@@ -22,3 +22,21 @@ export function isInstant(value: string): boolean {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
+
+export function minuteOfDay(instant: string, date = venueDate(instant)): number {
+  return (Date.parse(instant) - Date.parse(dateAt(date))) / 60_000;
+}
+
+export function weekday(date: string): number {
+  return new Date(date + 'T00:00:00Z').getUTCDay();
+}
+
+export function covers(windows: { start: number; end: number }[], start: number, end: number): boolean {
+  let covered = start;
+  for (const window of windows) {
+    if (window.start > covered) break;
+    covered = Math.max(covered, window.end);
+    if (covered >= end) return true;
+  }
+  return false;
+}

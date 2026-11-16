@@ -1,4 +1,4 @@
-import type { Booking, BookingSelection, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
+import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
 
@@ -183,14 +183,15 @@ Page({
     this.setData({ booking: true });
     const storageKey = 'pending-booking:' + JSON.stringify(selection);
     try {
-      let requestKey = wx.getStorageSync<string>(storageKey);
-      if (!requestKey) {
-        const quote = await api<Quote>('/api/bookings/quote', 'POST', selection);
+      const stored = wx.getStorageSync<string | { requestKey: string; expectedRevision: string }>(storageKey);
+      let pending = typeof stored === 'string' ? { requestKey: stored } : stored;
+      if (!pending?.requestKey) {
+        const quote = await api<BookingQuote>('/api/bookings/quote', 'POST', selection);
         if (!await confirm(quote)) return;
-        requestKey = Date.now() + '-' + Math.random().toString(36).slice(2);
-        wx.setStorageSync(storageKey, requestKey);
+        pending = { requestKey: Date.now() + '-' + Math.random().toString(36).slice(2), expectedRevision: quote.revision };
+        wx.setStorageSync(storageKey, pending);
       }
-      const booking = await api<Booking>('/api/bookings', 'POST', { ...selection, requestKey });
+      const booking = await api<Booking>('/api/bookings', 'POST', { ...selection, ...pending });
       wx.removeStorageSync(storageKey);
       wx.showToast({ title: booking.status === 'CONFIRMED' ? '预约成功' : '预约已取消', icon: 'none' });
       await this.refresh();
@@ -208,7 +209,7 @@ Page({
         });
       } else {
         wx.showToast({ title: errorMessage(error), icon: 'none', duration: 2500 });
-        if (error instanceof RequestError && ['FULL', 'SLOT_TAKEN', 'ALREADY_BOOKED'].includes(error.code)) {
+        if (error instanceof RequestError && ['FULL', 'SLOT_TAKEN', 'ALREADY_BOOKED', 'QUOTE_CHANGED'].includes(error.code)) {
           await this.refresh();
         }
       }

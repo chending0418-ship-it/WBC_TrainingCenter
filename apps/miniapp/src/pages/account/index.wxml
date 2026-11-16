@@ -13,7 +13,12 @@
     <navigator class="picker profile" url="/pages/child/index" hover-class="press">
       <text>孩子资料</text><text class="accent">{{childName ? childName + ' · 编辑' : '填写姓名'}}</text>
     </navigator>
+  </block>
+  <navigator class="picker profile staff-entry" url="/pages/admin/index" hover-class="press">
+    <text>管理端</text><text class="accent">进入</text>
+  </navigator>
 
+  <block wx:if="{{!loading && !error}}">
     <view class="section-title" role="heading" aria-level="2">积分流水</view>
     <view wx:if="{{!ledger.length}}" class="muted">暂无积分变动。</view>
     <view wx:for="{{ledger}}" wx:key="id" class="list-row">

@@ -92,6 +92,42 @@ export function openDatabase(path: string): DatabaseSync {
       ON ledger (user_id) WHERE source = 'SEED';
     CREATE INDEX IF NOT EXISTS ledger_by_user ON ledger (user_id, id);
   `);
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 1) return;
+    db.exec(`
+      ALTER TABLE ledger ADD COLUMN operator TEXT;
+      ALTER TABLE ledger ADD COLUMN reference TEXT;
+      CREATE TABLE staff_requests (
+        request_key TEXT PRIMARY KEY, action TEXT NOT NULL, payload TEXT NOT NULL, result TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE audit_logs (
+        id INTEGER PRIMARY KEY, actor TEXT NOT NULL, action TEXT NOT NULL, entity_id TEXT NOT NULL, created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX audit_by_entity ON audit_logs (entity_id, action);
+      CREATE TABLE class_templates (
+        id TEXT PRIMARY KEY, coach_id TEXT NOT NULL REFERENCES coaches(id),
+        title TEXT NOT NULL, venue TEXT NOT NULL, first_date TEXT NOT NULL,
+        weekdays TEXT NOT NULL, start_minutes TEXT NOT NULL,
+        duration INTEGER NOT NULL, capacity INTEGER NOT NULL, points INTEGER NOT NULL
+      ) STRICT;
+      CREATE TABLE template_occurrences (
+        template_id TEXT NOT NULL REFERENCES class_templates(id),
+        starts_at TEXT NOT NULL, class_id TEXT NOT NULL UNIQUE REFERENCES class_sessions(id),
+        PRIMARY KEY (template_id, starts_at)
+      ) STRICT;
+      PRAGMA user_version = 1;
+    `);
+  });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 2) return;
+    db.exec(`
+      ALTER TABLE coach_exceptions ADD COLUMN exception_id TEXT;
+      ALTER TABLE coach_exceptions ADD COLUMN reason TEXT NOT NULL DEFAULT '停用时段';
+      UPDATE coach_exceptions SET exception_id = lower(hex(randomblob(16)));
+      CREATE UNIQUE INDEX coach_exception_id ON coach_exceptions (exception_id);
+      PRAGMA user_version = 2;
+    `);
+  });
   return db;
 }
 
@@ -125,7 +161,8 @@ export function seedDemo(db: DatabaseSync, now: Date): void {
     child.run('other-parent', '张同学');
 
     // TODO: product decision — 线下实收换算与课程积分定价，以下均为种子数据。
-    db.exec(`
+    // Seed weekly hours once. An empty day can be an intentional staff edit.
+    if (db.prepare('SELECT COUNT(*) AS n FROM coaches').get()?.n === 0) db.exec(`
       INSERT OR IGNORE INTO coaches VALUES ('li', '李晨', 30), ('wang', '王悦', 25);
       WITH weekdays(day) AS (VALUES (0), (1), (2), (3), (4), (5), (6)),
            windows(start_minute, end_minute) AS (VALUES (540, 600), (600, 720), (840, 1080), (1080, 1260))
@@ -144,4 +181,9 @@ export function seedDemo(db: DatabaseSync, now: Date): void {
       session.run(date + '-stability', 'wang', '核心与稳定', dateAt(date, 1140), dateAt(date, 1200), 50, 8);
     }
   });
+}
+
+export function audit(db: DatabaseSync, actor: string, action: string, entityId: string, createdAt: string) {
+  db.prepare('INSERT INTO audit_logs (actor, action, entity_id, created_at) VALUES (?, ?, ?, ?)')
+    .run(actor, action, entityId, createdAt);
 }

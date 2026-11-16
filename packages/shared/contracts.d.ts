@@ -39,6 +39,10 @@ export interface Quote extends PrivateSlot {
   venue: string;
 }
 
+export interface BookingQuote extends Quote {
+  revision: string;
+}
+
 export interface Booking extends Quote {
   id: string;
   type: BookingSelection['type'];
@@ -57,4 +61,59 @@ export interface Child {
 export interface ApiFailure {
   code: string;
   message: string;
+}
+
+export type ClassStatus = 'PUBLISHED' | 'CLOSED';
+
+export interface ClassDraft {
+  title: string;
+  coachId: string;
+  venue: string;
+  date: string;
+  startMinute: number;
+  duration: number;
+  capacity: number;
+  points: number;
+}
+
+export interface ClassPlan extends ClassDraft {
+  startMinutes: number[];
+  weekdays: number[];
+}
+
+export interface ManagedClass extends ClassDraft {
+  id: string;
+  coachName: string;
+  startsAt: string;
+  endsAt: string;
+  status: ClassStatus;
+  bookedCount: number;
+  attendees: { userId: string; childName: string }[];
+}
+
+export interface ManagedBooking extends Booking {
+  userId: string;
+  childName: string;
+  staffCreated: boolean;
+  staffCancelled: boolean;
+}
+
+export interface ManagedUser {
+  id: string;
+  childName: string | null;
+  balance: number;
+}
+
+export interface MinuteWindow {
+  start: number;
+  end: number;
+}
+
+export interface CoachHours {
+  windows: MinuteWindow[];
+  exceptions: (MinuteWindow & { id: string; reason: string })[];
+}
+
+export interface StaffAccount extends Account {
+  ledger: (Account['ledger'][number] & { source: string; operator: string | null; reference: string | null })[];
 }

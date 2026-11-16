@@ -1,0 +1,244 @@
+import type { ClassDraft, ClassStatus, Coach, CoachHours, ManagedClass } from '../../../../../packages/shared/contracts.js';
+import { errorMessage } from '../../lib/client';
+import { timeRange } from '../../lib/display';
+import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
+
+type ClassRow = ManagedClass & { timeLabel: string; names: string; editable: boolean };
+type Editor = {
+  id: string; title: string; venue: string; date: string; time: string; duration: string;
+  capacity: string; points: string; status: ClassStatus; coachIndex: number; repeat: boolean;
+};
+let request = 0;
+
+Page({
+  data: {
+    mode: 'classes',
+    date: '', today: '', lastDate: '', dayLabel: '',
+    loading: true, loadError: '', saveError: '', busy: false,
+    coaches: [] as Coach[], coachIndex: 0, classes: [] as ClassRow[],
+    editor: null as Editor | null, days: weekdays.map((label, index) => ({ label, index, active: false })),
+    windows: [] as { key: number; start: string; end: string }[],
+    exceptions: [] as (CoachHours['exceptions'][number] & { label: string })[],
+    blocking: false, blockStart: '', blockEnd: '', blockReason: ''
+  },
+  onLoad() { void this.load(); },
+  async load() {
+    this.setData({ loading: true, loadError: '' });
+    try {
+      const { today, lastDate, coaches } = await staffContext();
+      this.setData({ today, lastDate, coaches, date: this.data.date || today });
+      await this.refresh();
+    } catch (error) {
+      this.setData({ loading: false, loadError: errorMessage(error) });
+    }
+  },
+  async refresh() {
+    const current = ++request;
+    const { date, mode, coaches, coachIndex } = this.data;
+    if (!date) return;
+    this.setData({ loading: true, loadError: '', dayLabel: weekdays[dayOfWeek(date)] });
+    try {
+      if (mode === 'classes') {
+        const classes = await staffApi<ManagedClass[]>('/classes?date=' + date);
+        const now = new Date().toISOString();
+        if (current !== request) return;
+        this.setData({ classes: classes.map(row => ({
+          ...row, timeLabel: timeRange(row.startsAt, row.endsAt), editable: row.startsAt > now,
+          names: row.attendees.map(attendee => attendee.childName).join('、')
+        })) });
+      } else {
+        const coach = coaches[coachIndex];
+        if (!coach) return;
+        const hours = await staffApi<CoachHours>('/coaches/' + coach.id + '/hours?date=' + date);
+        if (current !== request) return;
+        this.setData({
+          windows: hours.windows.map((window, key) => ({
+            key, start: minuteString(window.start), end: minuteString(window.end)
+          })),
+          exceptions: hours.exceptions.map(window => ({ ...window, label: minuteString(window.start) + '–' + minuteString(window.end) }))
+        });
+      }
+    } catch (error) {
+      if (current === request) this.setData({ loadError: errorMessage(error) });
+    } finally {
+      if (current === request) this.setData({ loading: false });
+    }
+  },
+  changeMode(event: WechatMiniprogram.TouchEvent) {
+    if (this.data.busy) return;
+    this.setData({ mode: String(event.currentTarget.dataset.mode), saveError: '', blocking: false });
+    void this.refresh();
+  },
+  changeDate(event: WechatMiniprogram.PickerChange) {
+    this.setData({ date: String(event.detail.value), saveError: '', blocking: false });
+    void this.refresh();
+  },
+  changeHoursCoach(event: WechatMiniprogram.PickerChange) {
+    this.setData({ coachIndex: Number(event.detail.value), saveError: '', blocking: false });
+    void this.refresh();
+  },
+  newClass() {
+    this.setData({
+      editor: { id: '', title: '', venue: '训练室 A', date: this.data.date,
+        time: '17:30', duration: '60', capacity: '6', points: '40',
+        status: 'PUBLISHED', coachIndex: 0, repeat: false },
+      days: weekdays.map((label, index) => ({ label, index, active: false })), saveError: ''
+    });
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+  editClass(event: WechatMiniprogram.TouchEvent) {
+    const row = this.data.classes.find(item => item.id === event.currentTarget.dataset.id);
+    if (!row) return;
+    this.setData({
+      editor: { id: row.id, title: row.title, venue: row.venue, date: row.date,
+        time: minuteString(row.startMinute), duration: String(row.duration), capacity: String(row.capacity),
+        points: String(row.points), status: row.status,
+        coachIndex: this.data.coaches.findIndex(coach => coach.id === row.coachId), repeat: false }, saveError: ''
+    });
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+  closeEditor() {
+    if (!this.data.busy) this.setData({ editor: null, saveError: '' });
+  },
+  changeClassField(event: WechatMiniprogram.Input) {
+    this.setData({ ['editor.' + event.currentTarget.dataset.field]: event.detail.value, saveError: '' });
+  },
+  changeClassDate(event: WechatMiniprogram.PickerChange) {
+    this.setData({ 'editor.date': String(event.detail.value) });
+  },
+  changeClassCoach(event: WechatMiniprogram.PickerChange) {
+    this.setData({ 'editor.coachIndex': Number(event.detail.value) });
+  },
+  changeRepeat(event: WechatMiniprogram.SwitchChange) {
+    this.setData({ 'editor.repeat': event.detail.value, saveError: '' });
+  },
+  toggleDay(event: WechatMiniprogram.TouchEvent) {
+    const index = Number(event.currentTarget.dataset.index);
+    this.setData({ ['days[' + index + '].active']: !this.data.days[index].active });
+  },
+  async saveClass() {
+    const editor = this.data.editor;
+    if (this.data.busy || !editor) return;
+    this.setData({ busy: true, saveError: '' });
+    try {
+      const coachId = this.data.coaches[editor.coachIndex]?.id;
+      const days = this.data.days.filter(day => day.active).map(day => day.index);
+      const startMinutes = editor.time.trim().split(/[、,，\s]+/).filter(Boolean).map(parseMinutes);
+      if (!editor.title.trim() || !editor.venue.trim() || !coachId || !startMinutes.length ||
+          (editor.repeat ? !days.length : startMinutes.length !== 1)) {
+        throw new Error('请填写课程、场地、教练和有效时段。周期排课需要选择星期。');
+      }
+      const draft: ClassDraft = {
+        title: editor.title, venue: editor.venue, coachId, date: editor.date, startMinute: startMinutes[0],
+        duration: Number(editor.duration), capacity: Number(editor.capacity), points: Number(editor.points)
+      };
+      let message = '班次已保存';
+      if (editor.id) {
+        await staffApi('/class-sessions/' + editor.id, 'PUT', { ...draft, status: editor.status });
+      } else {
+        const result = await staffWrite<{ count: number }>('/classes', { ...draft, startMinutes, weekdays: editor.repeat ? days : [] });
+        message = '已排 ' + result.count + ' 个班次';
+      }
+      this.setData({ editor: null, date: editor.date });
+      await this.refresh();
+      wx.showToast({ title: message, icon: 'none' });
+    } catch (error) {
+      this.setData({ saveError: error instanceof Error ? error.message : errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
+  },
+  async toggleClass(event: WechatMiniprogram.TouchEvent) {
+    const row = this.data.classes.find(item => item.id === event.currentTarget.dataset.id);
+    if (this.data.busy || !row) return;
+    const closing = row.status === 'PUBLISHED';
+    this.setData({ busy: true, saveError: '' });
+    try {
+      if (!await confirmAction(closing ? '停开此班次？' : '恢复此班次？', row.title + ' · ' + row.timeLabel, '确认')) return;
+      const { title, venue, coachId, date, startMinute, duration, capacity, points } = row;
+      await staffApi('/class-sessions/' + row.id, 'PUT', {
+        title, venue, coachId, date, startMinute, duration, capacity, points, status: closing ? 'CLOSED' : 'PUBLISHED'
+      });
+      await this.refresh();
+      wx.showToast({ title: closing ? '班次已停开' : '班次已恢复', icon: 'none' });
+    } catch (error) {
+      this.setData({ saveError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
+  },
+  changeWindow(event: WechatMiniprogram.Input) {
+    const { index, side } = event.currentTarget.dataset;
+    this.setData({ ['windows[' + index + '].' + side]: event.detail.value, saveError: '' });
+  },
+  addWindow() {
+    if (this.data.windows.length < 12) {
+      const windows = this.data.windows;
+      const key = 1 + Math.max(-1, ...windows.map(window => window.key));
+      this.setData({ windows: [...windows, { key, start: '14:00', end: '15:00' }] });
+    }
+  },
+  removeWindow(event: WechatMiniprogram.TouchEvent) {
+    const index = Number(event.currentTarget.dataset.index);
+    this.setData({ windows: this.data.windows.filter((_, position) => position !== index) });
+  },
+  async saveHours() {
+    if (this.data.busy) return;
+    const coach = this.data.coaches[this.data.coachIndex];
+    this.setData({ busy: true, saveError: '' });
+    try {
+      const windows = this.data.windows.map(window => ({
+        start: parseMinutes(window.start.trim()), end: window.end.trim() === '24:00' ? 1440 : parseMinutes(window.end.trim())
+      }));
+      await staffApi('/coaches/' + coach.id + '/hours', 'PUT', { weekday: dayOfWeek(this.data.date), windows });
+      await this.refresh();
+      wx.showToast({ title: '开放时段已保存', icon: 'none' });
+    } catch (error) {
+      this.setData({ saveError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
+  },
+  startBlock() {
+    this.setData({ blocking: true, blockStart: '14:00', blockEnd: '15:00', blockReason: '', saveError: '' });
+  },
+  closeBlock() {
+    this.setData({ blocking: false, saveError: '' });
+  },
+  changeBlock(event: WechatMiniprogram.Input) {
+    this.setData({ [String(event.currentTarget.dataset.field)]: event.detail.value, saveError: '' });
+  },
+  async saveBlock() {
+    if (this.data.busy) return;
+    const coach = this.data.coaches[this.data.coachIndex];
+    this.setData({ busy: true, saveError: '' });
+    try {
+      await staffWrite('/coaches/' + coach.id + '/exceptions', {
+        date: this.data.date, start: parseMinutes(this.data.blockStart.trim()),
+        end: this.data.blockEnd.trim() === '24:00' ? 1440 : parseMinutes(this.data.blockEnd.trim()),
+        reason: this.data.blockReason.trim()
+      });
+      this.setData({ blocking: false });
+      await this.refresh();
+      wx.showToast({ title: '已停用时段', icon: 'none' });
+    } catch (error) {
+      this.setData({ saveError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
+  },
+  async removeBlock(event: WechatMiniprogram.TouchEvent) {
+    if (this.data.busy) return;
+    const coach = this.data.coaches[this.data.coachIndex];
+    this.setData({ busy: true, saveError: '' });
+    try {
+      await staffApi('/coaches/' + coach.id + '/exceptions/' + event.currentTarget.dataset.id, 'DELETE');
+      await this.refresh();
+      wx.showToast({ title: '已解除停用', icon: 'none' });
+    } catch (error) {
+      this.setData({ saveError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
+  }
+});

@@ -3,7 +3,11 @@
     "pages/schedule/index",
     "pages/bookings/index",
     "pages/account/index",
-    "pages/child/index"
+    "pages/child/index",
+    "pages/admin/index",
+    "pages/admin-schedule/index",
+    "pages/admin-bookings/index",
+    "pages/admin-points/index"
   ],
   "window": {
     "navigationBarTitleText": "训练空间",
