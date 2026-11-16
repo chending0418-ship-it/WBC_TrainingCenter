@@ -23,7 +23,7 @@
       <input class="field" type="digit" value="{{partialRefund}}" maxlength="5" placeholder="例如 50，不退填 0"
         data-field="partialRefund" bindinput="changeField" disabled="{{busy}}" />
     </label>
-    <view class="muted">比例先保存到课程类型，取消后退还积分的规则待确认。</view>
+    <view class="muted">取消预约时自动退回积分，小数部分舍去。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
     <view class="section-actions">
       <button class="button quiet" bindtap="close" disabled="{{busy}}" hover-class="press">返回</button>

@@ -150,6 +150,49 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 4;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 5) return;
+    db.exec(`
+      ALTER TABLE bookings ADD COLUMN refund_points INTEGER NOT NULL DEFAULT 0 CHECK (refund_points BETWEEN 0 AND points);
+      UPDATE bookings SET refund_points = COALESCE((
+        SELECT bookings.points * t.refund_basis_points / 10000
+        FROM class_sessions s JOIN course_types t ON t.id = s.course_type_id
+        WHERE s.id = bookings.class_id
+      ), 0) WHERE status = 'CONFIRMED' AND class_id IS NOT NULL;
+      CREATE UNIQUE INDEX refund_per_booking ON ledger (booking_id) WHERE source = 'BOOKING_REFUND';
+      PRAGMA user_version = 5;
+    `);
+  });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 6) return;
+    db.exec(`
+      ALTER TABLE coaches ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1));
+      ALTER TABLE class_templates ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1));
+      ALTER TABLE template_occurrences ADD COLUMN manual_override INTEGER NOT NULL DEFAULT 0 CHECK (manual_override IN (0, 1));
+      UPDATE template_occurrences AS o SET manual_override = 1 WHERE EXISTS (
+        SELECT 1 FROM class_sessions s JOIN class_templates t ON t.id = o.template_id
+        WHERE s.id = o.class_id AND (s.status <> 'PUBLISHED' OR s.starts_at <> o.starts_at
+          OR s.coach_id <> t.coach_id OR s.title <> t.title OR s.venue <> t.venue
+          OR s.points <> t.points OR s.capacity <> t.capacity OR s.course_type_id IS NOT t.course_type_id
+          OR CAST(strftime('%s', s.ends_at) AS INTEGER) - CAST(strftime('%s', s.starts_at) AS INTEGER) <> t.duration * 60)
+      );
+      CREATE TABLE parent_contacts (
+        user_id TEXT PRIMARY KEY REFERENCES users(id),
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL
+      ) STRICT;
+      PRAGMA user_version = 6;
+    `);
+  });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 7) return;
+    db.exec(`
+      ALTER TABLE bookings ADD COLUMN approval_pending INTEGER NOT NULL DEFAULT 0 CHECK (approval_pending IN (0, 1));
+      ALTER TABLE children ADD COLUMN birth_month TEXT;
+      ALTER TABLE children ADD COLUMN gender TEXT CHECK (gender IN ('MALE', 'FEMALE'));
+      PRAGMA user_version = 7;
+    `);
+  });
   return db;
 }
 
@@ -170,7 +213,7 @@ export const mockProfiles = ['parent', 'other-parent', 'new-parent'] as const;
 export function seedDemo(db: DatabaseSync, now: Date): void {
   transaction(db, () => {
     const user = db.prepare('INSERT OR IGNORE INTO users VALUES (?)');
-    const child = db.prepare('INSERT OR IGNORE INTO children VALUES (?, ?)');
+    const child = db.prepare('INSERT OR IGNORE INTO children (guardian_id, name, birth_month, gender) VALUES (?, ?, ?, ?)');
     const credit = db.prepare(`
       INSERT OR IGNORE INTO ledger (user_id, source, delta, reason, created_at)
       VALUES (?, 'SEED', ?, '演示积分入账', ?)
@@ -179,13 +222,13 @@ export function seedDemo(db: DatabaseSync, now: Date): void {
       user.run(profile);
       credit.run(profile, 320, now.toISOString());
     }
-    child.run('parent', '陈同学');
-    child.run('other-parent', '张同学');
+    child.run('parent', '陈同学', '2016-08', 'MALE');
+    child.run('other-parent', '张同学', '2017-03', 'FEMALE');
 
     // TODO: product decision — 线下实收换算与课程积分定价，以下均为种子数据。
     // Seed weekly hours once. An empty day can be an intentional staff edit.
     if (db.prepare('SELECT COUNT(*) AS n FROM coaches').get()?.n === 0) db.exec(`
-      INSERT OR IGNORE INTO coaches VALUES ('li', '李晨', 30), ('wang', '王悦', 25);
+      INSERT OR IGNORE INTO coaches (id, name, points_per_slot) VALUES ('li', '李晨', 30), ('wang', '王悦', 25);
       WITH weekdays(day) AS (VALUES (0), (1), (2), (3), (4), (5), (6)),
            windows(start_minute, end_minute) AS (VALUES (540, 600), (600, 720), (840, 1080), (1080, 1260))
       INSERT OR IGNORE INTO coach_availability

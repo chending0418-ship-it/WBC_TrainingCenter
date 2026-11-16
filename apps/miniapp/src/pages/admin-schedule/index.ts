@@ -1,16 +1,18 @@
 import { allowPage } from '../../lib/session';
-import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass } from '../../../../../packages/shared/contracts.js';
+import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
 type ClassRow = ManagedClass & { timeLabel: string; names: string; editable: boolean };
+type TemplateRow = ManagedTemplate & { timetable: string };
 type TypeOption = { id: string | null; label: string; maxStudents: number };
 const untyped: TypeOption = { id: null, label: '未指定类型', maxStudents: 500 };
 
 type Editor = {
   id: string; title: string; venue: string; date: string; time: string; duration: string;
   capacity: string; points: string; status: ClassStatus; coachIndex: number; typeIndex: number; repeat: boolean;
+  template?: ManagedTemplate;
 };
 let request = 0;
 
@@ -21,6 +23,7 @@ Page({
     date: '', today: '', lastDate: '', dayLabel: '',
     loading: true, loadError: '', saveError: '', busy: false,
     coaches: [] as Coach[], coachIndex: 0, classes: [] as ClassRow[],
+    templates: [] as TemplateRow[],
     typeOptions: [untyped] as TypeOption[],
     editor: null as Editor | null, days: weekdays.map((label, index) => ({ label, index, active: false })),
     windows: [] as { key: number; start: string; end: string }[],
@@ -57,8 +60,14 @@ Page({
         const now = new Date().toISOString();
         if (current !== request) return;
         this.setData({ classes: classes.map(row => ({
-          ...row, timeLabel: timeRange(row.startsAt, row.endsAt), editable: row.startsAt > now,
+          ...row, timeLabel: timeRange(row.startsAt, row.endsAt), editable: row.startsAt > now && coaches.some(coach => coach.id === row.coachId),
           names: row.attendees.map(attendee => attendee.childName).join('、')
+        })) });
+      } else if (mode === 'templates') {
+        const templates = await staffApi<ManagedTemplate[]>('/class-templates');
+        if (current === request) this.setData({ templates: templates.map(template => ({
+          ...template, timetable: template.weekdays.map(day => weekdays[day]).join('、') + ' · ' +
+            template.startMinutes.map(minuteString).join('、')
         })) });
       } else {
         const coach = coaches[coachIndex];
@@ -92,13 +101,44 @@ Page({
     void this.refresh();
   },
   newClass() {
+    const repeat = this.data.mode === 'templates';
     this.setData({
-      editor: { id: '', title: '', venue: '训练室 A', date: this.data.date,
+      editor: { id: '', title: '', venue: '训练室 A', date: repeat ? this.data.today : this.data.date,
         time: '17:30', duration: '60', capacity: '6', points: '40',
-        status: 'PUBLISHED', coachIndex: 0, typeIndex: 0, repeat: false },
+        status: 'PUBLISHED', coachIndex: 0, typeIndex: 0, repeat },
       days: weekdays.map((label, index) => ({ label, index, active: false })), saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+  editTemplate(event: WechatMiniprogram.TouchEvent) {
+    const row = this.data.templates.find(item => item.id === event.currentTarget.dataset.id);
+    if (!row) return;
+    this.setData({
+      editor: { id: row.id, template: row, title: row.title, venue: row.venue, date: row.date,
+        time: row.startMinutes.map(minuteString).join('，'), duration: String(row.duration), capacity: String(row.capacity),
+        points: String(row.points), status: 'PUBLISHED', repeat: true,
+        coachIndex: this.data.coaches.findIndex(coach => coach.id === row.coachId),
+        typeIndex: Math.max(0, this.data.typeOptions.findIndex(type => type.id === row.courseTypeId)) },
+      days: weekdays.map((label, index) => ({ label, index, active: row.weekdays.includes(index) })), saveError: ''
+    });
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+  async toggleTemplate(event: WechatMiniprogram.TouchEvent) {
+    const row = this.data.templates.find(item => item.id === event.currentTarget.dataset.id);
+    if (!row || this.data.busy) return;
+    const action = row.enabled ? '停用模板' : '启用模板';
+    this.setData({ busy: true, saveError: '' });
+    try {
+      if (!await confirmAction(action + '？', row.enabled ? '移除未来未被预约的自动班次。已预约和单独调整的班次保留。' :
+        '从未来日期开始生成班次。', action)) return;
+      await staffWrite('/class-templates/' + row.id, { ...row, enabled: !row.enabled }, undefined, 'PUT');
+      await this.refresh();
+      wx.showToast({ title: row.enabled ? '模板已停用' : '模板已启用', icon: 'none' });
+    } catch (error) {
+      this.setData({ saveError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
   },
   editClass(event: WechatMiniprogram.TouchEvent) {
     const row = this.data.classes.find(item => item.id === event.currentTarget.dataset.id);
@@ -146,7 +186,7 @@ Page({
     if (this.data.busy || !editor) return;
     this.setData({ busy: true, saveError: '' });
     try {
-      const coachId = this.data.coaches[editor.coachIndex]?.id;
+      const coachId = this.data.coaches[editor.coachIndex]?.id ?? editor.template?.coachId;
       const days = this.data.days.filter(day => day.active).map(day => day.index);
       const startMinutes = editor.time.trim().split(/[、,，\s]+/).filter(Boolean).map(parseMinutes);
       if (!editor.title.trim() || !editor.venue.trim() || !coachId || !startMinutes.length ||
@@ -159,13 +199,17 @@ Page({
         duration: Number(editor.duration), capacity: Number(editor.capacity), points: Number(editor.points)
       };
       let message = '班次已保存';
-      if (editor.id) {
+      if (editor.template) {
+        await staffWrite('/class-templates/' + editor.id, { ...draft, startMinutes, weekdays: days, enabled: editor.template.enabled },
+          undefined, 'PUT');
+        message = '周期模板已保存';
+      } else if (editor.id) {
         await staffApi('/class-sessions/' + editor.id, 'PUT', { ...draft, status: editor.status });
       } else {
         const result = await staffWrite<{ count: number }>('/classes', { ...draft, startMinutes, weekdays: editor.repeat ? days : [] });
         message = '已排 ' + result.count + ' 个班次';
       }
-      this.setData({ editor: null, date: editor.date });
+      this.setData({ editor: null, date: editor.date < this.data.today ? this.data.today : editor.date });
       await this.refresh();
       wx.showToast({ title: message, icon: 'none' });
     } catch (error) {

@@ -15,6 +15,8 @@
 
   <block wx:elif="{{mode === 'COACH'}}">
     <view class="muted">选择演示教练账号。</view>
+    <view wx:if="{{loadingCoaches}}" class="message">正在查询教练…</view>
+    <view wx:elif="{{!error && !coaches.length}}" class="message">目前没有已启用的教练。</view>
     <view class="entry-actions">
       <button wx:for="{{coaches}}" wx:key="profile" class="button quiet" bindtap="chooseCoach"
         data-profile="{{item.profile}}" disabled="{{busy}}" hover-class="press">{{item.name}}教练</button>

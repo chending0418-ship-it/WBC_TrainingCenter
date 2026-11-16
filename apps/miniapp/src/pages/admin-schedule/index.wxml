@@ -1,5 +1,5 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.id ? '编辑班次' : '新增团课') : '排课管理'}}</text>
+  <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.template ? '编辑周期模板' : (editor.id ? '编辑班次' : '新增团课')) : '排课管理'}}</text>
   <form wx:if="{{editor}}" bindsubmit="saveClass">
     <label class="form-field"><text>课程名称</text><input class="field" value="{{editor.title}}" data-field="title" bindinput="changeClassField" maxlength="50" placeholder="输入课程名称" disabled="{{busy}}" /></label>
     <picker wx:if="{{typeOptions.length > 1}}" class="filter-row" range="{{typeOptions}}" range-key="label"
@@ -7,13 +7,13 @@
       <view class="picker"><text class="picker-label">课程类型</text><text class="picker-value">{{typeOptions[editor.typeIndex].label}}</text></view>
     </picker>
     <picker range="{{coaches}}" range-key="name" value="{{editor.coachIndex}}" bindchange="changeClassCoach" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[editor.coachIndex].name}}</text></view>
+      <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{editor.coachIndex < 0 ? editor.template.coachName + '（已停用）' : coaches[editor.coachIndex].name}}</text></view>
     </picker>
     <label class="form-field"><text>场地</text><input class="field" value="{{editor.venue}}" data-field="venue" bindinput="changeClassField" maxlength="50" disabled="{{busy}}" /></label>
-    <picker mode="date" start="{{today}}" end="{{lastDate}}" value="{{editor.date}}" bindchange="changeClassDate" disabled="{{busy}}">
+    <picker mode="date" start="{{editor.date < today ? editor.date : today}}" end="{{lastDate}}" value="{{editor.date}}" bindchange="changeClassDate" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">{{editor.repeat ? '起始日期' : '开课日期'}}</text><text class="picker-value">{{editor.date}}</text></view>
     </picker>
-    <view wx:if="{{!editor.id}}" class="row-line filter-row"><text>按周重复</text><switch color="#761F32" checked="{{editor.repeat}}" bindchange="changeRepeat" disabled="{{busy}}" /></view>
+    <view wx:if="{{!editor.id && mode !== 'templates'}}" class="row-line filter-row"><text>按周重复</text><switch color="#761F32" checked="{{editor.repeat}}" bindchange="changeRepeat" disabled="{{busy}}" /></view>
     <view wx:if="{{editor.repeat}}">
       <view class="subheading">选择重复日期</view>
       <view class="selection-grid">
@@ -38,9 +38,10 @@
   <block wx:else>
     <view class="section-actions">
       <button class="button {{mode === 'classes' ? '' : 'quiet'}}" data-mode="classes" bindtap="changeMode" aria-pressed="{{mode === 'classes'}}" hover-class="press">团课</button>
+      <button class="button {{mode === 'templates' ? '' : 'quiet'}}" data-mode="templates" bindtap="changeMode" aria-pressed="{{mode === 'templates'}}" hover-class="press">周期模板</button>
       <button class="button {{mode === 'hours' ? '' : 'quiet'}}" data-mode="hours" bindtap="changeMode" aria-pressed="{{mode === 'hours'}}" hover-class="press">私教时段</button>
     </view>
-    <picker wx:if="{{date}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
+    <picker wx:if="{{date && mode !== 'templates'}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">排课日期</text><text class="picker-value">{{date}} · {{dayLabel}}</text></view>
     </picker>
     <view wx:if="{{loading}}" class="message">正在加载排课…</view>
@@ -48,7 +49,7 @@
       <view>{{loadError}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
     </view>
     <block wx:elif="{{mode === 'classes'}}">
-      <button class="button row-action" bindtap="newClass" disabled="{{busy}}" hover-class="press">新增团课</button>
+      <button class="button row-action" bindtap="newClass" disabled="{{busy || !coaches.length}}" hover-class="press">新增团课</button>
       <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
       <view wx:if="{{!classes.length}}" class="message">这天还没有团课。</view>
       <view wx:for="{{classes}}" wx:key="id" class="list-row">
@@ -60,6 +61,20 @@
         <view wx:if="{{item.editable}}" class="section-actions">
           <button class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>
           <button class="button quiet" data-id="{{item.id}}" bindtap="toggleClass" disabled="{{busy}}" hover-class="press">{{item.status === 'CLOSED' ? '恢复班次' : '停开班次'}}</button>
+        </view>
+      </view>
+    </block>
+    <block wx:elif="{{mode === 'templates'}}">
+      <button class="button row-action" bindtap="newClass" disabled="{{busy || !coaches.length}}" hover-class="press">新增周期模板</button>
+      <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+      <view wx:if="{{!templates.length}}" class="message">还没有周期排课模板。</view>
+      <view wx:for="{{templates}}" wx:key="id" class="list-row">
+        <view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.enabled ? '已启用' : '已停用'}}</text></view>
+        <view>{{item.timetable}}</view>
+        <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
+        <view class="section-actions">
+          <button class="button quiet" data-id="{{item.id}}" bindtap="editTemplate" disabled="{{busy}}" hover-class="press">编辑模板</button>
+          <button class="button quiet" data-id="{{item.id}}" bindtap="toggleTemplate" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用模板' : '启用模板'}}</button>
         </view>
       </view>
     </block>

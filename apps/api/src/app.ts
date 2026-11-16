@@ -5,6 +5,7 @@ import { ApiError, bookingService } from './booking.ts';
 import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
 import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
+import { readContact, saveContact } from './parent-contact.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
@@ -65,7 +66,22 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
     return service.listSlots(coachId, date);
   });
   app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
-  app.put('/api/me/child', async request => service.saveChild(user(request), requiredText(object(request.body).name, 40)));
+  app.put('/api/me/child', async request => {
+    const profile = user(request);
+    const { name, birthMonth, gender } = object(request.body);
+    const month = requiredText(birthMonth, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < '1900-01' || month > venueDate(clock()).slice(0, 7)) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的出生年月');
+    }
+    if (gender !== 'MALE' && gender !== 'FEMALE') throw new ApiError(400, 'VALIDATION_ERROR', '请选择性别');
+    return service.saveChild(profile, { name: requiredText(name, 40), birthMonth: month, gender });
+  });
+  app.get('/api/me/contact', async request => ({ contact: readContact(db, user(request)) }));
+  app.put('/api/me/contact', async request => saveContact(db, user(request), request.body));
+  app.delete('/api/me/contact', async (request, reply) => {
+    db.prepare('DELETE FROM parent_contacts WHERE user_id = ?').run(user(request));
+    return reply.code(204).send();
+  });
   app.get('/api/me/account', async request => service.account(user(request)));
   app.get('/api/me/bookings', async request => service.bookings(user(request)));
   app.post('/api/bookings/quote', async request => service.quote(user(request), selection(object(request.body))));
@@ -74,9 +90,9 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
     const body = object(request.body);
     return service.book(profile, selection(body), requiredText(body.requestKey), profile, expectedRevision(body.expectedRevision));
   });
-  app.delete('/api/me/bookings/:id', async (request, reply) => {
-    service.cancel(user(request), requiredText(object(request.params).id));
-    return reply.code(204).send();
+  app.delete('/api/me/bookings/:id', async request => {
+    user(request);
+    throw new ApiError(403, 'ADMIN_ONLY', '请线下联系管理员处理取消');
   });
   registerStaffRoutes(app, db, clock, service, scheduling);
   registerCoachRoutes(app, db, clock);

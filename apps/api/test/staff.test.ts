@@ -17,7 +17,7 @@ const now = () => new Date(dateAt(today, 480));
 const credentials = { password: process.env.WBC_ADMIN_PASSWORD ?? 'wbc-demo-2026' };
 const scheduleUrl = '/api/admin/classes?date=' + today;
 const draft = {
-  title: '基础协调训练', coachId: 'li', venue: '训练室 A', date: today, startMinute: 780,
+  title: '基础协调训练', coachId: 'li', venue: '训练室 A', date: today, startMinute: 870,
   duration: 60, capacity: 2, points: 45
 };
 
@@ -204,6 +204,12 @@ test('教练仅能读取本人今日和本周日程，学员数据只包含姓�
   for (const [selection, requestKey] of [[group, 'coach-group'], [slot, 'coach-private']] as const) {
     const result = await app.inject({ method: 'POST', url: '/api/bookings', headers: parent, payload: { ...selection, requestKey } });
     assert.equal(result.statusCode, 200);
+    const pending = (await app.inject({ url, headers: li })).json<CoachSchedule>();
+    assert.equal(pending.lessons.length, 1);
+    if (selection.type === 'GROUP') assert.deepEqual(pending.lessons[0].childNames, []);
+    assert.equal((await app.inject({
+      method: 'POST', url: '/api/admin/bookings/' + result.json().id + '/approve', headers: admin
+    })).statusCode, 204);
   }
 
   const day = (await app.inject({ url: url + '?coachId=wang', headers: li })).json<CoachSchedule>();
@@ -254,6 +260,7 @@ test('人工调整可关联本账户预约，冲正写入反向流水并保留�
   assert.equal((await write({ ...source, delta: 20, requestKey: 'other-adjust' }, 'other-parent')).statusCode, 404);
   assert.equal((await write({ ...source, delta: 0, requestKey: 'zero' })).statusCode, 400);
   assert.equal((await write({ ...source, delta: -281, requestKey: 'overspend' })).json().code, 'INSUFFICIENT_POINTS');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings/' + bookingId + '/approve', headers: admin })).statusCode, 204);
 
   const adjust = { ...source, delta: -20, requestKey: 'minus' };
   const debit = await write(adjust);
@@ -328,8 +335,8 @@ test('两个独立 SQLite 连接并发写入，余额不足时调减与预约只
       [[409, 'INSUFFICIENT_POINTS']]);
     const parent = await session(app, false);
     const account = (await app.inject({ url: '/api/me/account', headers: parent })).json();
-    assert.equal(account.balance, winner[0].isStaff ? 20 : 280);
-    assert.equal(account.ledger.length, 2);
+    assert.equal(account.balance - account.reservedPoints, winner[0].isStaff ? 20 : 280);
+    assert.equal(account.ledger.length, winner[0].isStaff ? 2 : 1);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM bookings').get()?.n, winner[0].isStaff ? 0 : 1);
   } finally {
     await Promise.all(workers.map(worker => worker.terminate()));
@@ -420,13 +427,147 @@ test('管理员新增课程类型，班次及周期排课沿用类型和人数�
   assert.equal(booking.statusCode, 200);
   assert.equal((await configure({ courseTypeId: null })).json().code, 'CLASS_HAS_BOOKINGS');
   assert.equal((await app.inject({
-    method: 'DELETE', url: '/api/me/bookings/' + booking.json().id, headers: parent, payload: {}
+    method: 'POST', url: '/api/admin/bookings/' + booking.json().id + '/approve', headers: admin
+  })).statusCode, 204);
+  assert.equal((await app.inject({
+    method: 'DELETE', url: '/api/admin/bookings/' + booking.json().id, headers: admin, payload: {}
   })).statusCode, 204);
   const account = (await app.inject({ url: '/api/me/account', headers: parent })).json();
-  assert.equal(account.balance, 320 - draft.points);
+  assert.equal(account.balance, 320 - draft.points + 33);
+  assert.equal(account.ledger[0].delta, 33);
+  assert.match(account.ledger[0].reason, /取消预约退积分/);
 
   clock = new Date(dateAt('2031-01-01', 480));
   const renewed = await session(app);
   const rolled = (await app.inject({ url: '/api/admin/classes?date=2031-01-30', headers: renewed })).json<ManagedClass[]>();
   assert.equal(rolled.find(item => item.title === draft.title)?.courseTypeId, courseType.id);
+});
+
+test('管理员可在六小时前取消，按原扣分全退、部分退或不退，同一笔只入账一次', async context => {
+  const { app, db } = fixture(context);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const initial = [100, 50, 0] as const;
+  const ids: string[] = [];
+  for (const [i, refundPercent] of initial.entries()) {
+    const type = await app.inject({ method: 'POST', url: '/api/admin/course-types', headers: admin,
+      payload: { name: '退款测试 ' + i, maxStudents: 2, refundPercent, requestKey: 'refund-type-' + i } });
+    assert.equal(type.statusCode, 200);
+    const title = '退款班次 ' + i;
+    const created = await app.inject({ method: 'POST', url: '/api/admin/classes', headers: admin,
+      payload: { ...draft, title, startMinute: 840 + i * 60, courseTypeId: type.json().id, requestKey: 'refund-class-' + i } });
+    assert.equal(created.statusCode, 200);
+    const classes = (await app.inject({ url: scheduleUrl, headers: admin })).json<ManagedClass[]>();
+    const row = classes.find(item => item.title === title);
+    assert.ok(row);
+    const booked = await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+      payload: { classSessionId: row.id, userId: 'parent', type: 'GROUP', requestKey: 'refund-booking-' + i } });
+    assert.equal(booked.statusCode, 200);
+    ids.push(booked.json().id);
+  }
+  for (const [i, id] of ids.entries()) {
+    const url = '/api/admin/bookings/' + id;
+    const attempts = await Promise.all(Array.from({ length: 2 }, () => app.inject({ method: 'DELETE', url, headers: admin })));
+    assert.ok(attempts.every(result => result.statusCode === 204));
+    const entry = db.prepare("SELECT delta, operator FROM ledger WHERE booking_id = ? AND source = 'BOOKING_REFUND'").all(id);
+    assert.deepEqual(entry.map(row => [row.delta, row.operator]), i === 2 ? [] : [[i === 0 ? 45 : 22, 'local-admin']]);
+  }
+  const account = (await app.inject({ url: '/api/me/account', headers: parent })).json();
+  assert.deepEqual(account.ledger.filter((entry: { delta: number; reason: string }) => entry.delta > 0 && entry.reason.includes('退积分'))
+    .map((entry: { delta: number }) => entry.delta), [22, 45]);
+  assert.equal(account.balance, 320 - 135 + 67);
+});
+
+test('周期模板变更保留已有预约和单独停开的班次，停用后停止补排', async context => {
+  let current = now();
+  const { app } = fixture(context, () => current);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const planned = { ...draft, weekdays: [0, 1, 2, 3, 4, 5, 6], startMinutes: [870, 960] };
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/classes', headers: admin,
+    payload: { ...planned, requestKey: 'template' } })).statusCode, 200);
+  const [template] = (await app.inject({ url: '/api/admin/class-templates', headers: admin })).json();
+  const classes = async () => (await app.inject({ url: scheduleUrl, headers: admin })).json<ManagedClass[]>();
+  const [booked, closed] = (await classes()).filter(row => row.title === draft.title);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/class-sessions/' + closed.id, headers: admin,
+    payload: { ...closed, status: 'CLOSED' } })).statusCode, 204);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { type: 'GROUP', classSessionId: booked.id, requestKey: 'template-booked' } })).statusCode, 200);
+
+  const revise = (enabled: boolean, key: string) => app.inject({ method: 'PUT', url: '/api/admin/class-templates/' + template.id,
+    headers: admin, payload: { ...planned, title: '更新后的课程', points: 60, enabled, requestKey: key } });
+  const changed = await revise(true, 'update-template');
+  assert.equal(changed.statusCode, 200);
+  assert.equal((await classes()).find(row => row.id === booked.id)?.points, draft.points);
+  assert.equal((await classes()).find(row => row.id === closed.id)?.status, 'CLOSED');
+  const nextDate = '/api/admin/classes?date=2031-01-01';
+  let future = (await app.inject({ url: nextDate, headers: admin })).json<ManagedClass[]>();
+  assert.equal(future.filter(row => row.title === '更新后的课程' && row.points === 60).length, 2);
+
+  assert.equal((await revise(false, 'pause-template')).statusCode, 200);
+  assert.equal((await classes()).find(row => row.id === booked.id)?.status, 'PUBLISHED');
+  const schedule = (await app.inject({ url: '/api/schedule', headers: parent })).json<Schedule>();
+  assert.ok(!schedule.courses.some(row => row.id === booked.id || row.title === '更新后的课程'));
+  future = (await app.inject({ url: nextDate, headers: admin })).json<ManagedClass[]>();
+  assert.ok(!future.some(row => row.title === '更新后的课程' && row.status === 'PUBLISHED'));
+  current = new Date(dateAt('2031-01-01', 480));
+  const nextAdmin = await session(app);
+  const rolled = (await app.inject({ url: '/api/admin/classes?date=2031-01-30', headers: nextAdmin })).json<ManagedClass[]>();
+  assert.ok(!rolled.some(row => row.title === '更新后的课程'));
+});
+
+test('教练管理控制可预约和演示登录，停用不会中断已有预约', async context => {
+  const { app } = fixture(context);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const add = { method: 'POST' as const, url: '/api/admin/coaches',
+    payload: { name: '赵教练', pointsPerSlot: 40, requestKey: 'new-coach' } };
+  assert.equal((await app.inject({ ...add, headers: parent })).statusCode, 401);
+  const response = await app.inject({ ...add, headers: admin });
+  assert.equal(response.statusCode, 200);
+  const coach = response.json();
+  assert.deepEqual((await app.inject({ ...add, headers: admin })).json(), coach);
+  const change = (enabled: boolean) => app.inject({
+    method: 'PUT', url: '/api/admin/coaches/' + coach.id, headers: admin,
+    payload: { enabled, name: '赵一', pointsPerSlot: 36 }
+  });
+  const demo = () => app.inject({ method: 'POST', url: '/api/dev/coach-session', payload: { profile: 'coach-' + coach.id } });
+  assert.equal((await demo()).statusCode, 200);
+  assert.equal((await change(false)).statusCode, 204);
+  assert.equal((await demo()).statusCode, 400);
+  const schedule = async () => (await app.inject({ url: '/api/schedule', headers: parent })).json<Schedule>();
+  assert.ok(!(await schedule()).coaches.some(row => row.id === coach.id));
+  assert.equal((await change(true)).statusCode, 204);
+  assert.equal((await schedule()).coaches.find(row => row.id === coach.id)?.name, '赵一');
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/coaches/' + coach.id + '/hours', headers: admin,
+    payload: { weekday: weekday(today), windows: [{ start: 840, end: 960 }] } })).statusCode, 204);
+  const slots = (await app.inject({ url: '/api/coaches/' + coach.id + '/slots?date=' + today, headers: parent })).json();
+  assert.ok(slots.some((slot: { points: number }) => slot.points === 72));
+  assert.equal((await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { ...slots[0], type: 'PRIVATE', coachId: coach.id, requestKey: 'book-new-coach' } })).statusCode, 200);
+  assert.equal((await change(false)).json().code, 'COACH_HAS_BOOKINGS');
+});
+
+test('家长联系人只能本人修改，管理员可以搜索，教练不可读取', async context => {
+  const { app } = fixture(context);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const otherLogin = await app.inject({ method: 'POST', url: '/api/dev/session', payload: { profile: 'other-parent' } });
+  const other = { authorization: 'Bearer ' + otherLogin.json().token };
+  const contact = { name: '演示家长', phone: '13800138000' };
+  const url = '/api/me/contact';
+  assert.equal((await app.inject({ method: 'PUT', url, headers: parent, payload: { ...contact, phone: 'abc' } })).statusCode, 400);
+  assert.deepEqual((await app.inject({ method: 'PUT', url, headers: parent, payload: { ...contact, userId: 'other-parent' } })).json(), contact);
+  assert.deepEqual((await app.inject({ url, headers: other })).json(), { contact: null });
+  const searchUrl = '/api/admin/parents?q=13800';
+  assert.equal((await app.inject({ url: searchUrl, headers: parent })).statusCode, 401);
+  const login = await app.inject({ method: 'POST', url: '/api/dev/coach-session', payload: { profile: 'coach-li' } });
+  assert.equal((await app.inject({ url: searchUrl, headers: { authorization: 'Bearer ' + login.json().token } })).statusCode, 401);
+  const results = (await app.inject({ url: searchUrl, headers: admin })).json();
+  assert.equal(results.length, 1);
+  assert.equal(results[0].id, 'parent');
+  assert.deepEqual(results[0].contact, contact);
+  assert.equal(results[0].child.birthMonth, '2016-08');
+  assert.equal((await app.inject({ method: 'DELETE', url, headers: parent })).statusCode, 204);
+  assert.deepEqual((await app.inject({ url: searchUrl, headers: admin })).json(), []);
 });

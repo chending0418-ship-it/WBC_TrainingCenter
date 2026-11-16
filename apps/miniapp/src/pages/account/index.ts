@@ -7,6 +7,7 @@ Page({
   data: {
     authorized: false,
     balance: 0,
+    reservedPoints: 0,
     ledger: [] as { id: number; reason: string; change: string; date: string }[],
     childName: '',
     loading: true,
@@ -33,7 +34,8 @@ Page({
         change: (entry.delta > 0 ? '+' : '') + entry.delta,
         date: datetime(entry.createdAt)
       }));
-      this.setData({ balance: account.balance, ledger, childName: profile.child?.name ?? '' });
+      this.setData({ balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
+        ledger, childName: profile.child?.name ?? '' });
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {

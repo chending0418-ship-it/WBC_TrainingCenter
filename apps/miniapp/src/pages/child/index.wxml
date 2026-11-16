@@ -7,10 +7,16 @@
   </view>
   <form wx:else bindsubmit="save">
     <label class="form-field">
-      <text>孩子姓名</text>
+      <text>姓名或昵称</text>
       <input class="field" value="{{name}}" bindinput="changeName" maxlength="40" disabled="{{saving}}"
-        placeholder="请输入姓名" placeholder-style="color: #66595c" aria-label="孩子姓名" />
+        placeholder="请输入姓名或昵称" placeholder-style="color: #66595c" aria-label="姓名或昵称" />
     </label>
+    <picker mode="date" fields="month" start="1900-01" end="{{maxMonth}}" value="{{birthMonth || maxMonth}}" bindchange="changeMonth" disabled="{{saving}}">
+      <view class="picker"><text class="picker-label">出生年月</text><text class="picker-value">{{birthMonth || '请选择'}}</text></view>
+    </picker>
+    <picker range="{{genders}}" range-key="label" value="{{genderIndex < 0 ? 0 : genderIndex}}" bindchange="changeGender" disabled="{{saving}}">
+      <view class="picker"><text class="picker-label">性别</text><text class="picker-value">{{genderIndex < 0 ? '请选择' : genders[genderIndex].label}}</text></view>
+    </picker>
     <view wx:if="{{saveError}}" class="accent row-action">{{saveError}}</view>
     <button class="button row-action" form-type="submit" loading="{{saving}}" disabled="{{saving}}" hover-class="press">保存资料</button>
   </form>

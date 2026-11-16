@@ -20,3 +20,7 @@ export function datetime(value: string): string {
 export function timeRange(startsAt: string, endsAt: string): string {
   return time(startsAt) + '–' + time(endsAt);
 }
+
+export function cancellationRefundText(points: number): string {
+  return points > 0 ? '取消将退回 ' + points + ' 积分。' : '取消不退积分。';
+}

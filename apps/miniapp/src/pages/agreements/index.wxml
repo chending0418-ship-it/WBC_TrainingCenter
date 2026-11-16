@@ -1,0 +1,14 @@
+<view wx:if="{{authorized}}" class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">使用协议与隐私说明</text>
+  <view class="message">这是本地演示说明，请使用模拟资料。</view>
+  <view class="section-title" role="heading" aria-level="2">预约与积分</view>
+  <view class="list-row">
+    <view>提交申请会预留名额和积分，管理员确认后扣除积分。</view>
+    <view>如需取消已确认的预约，请在开课前至少 6 小时联系场馆管理员。积分按课程类型设置退回。</view>
+  </view>
+  <view class="section-title" role="heading" aria-level="2">资料怎么使用</view>
+  <view class="list-row">
+    <view>孩子的姓名或昵称、出生年月和性别用于登记训练资料。教练只看到本人课程的学员姓名。</view>
+    <view>联系人姓名和电话可选填，用于处理预约，可在「联系人资料」编辑或删除。</view>
+  </view>
+</view>

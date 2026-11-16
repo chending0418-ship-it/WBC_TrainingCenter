@@ -1,0 +1,30 @@
+<view wx:if="{{authorized}}" class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.id ? '编辑教练' : '新增教练') : '教练管理'}}</text>
+  <form wx:if="{{editor}}" bindsubmit="save">
+    <label class="form-field"><text>教练姓名</text><input class="field" value="{{editor.name}}" maxlength="40" data-field="name" bindinput="change" disabled="{{busy}}" /></label>
+    <label class="form-field"><text>每 30 分钟所需私教积分</text><input class="field" type="number" value="{{editor.points}}" maxlength="5" data-field="points" bindinput="change" disabled="{{busy}}" /></label>
+    <view class="muted">新增后可到「排课管理 → 私教时段」设置开放时间。</view>
+    <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+    <view class="section-actions">
+      <button class="button quiet" bindtap="close" disabled="{{busy}}" hover-class="press">返回</button>
+      <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">保存教练</button>
+    </view>
+  </form>
+  <view wx:elif="{{loading}}" class="message">正在查询教练…</view>
+  <view wx:elif="{{error}}" class="message">
+    <view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
+  </view>
+  <block wx:else>
+    <button class="button row-action" bindtap="edit" disabled="{{busy}}" hover-class="press">新增教练</button>
+    <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+    <view wx:if="{{!coaches.length}}" class="message">还没有教练。</view>
+    <view wx:for="{{coaches}}" wx:key="id" class="list-row">
+      <view class="row-line"><text class="row-name">{{item.name}}</text><text class="muted">{{item.enabled ? '已启用' : '已停用'}}</text></view>
+      <view class="muted">私教每 30 分钟 {{item.pointsPerSlot}} 积分</view>
+      <view class="section-actions">
+        <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑资料</button>
+        <button class="button quiet" data-id="{{item.id}}" bindtap="toggle" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用' : '启用'}}</button>
+      </view>
+    </view>
+  </block>
+</view>

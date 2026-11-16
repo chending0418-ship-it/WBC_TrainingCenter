@@ -3,6 +3,11 @@ export interface Coach {
   name: string;
 }
 
+export interface ManagedCoach extends Coach {
+  pointsPerSlot: number;
+  enabled: boolean;
+}
+
 export interface CourseType {
   id: string;
   name: string;
@@ -45,6 +50,7 @@ export interface Quote extends PrivateSlot {
   title: string;
   coachName: string;
   venue: string;
+  refundPoints: number;
 }
 
 export interface BookingQuote extends Quote {
@@ -54,16 +60,24 @@ export interface BookingQuote extends Quote {
 export interface Booking extends Quote {
   id: string;
   type: BookingSelection['type'];
-  status: 'CONFIRMED' | 'CANCELLED';
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'REJECTED';
 }
 
 export interface Account {
   balance: number;
+  reservedPoints: number;
   ledger: { id: number; delta: number; reason: string; createdAt: string }[];
 }
 
 export interface Child {
   name: string;
+  birthMonth: string | null;
+  gender: 'MALE' | 'FEMALE' | null;
+}
+
+export interface ParentContact {
+  name: string;
+  phone: string;
 }
 
 export interface ApiFailure {
@@ -90,6 +104,12 @@ export interface ClassPlan extends ClassDraft {
   weekdays: number[];
 }
 
+export interface ManagedTemplate extends ClassPlan {
+  id: string;
+  coachName: string;
+  enabled: boolean;
+}
+
 export interface ManagedClass extends ClassDraft {
   courseTypeId: string | null;
   courseTypeName: string | null;
@@ -98,6 +118,7 @@ export interface ManagedClass extends ClassDraft {
   startsAt: string;
   endsAt: string;
   status: ClassStatus;
+  bookable: boolean;
   bookedCount: number;
   attendees: { userId: string; childName: string }[];
 }
@@ -107,12 +128,19 @@ export interface ManagedBooking extends Booking {
   childName: string;
   staffCreated: boolean;
   staffCancelled: boolean;
+  canCancel: boolean;
+  canApprove: boolean;
 }
 
 export interface ManagedUser {
   id: string;
   childName: string | null;
   balance: number;
+}
+
+export interface ManagedParent extends ManagedUser {
+  contact: ParentContact | null;
+  child: Child | null;
 }
 
 export interface MinuteWindow {
@@ -129,7 +157,7 @@ export type StaffLedgerSource = 'OFFLINE_CREDIT' | 'ADJUSTMENT' | 'REVERSAL';
 
 export interface StaffAccount extends Account {
   ledger: (Account['ledger'][number] & {
-    source: 'SEED' | 'BOOKING' | StaffLedgerSource;
+    source: 'SEED' | 'BOOKING' | 'BOOKING_REFUND' | StaffLedgerSource;
     operator: string | null;
     reference: string | null;
     bookingId: string | null;
