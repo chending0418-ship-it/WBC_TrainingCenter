@@ -8,7 +8,7 @@ type ListRow = ManagedBooking & { hours: string; statusLabel: string };
 const statusLabels = { PENDING: '待确认', CONFIRMED: '已确认', REJECTED: '已拒绝', CANCELLED: '已取消' };
 type ClassOption = ManagedClass & { label: string };
 type SlotOption = PrivateSlot & { label: string };
-const defaultPrivateType = { id: '', name: '一对一训练（默认）' };
+const defaultPrivateType = { id: '', name: '按教练设置' };
 let bookingRequest = 0;
 let choicesRequest = 0;
 

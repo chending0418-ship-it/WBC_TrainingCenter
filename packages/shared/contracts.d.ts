@@ -6,6 +6,7 @@ export interface Coach {
 export interface ManagedCoach extends Coach {
   pointsPerSlot: number;
   enabled: boolean;
+  privateCourseTypeId: string | null;
 }
 
 export interface CourseType {

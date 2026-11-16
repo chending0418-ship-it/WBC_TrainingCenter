@@ -1,12 +1,15 @@
 import { allowPage } from '../../lib/session';
-import type { Booking, BookingQuote, BookingSelection, Course, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
+import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
 
 type VisibleCourse = Course & { hours: string; action: string; unavailable: boolean };
+type StartOption = { label: string; options: PrivateSlot[] };
+type EndOption = PrivateSlot & { label: string };
 
 let courses: Course[] = [];
 let scheduleRequest = 0;
+let slotsRequest = 0;
 
 function addDays(date: string, days: number): string {
   const timestamp = Date.parse(date + 'T00:00:00Z') + days * 86_400_000;
@@ -48,6 +51,7 @@ function confirm(quote: Quote): Promise<boolean> {
 Page({
   data: {
     authorized: false,
+    mode: 'GROUP' as BookingSelection['type'],
     today: '',
     lastDate: '',
     date: '',
@@ -58,6 +62,14 @@ Page({
     loading: true,
     error: '',
     courses: [] as VisibleCourse[],
+    coaches: [] as Coach[],
+    coachIndex: 0,
+    starts: [] as StartOption[],
+    ends: [] as EndOption[],
+    startIndex: -1,
+    endIndex: -1,
+    slotLoading: false,
+    slotError: '',
     booking: false
   },
 
@@ -75,7 +87,9 @@ Page({
       if (request !== scheduleRequest) return;
       courses = schedule.courses;
       const date = this.data.date >= schedule.today && this.data.date <= schedule.lastDate ? this.data.date : schedule.today;
-      this.setData({ today: schedule.today, lastDate: schedule.lastDate });
+      const coachId = this.data.coaches[this.data.coachIndex]?.id;
+      const coachIndex = Math.max(0, schedule.coaches.findIndex(coach => coach.id === coachId));
+      this.setData({ today: schedule.today, lastDate: schedule.lastDate, coaches: schedule.coaches, coachIndex });
       this.selectDate(date);
     } catch (error) {
       if (request === scheduleRequest) this.setData({ error: errorMessage(error) });
@@ -94,6 +108,7 @@ Page({
       return { ...course, hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
     });
     this.setData({ date, courses: visible, ...dateChoices(this.data.today, date, this.data.lastDate) });
+    if (this.data.mode === 'PRIVATE') void this.refreshSlots();
   },
 
   changeWeek(event: WechatMiniprogram.TouchEvent) {
@@ -107,11 +122,68 @@ Page({
     if (!this.data.booking) this.selectDate(String(event.currentTarget.dataset.date));
   },
 
+  changeMode(event: WechatMiniprogram.TouchEvent) {
+    const mode = event.currentTarget.dataset.mode as BookingSelection['type'];
+    if (this.data.booking || this.data.mode === mode) return;
+    this.setData({ mode });
+    if (mode === 'PRIVATE') void this.refreshSlots();
+  },
+
+  changeCoach(event: WechatMiniprogram.PickerChange) {
+    if (this.data.booking) return;
+    this.setData({ coachIndex: Number(event.detail.value) });
+    void this.refreshSlots();
+  },
+
+  async refreshSlots() {
+    const request = ++slotsRequest;
+    const coach = this.data.coaches[this.data.coachIndex];
+    this.setData({ starts: [], ends: [], startIndex: -1, endIndex: -1, slotError: '', slotLoading: !!coach });
+    if (!coach) return;
+    try {
+      const slots = await api<PrivateSlot[]>('/api/coaches/' + coach.id + '/slots?date=' + this.data.date);
+      if (request !== slotsRequest) return;
+      const byStart = new Map<string, PrivateSlot[]>();
+      for (const slot of slots) {
+        const options = byStart.get(slot.startsAt) ?? [];
+        options.push(slot);
+        byStart.set(slot.startsAt, options);
+      }
+      const starts = Array.from(byStart, ([start, options]) => ({ label: time(start), options }));
+      this.setData({ starts });
+    } catch (error) {
+      if (request === slotsRequest) this.setData({ slotError: errorMessage(error) });
+    } finally {
+      if (request === slotsRequest) this.setData({ slotLoading: false });
+    }
+  },
+
+  changeStart(event: WechatMiniprogram.PickerChange) {
+    if (this.data.booking) return;
+    const startIndex = Number(event.detail.value);
+    const ends = this.data.starts[startIndex].options.map(slot => ({
+      ...slot,
+      label: time(slot.endsAt) + ' · ' + slot.points + ' 积分'
+    }));
+    this.setData({ startIndex, ends, endIndex: -1 });
+  },
+
+  changeEnd(event: WechatMiniprogram.PickerChange) {
+    if (!this.data.booking) this.setData({ endIndex: Number(event.detail.value) });
+  },
+
   bookGroup(event: WechatMiniprogram.TouchEvent) {
     void this.book({ type: 'GROUP', classSessionId: String(event.currentTarget.dataset.id) });
   },
 
-  async book(selection: Extract<BookingSelection, { type: 'GROUP' }>) {
+  bookPrivate() {
+    const coach = this.data.coaches[this.data.coachIndex];
+    const slot = this.data.ends[this.data.endIndex];
+    if (!coach || !slot) return;
+    void this.book({ type: 'PRIVATE', coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt });
+  },
+
+  async book(selection: BookingSelection) {
     if (this.data.booking) return;
     this.setData({ booking: true });
     const storageKey = 'pending-booking:' + JSON.stringify(selection);
@@ -143,7 +215,7 @@ Page({
         });
       } else {
         wx.showToast({ title: errorMessage(error), icon: 'none', duration: 2500 });
-        if (error instanceof RequestError && ['FULL', 'ALREADY_BOOKED', 'QUOTE_CHANGED'].includes(error.code)) {
+        if (error instanceof RequestError && ['FULL', 'SLOT_TAKEN', 'ALREADY_BOOKED', 'QUOTE_CHANGED'].includes(error.code)) {
           await this.refresh();
         }
       }

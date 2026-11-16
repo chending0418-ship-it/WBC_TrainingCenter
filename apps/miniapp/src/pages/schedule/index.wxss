@@ -1,7 +1,16 @@
-.week, .dates, .course-action {
+.modes, .week, .dates, .course-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.modes {
+  gap: 12rpx;
+  margin-bottom: 34rpx;
+}
+
+.modes .button {
+  flex: 1;
 }
 
 .week {
@@ -84,4 +93,14 @@
 .course-action .button {
   flex: 0 0 162rpx;
   width: 162rpx;
+}
+
+.time-pickers {
+  display: grid;
+  gap: 18rpx;
+  margin-top: 18rpx;
+}
+
+.private-venue {
+  margin: 18rpx 0;
 }

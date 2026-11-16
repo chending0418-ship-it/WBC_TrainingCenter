@@ -4,7 +4,7 @@ import type { FastifyRequest } from 'fastify';
 import { ApiError, bookingService } from './booking.ts';
 import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
-import { expectedRevision, object, requiredText, selection } from './input.ts';
+import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
 import { readContact, saveContact } from './parent-contact.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
@@ -37,8 +37,11 @@ export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = t
   }
 
   function parentSelection(body: Record<string, unknown>) {
-    if (body.type === 'PRIVATE') throw new ApiError(403, 'ADMIN_ONLY', '私教由场馆管理员安排');
-    return selection(body);
+    const requested = selection(body);
+    if (requested.type === 'PRIVATE' && requested.courseTypeId !== undefined) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '私教课程类型由场馆设置');
+    }
+    return requested;
   }
 
   app.setErrorHandler((error, _request, reply) => {
@@ -69,7 +72,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = t
   app.get('/api/schedule', async request => service.schedule(user(request)));
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
-    throw new ApiError(403, 'ADMIN_ONLY', '私教时段由场馆管理员安排');
+    return service.listSlots(requiredText(object(request.params).id), dateInput(object(request.query).date));
   });
   app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
   app.put('/api/me/child', async request => {

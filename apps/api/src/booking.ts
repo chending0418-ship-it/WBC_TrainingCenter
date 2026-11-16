@@ -99,7 +99,9 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
   }
 
   function dayAvailability(coachId: string, date: string) {
-    const coach = db.prepare('SELECT name, points_per_slot AS points FROM coaches WHERE id = ? AND enabled = 1').get(coachId);
+    const coach = db.prepare(`
+      SELECT name, points_per_slot AS points, private_course_type_id FROM coaches WHERE id = ? AND enabled = 1
+    `).get(coachId);
     if (!coach) throw new ApiError(404, 'NOT_FOUND', '教练未开放预约');
     const startOfDay = dateAt(date);
     const endOfDay = dateAt(addDays(date, 1));
@@ -122,7 +124,8 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       start: (Date.parse(String(row.starts_at)) - dayStart) / 60_000,
       end: (Date.parse(String(row.ends_at)) - dayStart) / 60_000
     }));
-    return { name: String(coach.name), points: Number(coach.points), windows, occupied };
+    return { name: String(coach.name), points: Number(coach.points),
+      courseTypeId: coach.private_course_type_id as string | null, windows, occupied };
   }
 
   function isOpen(day: ReturnType<typeof dayAvailability>, start: number, end: number): boolean {
@@ -144,7 +147,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       if (startsAt <= now.toISOString()) continue;
       for (let duration = slotMinutes; duration <= maxPrivateMinutes; duration += slotMinutes) {
         const end = start + duration;
-        if (end >= 1440 || !isOpen(day, start, end)) break;
+        if (end > 1440 || !isOpen(day, start, end)) break;
         slots.push({ startsAt, endsAt: dateAt(date, end), points: privatePoints(duration, day.points) });
       }
     }
@@ -182,7 +185,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     const start = (Date.parse(startsAt) - dayStart) / 60_000;
     const end = (Date.parse(endsAt) - dayStart) / 60_000;
     const duration = end - start;
-    if (end >= 1440 || duration <= 0 || duration > maxPrivateMinutes || start % slotMinutes || end % slotMinutes) {
+    if (end > 1440 || duration <= 0 || duration > maxPrivateMinutes || start % slotMinutes || end % slotMinutes) {
       throw new ApiError(400, 'VALIDATION_ERROR', '请选择同一天内 30 至 120 分钟的私教时段');
     }
     const day = dayAvailability(coachId, date);
@@ -190,9 +193,10 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     const points = privatePoints(duration, day.points);
     let title = '一对一训练';
     let refundPoints = 0;
-    if (selection.courseTypeId) {
+    const courseTypeId = selection.courseTypeId ?? day.courseTypeId;
+    if (courseTypeId) {
       const course = db.prepare('SELECT name, max_students, refund_basis_points FROM course_types WHERE id = ?')
-        .get(selection.courseTypeId);
+        .get(courseTypeId);
       if (!course) throw new ApiError(404, 'NOT_FOUND', '未找到该课程类型');
       if (course.max_students !== 1) throw new ApiError(400, 'VALIDATION_ERROR', '请为私教选择一对一课程类型');
       title = String(course.name);
