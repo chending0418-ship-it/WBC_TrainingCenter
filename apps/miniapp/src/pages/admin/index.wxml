@@ -1,0 +1,28 @@
+<view class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">管理端</text>
+  <form wx:if="{{!signedIn}}" bindsubmit="signIn">
+    <label class="form-field">
+      <text>管理员密码</text>
+      <input class="field" password="{{true}}" value="{{password}}" maxlength="128" disabled="{{busy}}"
+        placeholder="输入管理员密码" bindinput="changePassword" aria-label="管理员密码" />
+    </label>
+    <view class="form-error" wx:if="{{error}}">{{error}}</view>
+    <button class="button row-action" form-type="submit" loading="{{busy}}" disabled="{{!password || busy}}" hover-class="press">登录</button>
+  </form>
+  <block wx:else>
+    <navigator class="action-link" url="/pages/admin-schedule/index" hover-class="press">
+      <view class="row-name">排课管理</view>
+      <view class="muted">安排团课，维护私教开放时间</view>
+    </navigator>
+    <navigator class="action-link" url="/pages/admin-bookings/index" hover-class="press">
+      <view class="row-name">预约管理</view>
+      <view class="muted">查看、代约和取消</view>
+    </navigator>
+    <navigator class="action-link" url="/pages/admin-points/index" hover-class="press">
+      <view class="row-name">积分录入</view>
+      <view class="muted">线下入账和积分流水</view>
+    </navigator>
+    <view class="form-error" wx:if="{{error}}">{{error}}</view>
+    <button class="button quiet row-action" bindtap="signOut" loading="{{busy}}" disabled="{{busy}}" hover-class="press">退出管理端</button>
+  </block>
+</view>

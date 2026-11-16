@@ -2,7 +2,7 @@ import type { ApiFailure } from '../../../../packages/shared/contracts.js';
 
 const apiBase = 'http://127.0.0.1:3000';
 
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 export class RequestError extends Error {
   readonly code: string;
@@ -15,7 +15,7 @@ export class RequestError extends Error {
   }
 }
 
-function send<T>(path: string, method: Method, data?: object, token?: string): Promise<T> {
+export function send<T>(path: string, method: Method, data?: object, token?: string): Promise<T> {
   return new Promise((resolve, reject) => {
     wx.request({
       url: apiBase + path,

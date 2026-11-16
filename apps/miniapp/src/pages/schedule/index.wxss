@@ -6,7 +6,7 @@
 
 .modes {
   gap: 12rpx;
-  margin-bottom: 28rpx;
+  margin-bottom: 34rpx;
 }
 
 .modes .button {
@@ -15,7 +15,7 @@
 
 .week {
   gap: 10rpx;
-  margin-bottom: 10rpx;
+  margin-bottom: 16rpx;
 }
 
 .week-step {
@@ -37,7 +37,7 @@
 .dates {
   justify-content: flex-start;
   gap: 5rpx;
-  padding-bottom: 20rpx;
+  padding-bottom: 26rpx;
   border-bottom: 1rpx solid #ded5d3;
 }
 
@@ -80,7 +80,14 @@
 
 .course-action {
   gap: 12rpx;
-  margin-top: 22rpx;
+  margin-top: 26rpx;
+}
+
+.course-status {
+  color: #66595c;
+  font-size: 28rpx;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .course-action .button {
@@ -90,8 +97,8 @@
 
 .time-pickers {
   display: grid;
-  gap: 12rpx;
-  margin-top: 12rpx;
+  gap: 18rpx;
+  margin-top: 18rpx;
 }
 
 .private-venue {

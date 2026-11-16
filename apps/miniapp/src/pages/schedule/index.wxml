@@ -45,8 +45,9 @@
             <view class="row-name">{{item.points}} 积分</view>
             <view class="muted">{{item.bookedCount}}/{{item.capacity}} 人 · 剩余 {{item.capacity - item.bookedCount}} 位</view>
           </view>
-          <button class="button" data-id="{{item.id}}" bindtap="bookGroup" hover-class="press"
-            disabled="{{item.unavailable || booking}}" aria-label="{{item.title}} {{item.action}}">{{item.action}}</button>
+          <text wx:if="{{item.unavailable}}" class="course-status">{{item.action}}</text>
+          <button wx:else class="button" data-id="{{item.id}}" bindtap="bookGroup" hover-class="press"
+            disabled="{{booking}}" aria-label="{{item.title}} 预约">预约</button>
         </view>
       </view>
     </block>

@@ -2,50 +2,30 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import Fastify from 'fastify';
 import type { FastifyRequest } from 'fastify';
-import type { BookingSelection } from '../../../packages/shared/contracts.js';
 import { ApiError, bookingService } from './booking.ts';
 import { mockProfiles, seedDemo } from './database.ts';
-import { isInstant, isVenueDate, venueDate } from './time.ts';
-
-function object(value: unknown): Record<string, unknown> {
-  if (typeof value !== 'object' || !value || Array.isArray(value)) {
-    throw new ApiError(400, 'VALIDATION_ERROR', '请求参数有误');
-  }
-  return value as Record<string, unknown>;
-}
-
-function requiredText(value: unknown, limit = 100): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > limit) {
-    throw new ApiError(400, 'VALIDATION_ERROR', '请求参数有误');
-  }
-  return value.trim();
-}
-
-function selection(body: Record<string, unknown>): BookingSelection {
-  if (body.type === 'GROUP') return { type: 'GROUP', classSessionId: requiredText(body.classSessionId) };
-  if (body.type === 'PRIVATE') {
-    const coachId = requiredText(body.coachId);
-    const startsAt = requiredText(body.startsAt);
-    const endsAt = requiredText(body.endsAt);
-    if (isInstant(startsAt) && isInstant(endsAt)) return { type: 'PRIVATE', coachId, startsAt, endsAt };
-  }
-  throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的课程或时段');
-}
+import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
+import { staffSchedule } from './staff-schedule.ts';
+import { registerStaffRoutes } from './staff.ts';
+import { venueDate } from './time.ts';
 
 export function createApp(db: DatabaseSync, clock = () => new Date()) {
   const app = Fastify({ logger: false, bodyLimit: 4096 });
   const service = bookingService(db, clock);
+  const scheduling = staffSchedule(db, clock);
   const tokens = new Map<string, string>();
   const profileTokens = new Map<string, string>();
   const initialTime = clock();
   let seededDate = venueDate(initialTime);
   seedDemo(db, initialTime);
+  scheduling.roll(initialTime);
 
   app.addHook('preHandler', async () => {
     const now = clock();
     const today = venueDate(now);
     if (seededDate !== today) {
       seedDemo(db, now);
+      scheduling.roll(now);
       seededDate = today;
     }
   });
@@ -86,8 +66,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
     const coachId = requiredText(object(request.params).id);
-    const date = requiredText(object(request.query).date);
-    if (!isVenueDate(date)) throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的日期');
+    const date = dateInput(object(request.query).date);
     return service.listSlots(coachId, date);
   });
   app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
@@ -98,11 +77,12 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
   app.post('/api/bookings', async request => {
     const profile = user(request);
     const body = object(request.body);
-    return service.book(profile, selection(body), requiredText(body.requestKey));
+    return service.book(profile, selection(body), requiredText(body.requestKey), profile, expectedRevision(body.expectedRevision));
   });
   app.delete('/api/me/bookings/:id', async (request, reply) => {
     service.cancel(user(request), requiredText(object(request.params).id));
     return reply.code(204).send();
   });
+  registerStaffRoutes(app, db, clock, service, scheduling);
   return app;
 }

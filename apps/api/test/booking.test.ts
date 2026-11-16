@@ -109,7 +109,7 @@ test('私教连续开放、团课互斥、教练独立、重叠请求和取消�
   assert.equal((await book(app, parent, privateTraining(690, 780), 'gap')).json().code, 'SLOT_TAKEN');
   assert.equal((await book(app, parent, privateTraining(1410, 1470), 'midnight')).statusCode, 400);
 
-  db.prepare("INSERT INTO coach_exceptions VALUES ('li', ?, ?)").run(dateAt(date, 960), dateAt(date, 990));
+  db.prepare("INSERT INTO coach_exceptions (coach_id, starts_at, ends_at) VALUES ('li', ?, ?)").run(dateAt(date, 960), dateAt(date, 990));
   assert.equal((await book(app, parent, privateTraining(930, 990), 'exception')).json().code, 'SLOT_TAKEN');
   const results = await Promise.all([
     book(app, parent, privateTraining(1050, 1110), 'overlap-1'),

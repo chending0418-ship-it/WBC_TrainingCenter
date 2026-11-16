@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Account, Booking, BookingSelection, Child, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../packages/shared/contracts.js';
-import { maxPrivateMinutes, privateVenue, slotMinutes, transaction } from './database.ts';
-import { addDays, dateAt, venueDate } from './time.ts';
+import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../packages/shared/contracts.js';
+import { audit, maxPrivateMinutes, privateVenue, slotMinutes, transaction } from './database.ts';
+import { addDays, covers, dateAt, venueDate } from './time.ts';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -29,14 +29,9 @@ const bookingFields = `
 type ClassRow = Omit<Course, 'bookedByMe'> & { mine: number; coachId: string };
 type Interval = { start: number; end: number };
 
-function covers(windows: Interval[], start: number, end: number): boolean {
-  let covered = start;
-  for (const window of windows) {
-    if (window.start > covered) break;
-    covered = Math.max(covered, window.end);
-    if (covered >= end) return true;
-  }
-  return false;
+function quoteRevision(quote: Quote & { coachId: string }): string {
+  const { title, coachId, venue, startsAt, endsAt, points } = quote;
+  return createHash('sha256').update(JSON.stringify([title, coachId, venue, startsAt, endsAt, points])).digest('hex');
 }
 
 export function bookingService(db: DatabaseSync, clock: () => Date) {
@@ -171,9 +166,10 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return { coachId, startsAt, endsAt, title: '一对一训练', coachName: day.name, venue: privateVenue, points: privatePoints(duration, day.points) };
   }
 
-  function quote(user: string, selection: BookingSelection): Quote {
-    const { title, coachName, venue, startsAt, endsAt, points } = resolve(user, selection);
-    return { title, coachName, venue, startsAt, endsAt, points };
+  function quote(user: string, selection: BookingSelection): BookingQuote {
+    const details = resolve(user, selection);
+    const { title, coachName, venue, startsAt, endsAt, points } = details;
+    return { title, coachName, venue, startsAt, endsAt, points, revision: quoteRevision(details) };
   }
 
   function bookings(user: string): Booking[] {
@@ -183,7 +179,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     `).all(user) as unknown as Booking[];
   }
 
-  function book(user: string, selection: BookingSelection, requestKey: string): Booking {
+  function book(user: string, selection: BookingSelection, requestKey: string, operator = user, expectedRevision?: string): Booking {
     return transaction(db, () => {
       const payload = JSON.stringify(selection);
       const previous = db.prepare(`
@@ -197,7 +193,11 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       }
 
       if (!child(user)) throw new ApiError(409, 'CHILD_PROFILE_REQUIRED', '请先填写孩子姓名');
-      const { coachId, ...details } = resolve(user, selection);
+      const quote = resolve(user, selection);
+      if (expectedRevision && expectedRevision !== quoteRevision(quote)) {
+        throw new ApiError(409, 'QUOTE_CHANGED', '课程时间或积分已更新，请重新确认预约');
+      }
+      const { coachId, ...details } = quote;
       const overlap = db.prepare(`
         SELECT 1 FROM bookings WHERE user_id = ? AND status = 'CONFIRMED' AND starts_at < ? AND ends_at > ?
       `).get(user, details.endsAt, details.startsAt);
@@ -213,22 +213,24 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       `).run(id, user, selection.type, selection.type === 'GROUP' ? selection.classSessionId : null, coachId,
         details.title, details.venue, details.startsAt, details.endsAt, details.points, requestKey, payload, createdAt);
       db.prepare(`
-        INSERT INTO ledger (user_id, booking_id, source, delta, reason, created_at)
-        VALUES (?, ?, 'BOOKING', ?, ?, ?)
-      `).run(user, id, -details.points, '预约 · ' + details.title, createdAt);
+        INSERT INTO ledger (user_id, booking_id, source, delta, reason, created_at, operator)
+        VALUES (?, ?, 'BOOKING', ?, ?, ?, ?)
+      `).run(user, id, -details.points, '预约 · ' + details.title, createdAt, operator);
+      if (operator !== user) audit(db, operator, 'BOOKING_CREATED', id, createdAt);
       return { ...details, id, type: selection.type, status: 'CONFIRMED' };
     });
   }
 
-  function cancel(user: string, id: string): void {
+  function cancel(user: string, id: string, operator = user): void {
     transaction(db, () => {
       const booking = db.prepare('SELECT status, starts_at FROM bookings WHERE user_id = ? AND id = ?').get(user, id);
       if (!booking) throw new ApiError(404, 'NOT_FOUND', '未找到该预约');
       if (booking.status === 'CANCELLED') return;
       const now = clock().toISOString();
       // TODO: product decision — 取消截止时间，本地允许开课前取消。
-      if (String(booking.starts_at) <= now) throw new ApiError(409, 'CANCEL_NOT_ALLOWED', '课程已开始，请联系管理员');
+      if (operator === user && String(booking.starts_at) <= now) throw new ApiError(409, 'CANCEL_NOT_ALLOWED', '课程已开始，请联系管理员');
       db.prepare("UPDATE bookings SET status = 'CANCELLED', cancelled_at = ? WHERE id = ?").run(now, id);
+      if (operator !== user) audit(db, operator, 'BOOKING_CANCELLED', id, now);
       // TODO: product decision — 退回比例与到账时机，本地取消暂不退积分。
     });
   }
