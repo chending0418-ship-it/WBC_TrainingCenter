@@ -1,4 +1,4 @@
-<view class="page-shell">
+<view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">孩子资料</text>
   <view wx:if="{{loading}}" class="message">正在查询孩子资料…</view>
   <view wx:elif="{{error}}" class="message">

@@ -1,3 +1,4 @@
+import { allowPage } from '../../lib/session';
 import type { Booking, ManagedUser, StaffAccount, StaffLedgerSource } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { datetime } from '../../lib/display';
@@ -15,6 +16,7 @@ let request = 0;
 
 Page({
   data: {
+    authorized: false,
     ...emptyForm,
     original: null as Entry | null,
     users: [] as (ManagedUser & { label: string })[],
@@ -28,7 +30,12 @@ Page({
     bookings: [] as { id: string; label: string }[],
     ledger: [] as Entry[]
   },
-  onLoad() { void this.load(); },
+  onShow() {
+    const authorized = allowPage('ADMIN');
+    const firstShow = !this.data.authorized;
+    this.setData({ authorized });
+    if (authorized && firstShow) void this.load();
+  },
   async load() {
     const current = ++request;
     this.setData({ loading: true, error: '' });

@@ -1,0 +1,14 @@
+.entry-actions {
+  display: grid;
+  gap: 18rpx;
+  margin-top: 30rpx;
+}
+
+.entry-actions .button {
+  width: 100%;
+  margin: 0;
+}
+
+.entry-actions .entry-back {
+  margin-top: 14rpx;
+}

@@ -1,4 +1,4 @@
-<view class="page-shell">
+<view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">{{adding ? '为家长代约' : '预约管理'}}</text>
   <picker wx:if="{{date}}" mode="date" start="{{adding ? today : ''}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
     <view class="picker"><text class="picker-label">预约日期</text><text class="picker-value">{{date}}</text></view>

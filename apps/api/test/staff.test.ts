@@ -337,3 +337,33 @@ test('两个独立 SQLite 连接并发写入，余额不足时调减与预约只
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('登录返回服务端角色，退出只撤销当前会话，过期后不能继续读数据', async context => {
+  let current = now();
+  const { app } = fixture(context, () => current);
+  const paths = [
+    { role: 'PARENT', path: '/api/dev/session', payload: { profile: 'parent' }, own: '/api/me/account' },
+    { role: 'COACH', path: '/api/dev/coach-session', payload: { profile: 'coach-li' }, own: '/api/coach/me/schedule' },
+    { role: 'ADMIN', path: '/api/admin/session', payload: credentials, own: '/api/admin/users' }
+  ];
+  for (const { role, path, payload, own } of paths) {
+    const authenticate = async () => {
+      const result = await app.inject({ method: 'POST', url: path, payload });
+      assert.equal(result.statusCode, 200);
+      assert.equal(result.json().role, role);
+      return { authorization: 'Bearer ' + result.json().token };
+    };
+    const first = await authenticate();
+    const second = await authenticate();
+    assert.notEqual(first.authorization, second.authorization);
+    for (const endpoint of paths) {
+      const response = await app.inject({ url: endpoint.own, headers: first });
+      assert.equal(response.statusCode, own === endpoint.own ? 200 : 401);
+    }
+    assert.equal((await app.inject({ method: 'DELETE', url: path, headers: first, payload: {} })).statusCode, 204);
+    assert.equal((await app.inject({ url: own, headers: first })).statusCode, 401);
+    assert.equal((await app.inject({ url: own, headers: second })).statusCode, 200);
+    current = new Date(current.getTime() + 8 * 60 * 60 * 1000);
+    assert.equal((await app.inject({ url: own, headers: second })).statusCode, 401);
+  }
+});

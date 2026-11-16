@@ -1,3 +1,4 @@
+import { allowPage } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
@@ -48,6 +49,7 @@ function confirm(quote: Quote): Promise<boolean> {
 
 Page({
   data: {
+    authorized: false,
     mode: 'GROUP' as BookingSelection['type'],
     today: '',
     lastDate: '',
@@ -71,7 +73,9 @@ Page({
   },
 
   onShow() {
-    void this.refresh();
+    const authorized = allowPage('PARENT', true);
+    this.setData({ authorized });
+    if (authorized) void this.refresh();
   },
 
   async refresh() {

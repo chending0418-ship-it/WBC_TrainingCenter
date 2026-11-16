@@ -1,5 +1,6 @@
 {
   "pages": [
+    "pages/entry/index",
     "pages/schedule/index",
     "pages/bookings/index",
     "pages/account/index",
@@ -22,7 +23,7 @@
     "backgroundColor": "#FFFFFF",
     "borderStyle": "white",
     "list": [
-      { "pagePath": "pages/schedule/index", "text": "排课" },
+      { "pagePath": "pages/schedule/index", "text": "课表" },
       { "pagePath": "pages/bookings/index", "text": "我的预约" },
       { "pagePath": "pages/account/index", "text": "我的账户" }
     ]

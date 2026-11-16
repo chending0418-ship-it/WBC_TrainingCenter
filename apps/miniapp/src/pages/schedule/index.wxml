@@ -1,5 +1,5 @@
-<view class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">课程排期</text>
+<view wx:if="{{authorized}}" class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">课程表</text>
 
   <view wx:if="{{loading}}" class="message">正在加载排课…</view>
   <view wx:elif="{{error}}" class="message">

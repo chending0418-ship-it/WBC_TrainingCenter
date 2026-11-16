@@ -1,3 +1,4 @@
+import { allowPage } from '../../lib/session';
 import type { ClassDraft, ClassStatus, Coach, CoachHours, ManagedClass } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { timeRange } from '../../lib/display';
@@ -12,6 +13,7 @@ let request = 0;
 
 Page({
   data: {
+    authorized: false,
     mode: 'classes',
     date: '', today: '', lastDate: '', dayLabel: '',
     loading: true, loadError: '', saveError: '', busy: false,
@@ -21,7 +23,12 @@ Page({
     exceptions: [] as (CoachHours['exceptions'][number] & { label: string })[],
     blocking: false, blockStart: '', blockEnd: '', blockReason: ''
   },
-  onLoad() { void this.load(); },
+  onShow() {
+    const authorized = allowPage('ADMIN');
+    const firstShow = !this.data.authorized;
+    this.setData({ authorized });
+    if (authorized && firstShow) void this.load();
+  },
   async load() {
     this.setData({ loading: true, loadError: '' });
     try {

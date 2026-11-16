@@ -1,3 +1,4 @@
+import { allowPage } from '../../lib/session';
 import type { Booking } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { datetime, time } from '../../lib/display';
@@ -6,6 +7,7 @@ type Row = Booking & { hours: string; label: string };
 
 Page({
   data: {
+    authorized: false,
     upcoming: [] as Row[],
     history: [] as Row[],
     busyId: '',
@@ -14,7 +16,9 @@ Page({
   },
 
   onShow() {
-    void this.refresh();
+    const authorized = allowPage('PARENT', true);
+    this.setData({ authorized });
+    if (authorized) void this.refresh();
   },
 
   async refresh() {

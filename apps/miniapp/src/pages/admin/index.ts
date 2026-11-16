@@ -1,43 +1,23 @@
-import { errorMessage, RequestError } from '../../lib/client';
-import { hasStaffSession, staffContext, staffLogin, staffLogout } from '../../lib/staff';
+import { errorMessage } from '../../lib/request';
+import { allowPage, signOut } from '../../lib/session';
+import { staffContext } from '../../lib/staff';
 
 Page({
-  data: { signedIn: false, busy: false, password: '', error: '' },
+  data: { authorized: false, loading: true, error: '' },
   onShow() {
-    this.setData({ signedIn: hasStaffSession() });
-    if (this.data.signedIn) void this.checkSession();
+    const authorized = allowPage('ADMIN');
+    this.setData({ authorized });
+    if (authorized) void this.refresh();
   },
-  async checkSession() {
+  async refresh() {
+    this.setData({ loading: true, error: '' });
     try {
       await staffContext();
     } catch (error) {
-      this.setData({ signedIn: hasStaffSession(), error: errorMessage(error) });
-    }
-  },
-  changePassword(event: WechatMiniprogram.Input) {
-    this.setData({ password: event.detail.value });
-  },
-  async signIn() {
-    if (this.data.busy) return;
-    this.setData({ busy: true, error: '' });
-    try {
-      await staffLogin(this.data.password);
-      this.setData({ signedIn: true, password: '' });
-    } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {
-      this.setData({ busy: false });
+      this.setData({ loading: false });
     }
   },
-  async signOut() {
-    if (this.data.busy) return;
-    this.setData({ busy: true, error: '' });
-    try {
-      await staffLogout();
-    } catch (error) {
-      if (!(error instanceof RequestError) || error.status !== 401) this.setData({ error: errorMessage(error) });
-    } finally {
-      this.setData({ busy: false, signedIn: hasStaffSession() });
-    }
-  }
+  signOut
 });

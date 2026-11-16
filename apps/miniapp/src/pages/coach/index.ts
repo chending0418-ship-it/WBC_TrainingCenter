@@ -1,5 +1,6 @@
 import type { CoachLesson, CoachSchedule } from '../../../../../packages/shared/contracts.js';
-import { errorMessage, RequestError, send } from '../../lib/client';
+import { errorMessage } from '../../lib/request';
+import { allowPage, roleRequest, signOut } from '../../lib/session';
 import { dateLabel, localTimestamp, timeRange } from '../../lib/display';
 
 type Period = 'today' | 'week';
@@ -7,7 +8,6 @@ type Day = {
   date: string; label: string;
   lessons: (CoachLesson & { key: string; hours: string; names: string })[];
 };
-let session = '';
 let request = 0;
 
 function groupLessons(lessons: CoachLesson[]): Day[] {
@@ -31,31 +31,23 @@ function groupLessons(lessons: CoachLesson[]): Day[] {
 
 Page({
   data: {
-    profiles: [{ id: 'coach-li', name: '李晨' }, { id: 'coach-wang', name: '王悦' }],
-    profile: '', coachName: '', period: 'today' as Period,
-    rangeLabel: '', days: [] as Day[], loading: false, error: ''
+    authorized: false,
+    coachName: '', period: 'today' as Period,
+    rangeLabel: '', days: [] as Day[], loading: true, error: ''
   },
   onShow() {
-    if (this.data.profile) void this.refresh();
+    const authorized = allowPage('COACH');
+    this.setData({ authorized });
+    if (authorized) void this.refresh();
   },
   async onPullDownRefresh() {
     try {
-      if (this.data.profile) await this.refresh();
+      if (this.data.authorized) await this.refresh();
     } finally {
       wx.stopPullDownRefresh();
     }
   },
-  chooseCoach(event: WechatMiniprogram.TouchEvent) {
-    if (this.data.loading) return;
-    session = '';
-    this.setData({ profile: String(event.currentTarget.dataset.profile), period: 'today', days: [], error: '' });
-    void this.refresh();
-  },
-  switchCoach() {
-    request++;
-    session = '';
-    this.setData({ profile: '', coachName: '', rangeLabel: '', days: [], error: '', loading: false });
-  },
+  signOut,
   changePeriod(event: WechatMiniprogram.TouchEvent) {
     const period = event.currentTarget.dataset.period as Period;
     if (period === this.data.period) return;
@@ -64,26 +56,12 @@ Page({
   },
   async refresh() {
     const current = ++request;
-    const { profile, period } = this.data;
     this.setData({ loading: true, error: '' });
     try {
-      let token = session;
-      const login = () => send<{ token: string }>('/api/dev/coach-session', 'POST', { profile });
-      if (!token) token = (await login()).token;
-      const schedule = (token: string) => send<CoachSchedule>('/api/coach/me/schedule?period=' + period, 'GET', undefined, token);
-      let result: CoachSchedule;
-      try {
-        result = await schedule(token);
-      } catch (error) {
-        if (!(error instanceof RequestError) || error.status !== 401) throw error;
-        token = (await login()).token;
-        result = await schedule(token);
-      }
+      const result = await roleRequest<CoachSchedule>('COACH', '/api/coach/me/schedule?period=' + this.data.period);
       if (current !== request) return;
-      session = token;
       this.setData({
-        coachName: result.coachName,
-        days: groupLessons(result.lessons),
+        coachName: result.coachName, days: groupLessons(result.lessons),
         rangeLabel: result.from === result.to ? dateLabel(result.from) : dateLabel(result.from) + ' – ' + dateLabel(result.to)
       });
     } catch (error) {
