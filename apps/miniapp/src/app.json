@@ -1,0 +1,26 @@
+{
+  "pages": [
+    "pages/schedule/index",
+    "pages/bookings/index",
+    "pages/account/index",
+    "pages/child/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "训练空间",
+    "navigationBarBackgroundColor": "#F8F6F3",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F8F6F3"
+  },
+  "tabBar": {
+    "color": "#64575A",
+    "selectedColor": "#761F32",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/schedule/index", "text": "排课" },
+      { "pagePath": "pages/bookings/index", "text": "我的预约" },
+      { "pagePath": "pages/account/index", "text": "我的账户" }
+    ]
+  },
+  "style": "v2"
+}

@@ -1,0 +1,24 @@
+<view class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">我的账户</text>
+  <view wx:if="{{loading}}" class="message">正在查询账户…</view>
+  <view wx:elif="{{error}}" class="message">
+    <view>{{error}}</view>
+    <button class="button quiet" bindtap="refresh" hover-class="press">重新查询</button>
+  </view>
+  <block wx:else>
+    <view class="balance">
+      <view>可用积分</view>
+      <text class="balance-number">{{balance}}</text>
+    </view>
+    <navigator class="picker profile" url="/pages/child/index" hover-class="press">
+      <text>孩子资料</text><text class="accent">{{childName ? childName + ' · 编辑' : '填写姓名'}}</text>
+    </navigator>
+
+    <view class="section-title" role="heading" aria-level="2">积分流水</view>
+    <view wx:if="{{!ledger.length}}" class="muted">暂无积分变动。</view>
+    <view wx:for="{{ledger}}" wx:key="id" class="list-row">
+      <view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.change}}</text></view>
+      <view class="muted">{{item.date}}</view>
+    </view>
+  </block>
+</view>
