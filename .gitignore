@@ -1,0 +1,6 @@
+node_modules/
+apps/api/data/
+apps/miniapp/dist/
+project.private.config.json
+.env
+.DS_Store

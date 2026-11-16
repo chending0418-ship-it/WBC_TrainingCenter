@@ -1,0 +1,142 @@
+page {
+  background: #f8f6f3;
+  color: #272327;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  font-size: 30rpx;
+  line-height: 1.55;
+}
+
+.page-shell {
+  box-sizing: border-box;
+  max-width: 960rpx;
+  margin: 0 auto;
+  padding: 28rpx 40rpx calc(52rpx + env(safe-area-inset-bottom));
+}
+
+.page-title {
+  display: block;
+  margin: 0 0 24rpx;
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -1rpx;
+}
+
+.section-title {
+  margin: 34rpx 0 10rpx;
+  font-size: 34rpx;
+  font-weight: 650;
+}
+
+.muted {
+  color: #66595c;
+  font-size: 26rpx;
+}
+
+.accent {
+  color: #761f32;
+  font-weight: 650;
+}
+
+.button {
+  box-sizing: border-box;
+  min-height: 88rpx;
+  margin: 0;
+  padding: 20rpx 24rpx;
+  border: 1rpx solid transparent;
+  border-radius: 16rpx;
+  background: #761f32;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.button::after {
+  border: 0;
+}
+
+.button.quiet {
+  border-color: #d5c4c5;
+  background: #fff;
+  color: #761f32;
+}
+
+.button[disabled] {
+  background: #ede7e5;
+  color: #6c6063;
+}
+
+.press {
+  opacity: .83;
+}
+
+.field, .picker {
+  box-sizing: border-box;
+  min-height: 92rpx;
+  padding: 21rpx 26rpx;
+  border: 1rpx solid #d5c4c5;
+  border-radius: 16rpx;
+  background: #fff;
+  color: #272327;
+}
+
+.field {
+  height: 92rpx;
+}
+
+.picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.picker-label {
+  color: #66595c;
+  font-size: 26rpx;
+}
+
+.picker-value {
+  font-weight: 600;
+  text-align: right;
+}
+
+.message {
+  margin: 32rpx 0;
+  padding: 24rpx 0;
+  color: #66595c;
+}
+
+.message .button {
+  margin-top: 16rpx;
+}
+
+.list-row {
+  padding: 26rpx 0;
+  border-bottom: 1rpx solid #ded5d3;
+}
+
+.row-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.row-name {
+  font-weight: 650;
+}
+
+.row-action {
+  margin-top: 20rpx;
+}
+
+.form-field {
+  display: block;
+  margin: 22rpx 0;
+}
+
+.form-field .field {
+  margin-top: 8rpx;
+}
