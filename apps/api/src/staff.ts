@@ -1,11 +1,12 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { ClassDraft, ClassPlan, ManagedBooking, ManagedUser, MinuteWindow, StaffAccount } from '../../../packages/shared/contracts.js';
+import type { ClassDraft, ClassPlan, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
 import type { bookingService } from './booking.ts';
-import { audit, transaction } from './database.ts';
+import { transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
+import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
 import { addDays, dateAt } from './time.ts';
 
@@ -164,29 +165,24 @@ export function registerStaffRoutes(
     routes.get('/accounts/:id', async request => {
       const userId = requiredText(object(request.params).id);
       requireUser(userId);
-      const ledger = db.prepare(`
-        SELECT id, delta, reason, created_at AS createdAt, source, reference, operator
-        FROM ledger WHERE user_id = ? ORDER BY id DESC
-      `).all(userId) as unknown as StaffAccount['ledger'];
-      return { ledger, balance: ledger.reduce((sum, entry) => sum + entry.delta, 0) };
+      return readStaffAccount(db, userId);
+    });
+    routes.get('/accounts/:id/bookings', async request => {
+      const userId = requiredText(object(request.params).id);
+      requireUser(userId);
+      return booking.bookings(userId);
     });
     routes.post('/accounts/:id/ledger', async request => {
       const userId = requiredText(object(request.params).id);
       requireUser(userId);
       const body = object(request.body);
-      // TODO: product decision — 线下实收与积分的换算比例。本地演示录入已确认应增加的积分。
-      const points = integer(body.points, 1, 100000, '请输入 1 至 100000 的整数积分');
-      const reason = requiredText(body.reason, 100);
-      const reference = requiredText(body.reference, 100);
-      return safeWrite(requiredText(body.requestKey), 'POINTS_CREDITED', { userId, points, reason, reference }, () => {
-        const now = clock().toISOString();
-        const entry = db.prepare(`
-          INSERT INTO ledger (user_id, source, delta, reason, created_at, operator, reference)
-          VALUES (?, 'OFFLINE_CREDIT', ?, ?, ?, ?, ?)
-        `).run(userId, points, reason, now, demoAdmin, reference);
-        audit(db, demoAdmin, 'POINTS_CREDITED', String(entry.lastInsertRowid), now);
-        return { id: Number(entry.lastInsertRowid) };
-      });
+      const input = ledgerInstruction(body);
+      // Keep the stored fingerprint of Phase 2 top-ups so a retry across migration still returns its original entry.
+      const payload = input.source === 'OFFLINE_CREDIT'
+        ? { userId, points: input.delta, reason: input.reason, reference: input.reference }
+        : { userId, ...input };
+      return safeWrite(requiredText(body.requestKey), ledgerActions[input.source], payload,
+        () => postLedgerEntry(db, userId, input, demoAdmin, clock().toISOString()));
     });
     routes.get('/bookings', async request => {
       const query = object(request.query);

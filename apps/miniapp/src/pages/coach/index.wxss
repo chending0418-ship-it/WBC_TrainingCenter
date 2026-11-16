@@ -1,0 +1,17 @@
+.coach-option {
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.coach-toolbar {
+  align-items: center;
+}
+
+.coach-toolbar .button {
+  flex-shrink: 0;
+  width: auto;
+}
+
+.lesson-type {
+  flex-shrink: 0;
+}

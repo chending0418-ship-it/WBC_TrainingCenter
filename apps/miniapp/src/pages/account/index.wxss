@@ -18,6 +18,8 @@
   margin-top: 24rpx;
 }
 
-.staff-entry {
-  margin-top: 48rpx;
+.workspaces {
+  display: grid;
+  gap: 16rpx;
+  margin-top: 36rpx;
 }

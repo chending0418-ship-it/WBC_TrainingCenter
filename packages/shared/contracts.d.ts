@@ -114,6 +114,33 @@ export interface CoachHours {
   exceptions: (MinuteWindow & { id: string; reason: string })[];
 }
 
+export type StaffLedgerSource = 'OFFLINE_CREDIT' | 'ADJUSTMENT' | 'REVERSAL';
+
 export interface StaffAccount extends Account {
-  ledger: (Account['ledger'][number] & { source: string; operator: string | null; reference: string | null })[];
+  ledger: (Account['ledger'][number] & {
+    source: 'SEED' | 'BOOKING' | StaffLedgerSource;
+    operator: string | null;
+    reference: string | null;
+    bookingId: string | null;
+    reversalOf: number | null;
+    reversalId: number | null;
+  })[];
+}
+
+export interface CoachLesson {
+  id: string;
+  type: BookingSelection['type'];
+  title: string;
+  venue: string;
+  startsAt: string;
+  endsAt: string;
+  childNames: string[];
+  bookedCount: number;
+}
+
+export interface CoachSchedule {
+  coachName: string;
+  from: string;
+  to: string;
+  lessons: CoachLesson[];
 }

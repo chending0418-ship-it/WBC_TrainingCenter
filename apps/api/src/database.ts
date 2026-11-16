@@ -128,6 +128,14 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 2;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 3) return;
+    db.exec(`
+      ALTER TABLE ledger ADD COLUMN reversal_of INTEGER REFERENCES ledger(id);
+      CREATE UNIQUE INDEX ledger_reversal_once ON ledger (reversal_of) WHERE reversal_of IS NOT NULL;
+      PRAGMA user_version = 3;
+    `);
+  });
   return db;
 }
 

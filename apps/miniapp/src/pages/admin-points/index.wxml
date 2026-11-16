@@ -1,6 +1,6 @@
 <view class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">积分录入</text>
-  <picker wx:if="{{users.length}}" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy}}">
+  <text class="page-title" role="heading" aria-level="1">{{source === 'REVERSAL' ? '冲正流水' : '积分管理'}}</text>
+  <picker wx:if="{{users.length}}" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy || source === 'REVERSAL'}}">
     <view class="picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text></view>
   </picker>
   <view wx:if="{{loading}}" class="message">正在查询积分账户…</view>
@@ -9,29 +9,64 @@
   </view>
   <block wx:elif="{{users.length}}">
     <view class="details">当前可用积分 <text class="accent">{{balance}}</text></view>
+    <view wx:if="{{source !== 'REVERSAL'}}" class="section-actions">
+      <button class="button {{source === 'OFFLINE_CREDIT' ? '' : 'quiet'}}" data-source="OFFLINE_CREDIT"
+        bindtap="setMode" disabled="{{busy}}" aria-pressed="{{source === 'OFFLINE_CREDIT'}}" hover-class="press">线下入账</button>
+      <button class="button {{source === 'ADJUSTMENT' ? '' : 'quiet'}}" data-source="ADJUSTMENT"
+        bindtap="setMode" disabled="{{busy}}" aria-pressed="{{source === 'ADJUSTMENT'}}" hover-class="press">人工调整</button>
+    </view>
     <form bindsubmit="save">
+      <view wx:if="{{source === 'REVERSAL'}}" class="details">
+        <view class="row-name">原流水 #{{original.id}} · {{original.deltaLabel}} 积分</view>
+        <view>{{original.reason}}</view>
+        <view class="muted">冲正后{{original.delta > 0 ? '扣减' : '增加'}} {{original.delta > 0 ? original.delta : -original.delta}} 积分，原记录保留。</view>
+      </view>
+      <block wx:else>
+        <view wx:if="{{source === 'ADJUSTMENT'}}">
+          <view class="subheading">调整方向</view>
+          <view class="section-actions">
+            <button class="button {{direction === 1 ? '' : 'quiet'}}" data-direction="1" bindtap="setDirection"
+              disabled="{{busy}}" aria-pressed="{{direction === 1}}" hover-class="press">增加</button>
+            <button class="button {{direction === -1 ? '' : 'quiet'}}" data-direction="-1" bindtap="setDirection"
+              disabled="{{busy}}" aria-pressed="{{direction === -1}}" hover-class="press">扣减</button>
+          </view>
+        </view>
+        <label class="form-field">
+          <text>{{source === 'OFFLINE_CREDIT' ? '增加积分' : '调整积分'}}</text>
+          <input class="field" type="number" maxlength="6" placeholder="例如 100" value="{{points}}" data-field="points" bindinput="changeField" disabled="{{busy}}" />
+        </label>
+        <picker wx:if="{{source === 'ADJUSTMENT'}}" range="{{bookings}}" range-key="label" value="{{bookingIndex}}" bindchange="selectBooking" disabled="{{busy}}">
+          <view class="picker"><text class="picker-label">关联预约</text><text class="picker-value">{{bookings[bookingIndex].label}}</text></view>
+        </picker>
+      </block>
       <label class="form-field">
-        <text>增加积分</text>
-        <input class="field" type="number" maxlength="6" placeholder="例如 100" value="{{points}}" data-field="points" bindinput="changeField" disabled="{{busy}}" />
+        <text>{{source === 'OFFLINE_CREDIT' ? '入账原因' : (source === 'REVERSAL' ? '冲正原因' : '调整原因')}}</text>
+        <input class="field" maxlength="100" placeholder="{{source === 'OFFLINE_CREDIT' ? '例如 线下收款' : '填写原因'}}" value="{{reason}}" data-field="reason" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <label class="form-field">
-        <text>入账原因</text>
-        <input class="field" maxlength="100" placeholder="例如 线下收款" value="{{reason}}" data-field="reason" bindinput="changeField" disabled="{{busy}}" />
-      </label>
-      <label class="form-field">
-        <text>凭证号或备注</text>
+        <text>{{source === 'OFFLINE_CREDIT' ? '凭证号或备注' : '备注（选填）'}}</text>
         <input class="field" maxlength="100" placeholder="例如 DEMO-001" value="{{reference}}" data-field="reference" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-      <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">确认入账</button>
+      <view class="section-actions">
+        <button wx:if="{{source === 'REVERSAL'}}" class="button quiet" bindtap="closeReversal" disabled="{{busy}}" hover-class="press">返回</button>
+        <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">{{action}}</button>
+      </view>
     </form>
-    <view class="section-title" role="heading" aria-level="2">积分流水</view>
-    <view wx:if="{{!ledger.length}}" class="message">该账户暂无积分流水。</view>
-    <view wx:for="{{ledger}}" wx:key="id" class="list-row">
-      <view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.deltaLabel}}</text></view>
-      <view class="muted">{{item.dateLabel}}{{item.operator ? ' · ' + item.operator : ''}}</view>
-      <view wx:if="{{item.reference}}" class="muted">{{item.reference}}</view>
-    </view>
+    <block wx:if="{{source !== 'REVERSAL'}}">
+      <view class="section-title" role="heading" aria-level="2">积分流水</view>
+      <view wx:if="{{!ledger.length}}" class="message">该账户暂无积分流水。</view>
+      <view wx:for="{{ledger}}" wx:key="id" class="list-row">
+        <view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.deltaLabel}}</text></view>
+        <view class="muted">{{item.dateLabel}}{{item.operator ? ' · ' + item.operator : ''}}</view>
+        <view wx:if="{{item.reference}}" class="muted">{{item.reference}}</view>
+        <view wx:if="{{item.bookingLabel}}" class="muted">关联预约 {{item.bookingLabel}}</view>
+        <view wx:if="{{item.reversalId}}" class="muted">已冲正 · 流水 #{{item.reversalId}}</view>
+        <view wx:if="{{item.reversalOf}}" class="muted">原流水 #{{item.reversalOf}}</view>
+        <button wx:if="{{item.canReverse}}" class="button quiet row-action" bindtap="startReversal" data-id="{{item.id}}"
+          disabled="{{busy}}" aria-label="冲正流水 {{item.id}}" hover-class="press">冲正</button>
+      </view>
+    </block>
   </block>
-  <view wx:else class="message">还没有可录入积分的账户。</view>
+  <view wx:else class="message">还没有可操作的账户。</view>
 </view>
