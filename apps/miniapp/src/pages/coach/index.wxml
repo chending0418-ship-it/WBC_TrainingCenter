@@ -1,0 +1,41 @@
+<view class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">授课日程</text>
+  <block wx:if="{{!profile}}">
+    <view class="muted">选择本地演示教练。</view>
+    <button wx:for="{{profiles}}" wx:key="id" class="button quiet coach-option" bindtap="chooseCoach"
+      data-profile="{{item.id}}" hover-class="press">{{item.name}}教练</button>
+  </block>
+  <block wx:else>
+    <view class="row-line coach-toolbar">
+      <view class="row-name">{{coachName ? coachName + '教练' : ''}}</view>
+      <button class="button quiet" bindtap="switchCoach" hover-class="press">切换教练</button>
+    </view>
+    <view class="section-actions">
+      <button class="button {{period === 'today' ? '' : 'quiet'}}" data-period="today" bindtap="changePeriod"
+        aria-pressed="{{period === 'today'}}" hover-class="press">今天</button>
+      <button class="button {{period === 'week' ? '' : 'quiet'}}" data-period="week" bindtap="changePeriod"
+        aria-pressed="{{period === 'week'}}" hover-class="press">本周</button>
+    </view>
+    <view wx:if="{{loading}}" class="message">正在查询授课日程…</view>
+    <view wx:elif="{{error}}" class="message">
+      <view>{{error}}</view>
+      <button class="button quiet" bindtap="refresh" hover-class="press">重新查询</button>
+    </view>
+    <block wx:else>
+      <view class="muted">{{rangeLabel}}</view>
+      <view wx:if="{{!days.length}}" class="message">{{period === 'today' ? '今天没有授课安排。' : '本周没有授课安排。'}}</view>
+      <view wx:for="{{days}}" wx:key="date" wx:for-item="day">
+        <view wx:if="{{period === 'week'}}" class="section-title" role="heading" aria-level="2">{{day.label}}</view>
+        <view wx:for="{{day.lessons}}" wx:key="key" class="list-row">
+          <view class="row-line">
+            <text class="row-name">{{item.title}}</text>
+            <text class="muted lesson-type">{{item.type === 'GROUP' ? '团课' : '私教'}}</text>
+          </view>
+          <view>{{item.hours}} · {{item.venue}}</view>
+          <view class="muted">已预约 {{item.bookedCount}} 人</view>
+          <view wx:if="{{item.names}}" class="details">{{item.names}}</view>
+        </view>
+      </view>
+    </block>
+  </block>
+</view>

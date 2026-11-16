@@ -7,7 +7,8 @@
     "pages/admin/index",
     "pages/admin-schedule/index",
     "pages/admin-bookings/index",
-    "pages/admin-points/index"
+    "pages/admin-points/index",
+    "pages/coach/index"
   ],
   "window": {
     "navigationBarTitleText": "训练空间",

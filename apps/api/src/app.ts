@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import Fastify from 'fastify';
 import type { FastifyRequest } from 'fastify';
 import { ApiError, bookingService } from './booking.ts';
+import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
 import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
 import { staffSchedule } from './staff-schedule.ts';
@@ -84,5 +85,6 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
     return reply.code(204).send();
   });
   registerStaffRoutes(app, db, clock, service, scheduling);
+  registerCoachRoutes(app, db, clock);
   return app;
 }

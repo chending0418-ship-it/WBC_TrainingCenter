@@ -19,8 +19,8 @@
       <view class="muted">查看、代约和取消</view>
     </navigator>
     <navigator class="action-link" url="/pages/admin-points/index" hover-class="press">
-      <view class="row-name">积分录入</view>
-      <view class="muted">线下入账和积分流水</view>
+      <view class="row-name">积分管理</view>
+      <view class="muted">线下入账、人工调整和冲正</view>
     </navigator>
     <view class="form-error" wx:if="{{error}}">{{error}}</view>
     <button class="button quiet row-action" bindtap="signOut" loading="{{busy}}" disabled="{{busy}}" hover-class="press">退出管理端</button>

@@ -14,9 +14,14 @@
       <text>孩子资料</text><text class="accent">{{childName ? childName + ' · 编辑' : '填写姓名'}}</text>
     </navigator>
   </block>
-  <navigator class="picker profile staff-entry" url="/pages/admin/index" hover-class="press">
-    <text>管理端</text><text class="accent">进入</text>
-  </navigator>
+  <view class="workspaces">
+    <navigator class="picker" url="/pages/admin/index" hover-class="press">
+      <text>管理端</text><text class="accent">进入</text>
+    </navigator>
+    <navigator class="picker" url="/pages/coach/index" hover-class="press">
+      <text>教练端</text><text class="accent">进入</text>
+    </navigator>
+  </view>
 
   <block wx:if="{{!loading && !error}}">
     <view class="section-title" role="heading" aria-level="2">积分流水</view>
