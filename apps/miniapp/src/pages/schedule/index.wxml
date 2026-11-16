@@ -39,7 +39,7 @@
           <text class="course-title">{{item.title}}</text>
           <text class="accent course-time">{{item.hours}}</text>
         </view>
-        <view class="muted">{{item.coachName}}教练 · {{item.venue}}</view>
+        <view class="muted">{{item.coachName}}教练 · {{item.venue}}{{item.courseTypeName ? ' · ' + item.courseTypeName : ''}}</view>
         <view class="course-action">
           <view>
             <view class="row-name">{{item.points}} 积分</view>

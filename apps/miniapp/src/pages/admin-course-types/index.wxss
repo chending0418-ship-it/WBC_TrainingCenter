@@ -1,0 +1,4 @@
+.refund-toggle {
+  align-items: center;
+  min-height: 88rpx;
+}

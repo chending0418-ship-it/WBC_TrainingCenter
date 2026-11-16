@@ -136,6 +136,20 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 3;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 4) return;
+    db.exec(`
+      CREATE TABLE course_types (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        max_students INTEGER NOT NULL CHECK (max_students BETWEEN 1 AND 500),
+        refund_basis_points INTEGER NOT NULL CHECK (refund_basis_points BETWEEN 0 AND 10000)
+      ) STRICT;
+      ALTER TABLE class_templates ADD COLUMN course_type_id TEXT REFERENCES course_types(id);
+      ALTER TABLE class_sessions ADD COLUMN course_type_id TEXT REFERENCES course_types(id);
+      PRAGMA user_version = 4;
+    `);
+  });
   return db;
 }
 

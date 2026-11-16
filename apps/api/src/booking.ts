@@ -18,6 +18,7 @@ export class ApiError extends Error {
 const classFields = `
   s.id, s.title, c.name AS coachName, s.venue, s.starts_at AS startsAt,
   s.ends_at AS endsAt, s.points, s.capacity,
+  (SELECT t.name FROM course_types t WHERE t.id = s.course_type_id) AS courseTypeName,
   (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS bookedCount,
   EXISTS (SELECT 1 FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED' AND b.user_id = ?) AS mine
 `;

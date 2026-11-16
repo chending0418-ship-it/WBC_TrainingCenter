@@ -3,6 +3,13 @@ export interface Coach {
   name: string;
 }
 
+export interface CourseType {
+  id: string;
+  name: string;
+  maxStudents: number;
+  refundPercent: number;
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -14,6 +21,7 @@ export interface Course {
   capacity: number;
   bookedCount: number;
   bookedByMe: boolean;
+  courseTypeName: string | null;
 }
 
 export interface Schedule {
@@ -66,6 +74,7 @@ export interface ApiFailure {
 export type ClassStatus = 'PUBLISHED' | 'CLOSED';
 
 export interface ClassDraft {
+  courseTypeId?: string | null;
   title: string;
   coachId: string;
   venue: string;
@@ -82,6 +91,8 @@ export interface ClassPlan extends ClassDraft {
 }
 
 export interface ManagedClass extends ClassDraft {
+  courseTypeId: string | null;
+  courseTypeName: string | null;
   id: string;
   coachName: string;
   startsAt: string;
