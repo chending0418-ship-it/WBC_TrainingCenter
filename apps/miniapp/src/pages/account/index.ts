@@ -1,9 +1,11 @@
+import { allowPage, signOut } from '../../lib/session';
 import type { Account, Child } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { datetime } from '../../lib/display';
 
 Page({
   data: {
+    authorized: false,
     balance: 0,
     ledger: [] as { id: number; reason: string; change: string; date: string }[],
     childName: '',
@@ -12,8 +14,12 @@ Page({
   },
 
   onShow() {
-    void this.refresh();
+    const authorized = allowPage('PARENT', true);
+    this.setData({ authorized });
+    if (authorized) void this.refresh();
   },
+
+  signOut,
 
   async refresh() {
     this.setData({ loading: true, error: '' });

@@ -1,18 +1,18 @@
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { ClassDraft, ClassPlan, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
 import type { bookingService } from './booking.ts';
 import { transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
+import { roleSessions } from './role-session.ts';
 import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
 import { addDays, dateAt } from './time.ts';
 
 const demoAdmin = 'local-admin';
 const demoPassword = 'wbc-demo-2026';
-const sessionDuration = 8 * 60 * 60 * 1000;
 
 function classDraft(body: Record<string, unknown>): ClassDraft {
   const duration = integer(body.duration, 1, 720, '课程时长须为 1 至 720 分钟');
@@ -50,29 +50,14 @@ export function registerStaffRoutes(
 ) {
   const salt = randomBytes(16);
   const secret = scryptSync(process.env.WBC_ADMIN_PASSWORD ?? demoPassword, salt, 64);
-  const sessions = new Map<string, number>();
+  const sessions = roleSessions('ADMIN', clock, '请先登录管理端');
   app.post('/api/admin/session', async request => {
     const password = object(request.body).password;
     if (typeof password !== 'string' || password.length > 128 || !timingSafeEqual(scryptSync(password, salt, 64), secret)) {
       throw new ApiError(401, 'INVALID_CREDENTIALS', '管理员密码错误');
     }
-    const time = clock().getTime();
-    for (const [token, expiry] of sessions) {
-      if (expiry <= time) sessions.delete(token);
-    }
-    const token = randomUUID();
-    sessions.set(token, time + sessionDuration);
-    return { token };
+    return sessions.create(demoAdmin);
   });
-
-  function staffToken(request: FastifyRequest): string {
-    const token = request.headers.authorization?.match(/^Bearer (.+)$/)?.[1] ?? '';
-    if ((sessions.get(token) ?? 0) <= clock().getTime()) {
-      sessions.delete(token);
-      throw new ApiError(401, 'NOT_AUTHORIZED', '请先登录管理端');
-    }
-    return token;
-  }
 
   function safeWrite<T>(key: string, action: string, data: unknown, write: () => T): T {
     return transaction(db, () => {
@@ -105,9 +90,9 @@ export function registerStaffRoutes(
   }
 
   void app.register(async routes => {
-    routes.addHook('preHandler', async request => { staffToken(request); });
+    routes.addHook('preHandler', async request => { sessions.authorize(request.headers.authorization); });
     routes.delete('/session', async (request, reply) => {
-      sessions.delete(staffToken(request));
+      sessions.revoke(request.headers.authorization);
       return reply.code(204).send();
     });
     routes.get('/context', async () => {

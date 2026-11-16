@@ -1,32 +1,12 @@
 import type { Coach } from '../../../../packages/shared/contracts.js';
-import { RequestError, send } from './client';
-import type { Method } from './client';
+import { RequestError } from './request';
+import type { Method } from './request';
+import { roleRequest } from './session';
 
-let token = '';
 const pending = new Map<string, { requestKey: string; expectedRevision?: string }>();
 
-export async function staffLogin(password: string) {
-  const session = await send<{ token: string }>('/api/admin/session', 'POST', { password });
-  token = session.token;
-}
-
-export function hasStaffSession() {
-  return !!token;
-}
-
-export async function staffApi<T>(path: string, method: Method = 'GET', data?: object): Promise<T> {
-  const activeToken = token;
-  try {
-    return await send<T>('/api/admin' + path, method, data, activeToken);
-  } catch (error) {
-    if (error instanceof RequestError && error.status === 401 && token === activeToken) token = '';
-    throw error;
-  }
-}
-
-export async function staffLogout() {
-  await staffApi('/session', 'DELETE');
-  token = '';
+export function staffApi<T>(path: string, method: Method = 'GET', data?: object): Promise<T> {
+  return roleRequest<T>('ADMIN', '/api/admin' + path, method, data);
 }
 
 export function hasPendingStaffWrite(path: string, data: object) {

@@ -1,3 +1,4 @@
+import { allowPage } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, ManagedBooking, ManagedClass, ManagedUser, PrivateSlot } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { datetime, time, timeRange } from '../../lib/display';
@@ -11,13 +12,19 @@ let choicesRequest = 0;
 
 Page({
   data: {
+    authorized: false,
     today: '', lastDate: '', date: '', loading: true, busy: false, loadError: '', saveError: '',
     bookings: [] as ListRow[], users: [] as { id: string; label: string }[], coaches: [] as Coach[],
     adding: false, type: 'GROUP' as BookingSelection['type'],
     userIndex: 0, coachIndex: 0, optionIndex: 0, choicesLoading: false, choicesError: '',
     classes: [] as ClassOption[], slots: [] as SlotOption[]
   },
-  onLoad() { void this.load(); },
+  onShow() {
+    const authorized = allowPage('ADMIN');
+    const firstShow = !this.data.authorized;
+    this.setData({ authorized });
+    if (authorized && firstShow) void this.load();
+  },
   async load() {
     this.setData({ loading: true, loadError: '' });
     try {

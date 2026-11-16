@@ -1,8 +1,10 @@
+import { allowPage } from '../../lib/session';
 import type { Child } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 
 Page({
   data: {
+    authorized: false,
     name: '',
     loading: true,
     saving: false,
@@ -10,8 +12,11 @@ Page({
     saveError: ''
   },
 
-  onLoad() {
-    void this.refresh();
+  onShow() {
+    const authorized = allowPage('PARENT');
+    const firstShow = !this.data.authorized;
+    this.setData({ authorized });
+    if (authorized && firstShow) void this.refresh();
   },
 
   async refresh() {

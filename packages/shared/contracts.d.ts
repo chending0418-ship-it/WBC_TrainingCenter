@@ -144,3 +144,10 @@ export interface CoachSchedule {
   to: string;
   lessons: CoachLesson[];
 }
+
+export type SessionRole = 'PARENT' | 'COACH' | 'ADMIN';
+
+export interface RoleSession {
+  role: SessionRole;
+  token: string;
+}

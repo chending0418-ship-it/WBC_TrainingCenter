@@ -1,4 +1,4 @@
-<view class="page-shell">
+<view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">我的账户</text>
   <view wx:if="{{loading}}" class="message">正在查询账户…</view>
   <view wx:elif="{{error}}" class="message">
@@ -14,14 +14,7 @@
       <text>孩子资料</text><text class="accent">{{childName ? childName + ' · 编辑' : '填写姓名'}}</text>
     </navigator>
   </block>
-  <view class="workspaces">
-    <navigator class="picker" url="/pages/admin/index" hover-class="press">
-      <text>管理端</text><text class="accent">进入</text>
-    </navigator>
-    <navigator class="picker" url="/pages/coach/index" hover-class="press">
-      <text>教练端</text><text class="accent">进入</text>
-    </navigator>
-  </view>
+  <button class="button quiet logout-button" bindtap="signOut" hover-class="press">退出家长登录</button>
 
   <block wx:if="{{!loading && !error}}">
     <view class="section-title" role="heading" aria-level="2">积分流水</view>

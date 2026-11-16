@@ -164,9 +164,10 @@ test('上海日期滚动后补齐第 30 天，已开课或停开的班次无法�
   db.prepare("UPDATE class_sessions SET status = 'CLOSED' WHERE id = ?").run(group.classSessionId);
   assert.equal((await book(app, parent, group, 'closed')).statusCode, 404);
   current = new Date(dateAt(date, 1140));
-  assert.equal((await book(app, parent, { type: 'GROUP', classSessionId: date + '-stability' }, 'started')).json().code, 'OUTSIDE_BOOKING_WINDOW');
+  const resumed = await login(app);
+  assert.equal((await book(app, resumed, { type: 'GROUP', classSessionId: date + '-stability' }, 'started')).json().code, 'OUTSIDE_BOOKING_WINDOW');
   current = new Date(dateAt('2031-01-01'));
-  const schedule = (await app.inject({ url: '/api/schedule', headers: parent })).json<Schedule>();
+  const schedule = (await app.inject({ url: '/api/schedule', headers: resumed })).json<Schedule>();
   assert.equal(schedule.today, '2031-01-01');
   assert.equal(schedule.lastDate, '2031-01-30');
   assert.equal(schedule.courses.length, 60);

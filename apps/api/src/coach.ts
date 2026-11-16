@@ -1,35 +1,30 @@
-import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import type { CoachLesson, CoachSchedule } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
 import { object, requiredText } from './input.ts';
+import { roleSessions } from './role-session.ts';
 import { addDays, dateAt, venueDate, weekday } from './time.ts';
 
 const demoProfiles = new Map([['coach-li', 'li'], ['coach-wang', 'wang']]);
 type LessonRow = Omit<CoachLesson, 'childNames' | 'bookedCount'> & { childName: string | null };
 
 export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, clock: () => Date) {
-  const sessions = new Map<string, string>();
-  const profileTokens = new Map<string, string>();
+  const sessions = roleSessions('COACH', clock, '请重新登录教练端');
 
   app.post('/api/dev/coach-session', async request => {
     const profile = requiredText(object(request.body).profile);
     const coachId = demoProfiles.get(profile);
     if (!coachId) throw new ApiError(400, 'VALIDATION_ERROR', '未知的演示教练');
-    let token = profileTokens.get(profile);
-    if (!token) {
-      token = randomUUID();
-      profileTokens.set(profile, token);
-      sessions.set(token, coachId);
-    }
-    return { token };
+    return sessions.create(coachId);
+  });
+  app.delete('/api/dev/coach-session', async (request, reply) => {
+    sessions.revoke(request.headers.authorization);
+    return reply.code(204).send();
   });
 
   app.get('/api/coach/me/schedule', async (request): Promise<CoachSchedule> => {
-    const token = request.headers.authorization?.match(/^Bearer (.+)$/)?.[1] ?? '';
-    const coachId = sessions.get(token);
-    if (!coachId) throw new ApiError(401, 'NOT_AUTHORIZED', '请重新进入教练端');
+    const coachId = sessions.authorize(request.headers.authorization).subject;
     const period = object(request.query).period ?? 'today';
     if (period !== 'today' && period !== 'week') throw new ApiError(400, 'VALIDATION_ERROR', '请选择今日或本周');
     const coach = db.prepare('SELECT name FROM coaches WHERE id = ?').get(coachId);

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import Fastify from 'fastify';
 import type { FastifyRequest } from 'fastify';
@@ -6,6 +5,7 @@ import { ApiError, bookingService } from './booking.ts';
 import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
 import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
+import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
 import { venueDate } from './time.ts';
@@ -14,8 +14,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
   const app = Fastify({ logger: false, bodyLimit: 4096 });
   const service = bookingService(db, clock);
   const scheduling = staffSchedule(db, clock);
-  const tokens = new Map<string, string>();
-  const profileTokens = new Map<string, string>();
+  const parents = roleSessions('PARENT', clock, '请重新登录家长端');
   const initialTime = clock();
   let seededDate = venueDate(initialTime);
   seedDemo(db, initialTime);
@@ -33,10 +32,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
   app.addHook('onClose', async () => db.close());
 
   function user(request: FastifyRequest): string {
-    const token = request.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
-    const profile = token && tokens.get(token);
-    if (!profile) throw new ApiError(401, 'NOT_AUTHORIZED', '请重新登录');
-    return profile;
+    return parents.authorize(request.headers.authorization).subject;
   }
 
   app.setErrorHandler((error, _request, reply) => {
@@ -55,13 +51,11 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
     if (!mockProfiles.some(name => name === profile) || typeof profile !== 'string') {
       throw new ApiError(400, 'VALIDATION_ERROR', '未知的演示账号');
     }
-    let token = profileTokens.get(profile);
-    if (!token) {
-      token = randomUUID();
-      profileTokens.set(profile, token);
-      tokens.set(token, profile);
-    }
-    return { token };
+    return parents.create(profile);
+  });
+  app.delete('/api/dev/session', async (request, reply) => {
+    parents.revoke(request.headers.authorization);
+    return reply.code(204).send();
   });
   app.get('/api/schedule', async request => service.schedule(user(request)));
   app.get('/api/coaches/:id/slots', async request => {

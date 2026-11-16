@@ -1,4 +1,4 @@
-<view class="page-shell">
+<view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.id ? '编辑班次' : '新增团课') : '排课管理'}}</text>
   <form wx:if="{{editor}}" bindsubmit="saveClass">
     <label class="form-field"><text>课程名称</text><input class="field" value="{{editor.title}}" data-field="title" bindinput="changeClassField" maxlength="50" placeholder="输入课程名称" disabled="{{busy}}" /></label>
