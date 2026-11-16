@@ -193,6 +193,13 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 7;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 8) return;
+    db.exec(`
+      ALTER TABLE coaches ADD COLUMN private_course_type_id TEXT REFERENCES course_types(id);
+      PRAGMA user_version = 8;
+    `);
+  });
   return db;
 }
 

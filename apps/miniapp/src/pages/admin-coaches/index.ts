@@ -1,12 +1,15 @@
-import type { ManagedCoach } from '../../../../../packages/shared/contracts.js';
+import type { CourseType, ManagedCoach } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { allowPage } from '../../lib/session';
 import { confirmAction, staffApi, staffWrite } from '../../lib/staff';
 
+const defaultPrivateType = { id: null, name: '一对一训练（默认）' };
+
 Page({
   data: {
     authorized: false, loading: true, busy: false, error: '', saveError: '', coaches: [] as ManagedCoach[],
-    editor: null as { id: string; name: string; points: string; enabled: boolean } | null
+    privateTypes: [defaultPrivateType] as { id: string | null; name: string }[],
+    editor: null as { id: string; name: string; points: string; enabled: boolean; privateTypeIndex: number } | null
   },
   onShow() {
     const authorized = allowPage('ADMIN');
@@ -16,7 +19,10 @@ Page({
   async load() {
     this.setData({ loading: true, error: '' });
     try {
-      this.setData({ coaches: await staffApi<ManagedCoach[]>('/coaches') });
+      const [coaches, types] = await Promise.all([
+        staffApi<ManagedCoach[]>('/coaches'), staffApi<CourseType[]>('/course-types')
+      ]);
+      this.setData({ coaches, privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)] });
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {
@@ -25,8 +31,12 @@ Page({
   },
   edit(event: WechatMiniprogram.TouchEvent) {
     const coach = this.data.coaches.find(row => row.id === event.currentTarget.dataset.id);
-    this.setData({ saveError: '',
-      editor: coach ? { ...coach, points: String(coach.pointsPerSlot) } : { id: '', name: '', points: '', enabled: true } });
+    const privateTypeIndex = Math.max(0, this.data.privateTypes.findIndex(type => type.id === coach?.privateCourseTypeId));
+    this.setData({
+      saveError: '',
+      editor: coach ? { ...coach, points: String(coach.pointsPerSlot), privateTypeIndex } :
+        { id: '', name: '', points: '', enabled: true, privateTypeIndex: 0 }
+    });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
   close() {
@@ -34,6 +44,9 @@ Page({
   },
   change(event: WechatMiniprogram.Input) {
     this.setData({ ['editor.' + event.currentTarget.dataset.field]: event.detail.value, saveError: '' });
+  },
+  changePrivateType(event: WechatMiniprogram.PickerChange) {
+    this.setData({ 'editor.privateTypeIndex': Number(event.detail.value), saveError: '' });
   },
   async save() {
     const editor = this.data.editor;
@@ -46,10 +59,11 @@ Page({
     }
     this.setData({ busy: true, saveError: '' });
     try {
+      const privateCourseTypeId = this.data.privateTypes[editor.privateTypeIndex]?.id ?? null;
       if (editor.id) {
-        await staffApi('/coaches/' + editor.id, 'PUT', { name, pointsPerSlot, enabled: editor.enabled });
+        await staffApi('/coaches/' + editor.id, 'PUT', { name, pointsPerSlot, privateCourseTypeId, enabled: editor.enabled });
       } else {
-        await staffWrite('/coaches', { name, pointsPerSlot });
+        await staffWrite('/coaches', { name, pointsPerSlot, privateCourseTypeId });
       }
       this.setData({ editor: null });
       await this.load();
