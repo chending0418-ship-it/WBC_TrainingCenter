@@ -187,8 +187,18 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     }
     const day = dayAvailability(coachId, date);
     if (!isOpen(day, start, end)) throw new ApiError(409, 'SLOT_TAKEN', '该时段已被占用或未开放');
-    return { coachId, startsAt, endsAt, title: '一对一训练', coachName: day.name, venue: privateVenue,
-      points: privatePoints(duration, day.points), refundPoints: 0 };
+    const points = privatePoints(duration, day.points);
+    let title = '一对一训练';
+    let refundPoints = 0;
+    if (selection.courseTypeId) {
+      const course = db.prepare('SELECT name, max_students, refund_basis_points FROM course_types WHERE id = ?')
+        .get(selection.courseTypeId);
+      if (!course) throw new ApiError(404, 'NOT_FOUND', '未找到该课程类型');
+      if (course.max_students !== 1) throw new ApiError(400, 'VALIDATION_ERROR', '请为私教选择一对一课程类型');
+      title = String(course.name);
+      refundPoints = Math.floor(points * Number(course.refund_basis_points) / 10000);
+    }
+    return { coachId, startsAt, endsAt, title, coachName: day.name, venue: privateVenue, points, refundPoints };
   }
 
   function quote(user: string, selection: BookingSelection): BookingQuote {

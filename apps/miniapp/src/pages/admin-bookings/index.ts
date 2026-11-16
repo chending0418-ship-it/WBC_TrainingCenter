@@ -1,5 +1,5 @@
 import { allowPage } from '../../lib/session';
-import type { Booking, BookingQuote, BookingSelection, Coach, ManagedBooking, ManagedClass, ManagedUser, PrivateSlot } from '../../../../../packages/shared/contracts.js';
+import type { Booking, BookingQuote, BookingSelection, Coach, CourseType, ManagedBooking, ManagedClass, ManagedUser, PrivateSlot } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { cancellationRefundText, datetime, time, timeRange } from '../../lib/display';
 import { confirmAction, hasPendingStaffWrite, staffApi, staffContext, staffWrite } from '../../lib/staff';
@@ -8,6 +8,7 @@ type ListRow = ManagedBooking & { hours: string; statusLabel: string };
 const statusLabels = { PENDING: '待确认', CONFIRMED: '已确认', REJECTED: '已拒绝', CANCELLED: '已取消' };
 type ClassOption = ManagedClass & { label: string };
 type SlotOption = PrivateSlot & { label: string };
+const defaultPrivateType = { id: '', name: '一对一训练（默认）' };
 let bookingRequest = 0;
 let choicesRequest = 0;
 
@@ -19,6 +20,7 @@ Page({
     bookings: [] as ListRow[], users: [] as { id: string; label: string }[], coaches: [] as Coach[],
     adding: false, type: 'GROUP' as BookingSelection['type'],
     userIndex: 0, coachIndex: 0, optionIndex: 0, choicesLoading: false, choicesError: '',
+    privateTypeIndex: 0, privateTypes: [defaultPrivateType],
     classes: [] as ClassOption[], slots: [] as SlotOption[]
   },
   onLoad(options: Record<string, string | undefined>) {
@@ -33,9 +35,12 @@ Page({
   async load() {
     this.setData({ loading: true, loadError: '' });
     try {
-      const [context, users] = await Promise.all([staffContext(), staffApi<ManagedUser[]>('/users')]);
+      const [context, users, types] = await Promise.all([
+        staffContext(), staffApi<ManagedUser[]>('/users'), staffApi<CourseType[]>('/course-types')
+      ]);
       this.setData({
         ...context, date: this.data.date || context.today,
+        privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)],
         users: users.filter(user => user.childName).map(user => ({
           id: user.id, label: user.childName + ' · ' + user.id
         }))
@@ -74,7 +79,7 @@ Page({
   },
   startBooking() {
     const { date, today } = this.data;
-    this.setData({ adding: true, type: 'GROUP', date: date < today ? today : date, saveError: '' });
+    this.setData({ adding: true, type: 'GROUP', privateTypeIndex: 0, date: date < today ? today : date, saveError: '' });
     void this.refreshChoices();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
@@ -97,6 +102,9 @@ Page({
   },
   changeOption(event: WechatMiniprogram.PickerChange) {
     this.setData({ optionIndex: Number(event.detail.value), saveError: '' });
+  },
+  changePrivateType(event: WechatMiniprogram.PickerChange) {
+    this.setData({ privateTypeIndex: Number(event.detail.value), saveError: '' });
   },
   async refreshChoices() {
     const request = ++choicesRequest;
@@ -135,7 +143,12 @@ Page({
     const coach = coaches[coachIndex];
     let selection: BookingSelection;
     if (type === 'GROUP' && course) selection = { type, classSessionId: course.id };
-    else if (type === 'PRIVATE' && slot && coach) selection = { type, coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt };
+    else if (type === 'PRIVATE' && slot && coach) {
+      const courseTypeId = this.data.privateTypes[this.data.privateTypeIndex]?.id;
+      selection = {
+        type, coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt, ...(courseTypeId ? { courseTypeId } : {})
+      };
+    }
     else return;
 
     this.setData({ busy: true, saveError: '' });

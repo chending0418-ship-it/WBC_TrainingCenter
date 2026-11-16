@@ -50,18 +50,20 @@ function windowInput(input: unknown): MinuteWindow {
 
 export function registerStaffRoutes(
   app: FastifyInstance, db: DatabaseSync, clock: () => Date,
-  booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>
+  booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>, demo: boolean
 ) {
-  const salt = randomBytes(16);
-  const secret = scryptSync(process.env.WBC_ADMIN_PASSWORD ?? demoPassword, salt, 64);
   const sessions = roleSessions('ADMIN', clock, '请先登录管理端');
-  app.post('/api/admin/session', async request => {
-    const password = object(request.body).password;
-    if (typeof password !== 'string' || password.length > 128 || !timingSafeEqual(scryptSync(password, salt, 64), secret)) {
-      throw new ApiError(401, 'INVALID_CREDENTIALS', '管理员密码错误');
-    }
-    return sessions.create(demoAdmin);
-  });
+  if (demo) {
+    const salt = randomBytes(16);
+    const secret = scryptSync(process.env.WBC_ADMIN_PASSWORD ?? demoPassword, salt, 64);
+    app.post('/api/admin/session', async request => {
+      const password = object(request.body).password;
+      if (typeof password !== 'string' || password.length > 128 || !timingSafeEqual(scryptSync(password, salt, 64), secret)) {
+        throw new ApiError(401, 'INVALID_CREDENTIALS', '管理员密码错误');
+      }
+      return sessions.create(demoAdmin);
+    });
+  }
 
   function safeWrite<T>(key: string, action: string, data: unknown, write: () => T): T {
     return transaction(db, () => {

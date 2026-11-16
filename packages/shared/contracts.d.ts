@@ -44,7 +44,7 @@ export interface PrivateSlot {
 
 export type BookingSelection =
   | { type: 'GROUP'; classSessionId: string }
-  | { type: 'PRIVATE'; coachId: string; startsAt: string; endsAt: string };
+  | { type: 'PRIVATE'; coachId: string; startsAt: string; endsAt: string; courseTypeId?: string };
 
 export interface Quote extends PrivateSlot {
   title: string;

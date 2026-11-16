@@ -8,24 +8,26 @@ import { addDays, dateAt, venueDate, weekday } from './time.ts';
 
 type LessonRow = Omit<CoachLesson, 'childNames' | 'bookedCount'> & { childName: string | null };
 
-export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, clock: () => Date) {
+export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, clock: () => Date, demo: boolean) {
   const sessions = roleSessions('COACH', clock, '请重新登录教练端');
 
-  app.get('/api/dev/coach-profiles', async () => db.prepare(`
-    SELECT 'coach-' || id AS profile, name FROM coaches WHERE enabled = 1 ORDER BY name
-  `).all());
-  app.post('/api/dev/coach-session', async request => {
-    const profile = requiredText(object(request.body).profile);
-    const coachId = profile.startsWith('coach-') ? profile.slice(6) : '';
-    if (!coachId || !db.prepare('SELECT 1 FROM coaches WHERE id = ? AND enabled = 1').get(coachId)) {
-      throw new ApiError(400, 'VALIDATION_ERROR', '该演示教练不可登录');
-    }
-    return sessions.create(coachId);
-  });
-  app.delete('/api/dev/coach-session', async (request, reply) => {
-    sessions.revoke(request.headers.authorization);
-    return reply.code(204).send();
-  });
+  if (demo) {
+    app.get('/api/dev/coach-profiles', async () => db.prepare(`
+      SELECT 'coach-' || id AS profile, name FROM coaches WHERE enabled = 1 ORDER BY name
+    `).all());
+    app.post('/api/dev/coach-session', async request => {
+      const profile = requiredText(object(request.body).profile);
+      const coachId = profile.startsWith('coach-') ? profile.slice(6) : '';
+      if (!coachId || !db.prepare('SELECT 1 FROM coaches WHERE id = ? AND enabled = 1').get(coachId)) {
+        throw new ApiError(400, 'VALIDATION_ERROR', '该演示教练不可登录');
+      }
+      return sessions.create(coachId);
+    });
+    app.delete('/api/dev/coach-session', async (request, reply) => {
+      sessions.revoke(request.headers.authorization);
+      return reply.code(204).send();
+    });
+  }
 
   app.get('/api/coach/me/schedule', async (request): Promise<CoachSchedule> => {
     const coachId = sessions.authorize(request.headers.authorization).subject;

@@ -127,14 +127,13 @@ test('周期排课支持多个时段，跨天补齐时保留单独停开的实�
 test('私教开放和例外设置影响家长可约时间，已预约时段受到保护', async context => {
   const { app } = fixture(context);
   const admin = await session(app);
-  const parent = await session(app, false);
   const hoursUrl = '/api/admin/coaches/li/hours';
   const change = (windows: object[]) => app.inject({
     method: 'PUT', url: hoursUrl, headers: admin, payload: { weekday: weekday(today), windows }
   });
   assert.equal((await change([{ start: 840, end: 960 }])).statusCode, 204);
   const startsAt = dateAt(today, 840);
-  const getSlots = async () => (await app.inject({ url: '/api/coaches/li/slots?date=' + today, headers: parent }))
+  const getSlots = async () => (await app.inject({ url: '/api/admin/coaches/li/slots?date=' + today, headers: admin }))
     .json<{ startsAt: string }[]>();
   assert.ok((await getSlots()).every(slot => slot.startsAt >= startsAt));
   const block = await app.inject({
@@ -201,16 +200,17 @@ test('教练仅能读取本人今日和本周日程，学员数据只包含姓�
 
   const group = { type: 'GROUP', classSessionId: today + '-strength' };
   const slot = { type: 'PRIVATE', coachId: 'li', startsAt: dateAt(today, 840), endsAt: dateAt(today, 900) };
-  for (const [selection, requestKey] of [[group, 'coach-group'], [slot, 'coach-private']] as const) {
-    const result = await app.inject({ method: 'POST', url: '/api/bookings', headers: parent, payload: { ...selection, requestKey } });
-    assert.equal(result.statusCode, 200);
-    const pending = (await app.inject({ url, headers: li })).json<CoachSchedule>();
-    assert.equal(pending.lessons.length, 1);
-    if (selection.type === 'GROUP') assert.deepEqual(pending.lessons[0].childNames, []);
-    assert.equal((await app.inject({
-      method: 'POST', url: '/api/admin/bookings/' + result.json().id + '/approve', headers: admin
-    })).statusCode, 204);
-  }
+  const request = await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { ...group, requestKey: 'coach-group' } });
+  assert.equal(request.statusCode, 200);
+  const pending = (await app.inject({ url, headers: li })).json<CoachSchedule>();
+  assert.equal(pending.lessons.length, 1);
+  assert.deepEqual(pending.lessons[0].childNames, []);
+  assert.equal((await app.inject({
+    method: 'POST', url: '/api/admin/bookings/' + request.json().id + '/approve', headers: admin
+  })).statusCode, 204);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+    payload: { ...slot, userId: 'parent', requestKey: 'coach-private' } })).statusCode, 200);
 
   const day = (await app.inject({ url: url + '?coachId=wang', headers: li })).json<CoachSchedule>();
   assert.deepEqual(day, {
@@ -541,10 +541,10 @@ test('教练管理控制可预约和演示登录，停用不会中断已有预�
   assert.equal((await schedule()).coaches.find(row => row.id === coach.id)?.name, '赵一');
   assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/coaches/' + coach.id + '/hours', headers: admin,
     payload: { weekday: weekday(today), windows: [{ start: 840, end: 960 }] } })).statusCode, 204);
-  const slots = (await app.inject({ url: '/api/coaches/' + coach.id + '/slots?date=' + today, headers: parent })).json();
+  const slots = (await app.inject({ url: '/api/admin/coaches/' + coach.id + '/slots?date=' + today, headers: admin })).json();
   assert.ok(slots.some((slot: { points: number }) => slot.points === 72));
-  assert.equal((await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
-    payload: { ...slots[0], type: 'PRIVATE', coachId: coach.id, requestKey: 'book-new-coach' } })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+    payload: { ...slots[0], userId: 'parent', type: 'PRIVATE', coachId: coach.id, requestKey: 'book-new-coach' } })).statusCode, 200);
   assert.equal((await change(false)).json().code, 'COACH_HAS_BOOKINGS');
 });
 

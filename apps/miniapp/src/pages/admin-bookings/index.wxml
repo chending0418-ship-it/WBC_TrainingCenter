@@ -17,6 +17,10 @@
       <view class="picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text></view>
     </picker>
     <view wx:else class="message">没有已填写孩子姓名的家长账户。</view>
+    <picker wx:if="{{type === 'PRIVATE'}}" class="filter-row" range="{{privateTypes}}" range-key="name"
+      value="{{privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">
+      <view class="picker"><text class="picker-label">私教课程</text><text class="picker-value">{{privateTypes[privateTypeIndex].name}}</text></view>
+    </picker>
     <picker wx:if="{{type === 'PRIVATE' && coaches.length}}" class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="changeCoach" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}</text></view>
     </picker>
