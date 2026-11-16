@@ -6,16 +6,15 @@
     <button class="button quiet" bindtap="refresh" hover-class="press">重新查询</button>
   </view>
   <block wx:else>
-    <view class="section-title" role="heading" aria-level="2">即将上课</view>
+    <view class="section-title" role="heading" aria-level="2">待确认和即将开课</view>
+    <view wx:if="{{upcoming.length}}" class="muted">如需取消，请在开课前至少 6 小时联系场馆管理员。</view>
     <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去排课页选择课程。</view>
     <view wx:for="{{upcoming}}" wx:key="id" class="list-row">
       <view class="row-line">
-        <text class="row-name">{{item.title}}</text><text class="accent">{{item.points}} 积分</text>
+        <text class="row-name">{{item.title}}</text><text class="accent">{{item.label}}</text>
       </view>
       <view>{{item.hours}}</view>
-      <view class="muted">{{item.coachName}}教练 · {{item.venue}}</view>
-      <button class="button quiet row-action" data-id="{{item.id}}" bindtap="cancel" hover-class="press"
-        loading="{{busyId === item.id}}" disabled="{{!!busyId}}">取消预约</button>
+      <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
     </view>
 
     <view class="section-title" role="heading" aria-level="2">历史预约</view>
@@ -24,6 +23,7 @@
       <view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.label}}</text></view>
       <view>{{item.hours}}</view>
       <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
+      <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="muted">已退回 {{item.refundPoints}} 积分</view>
     </view>
   </block>
 </view>

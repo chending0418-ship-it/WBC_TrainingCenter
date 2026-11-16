@@ -1,13 +1,13 @@
 import type { SessionRole } from '../../../../../packages/shared/contracts.js';
-import { errorMessage } from '../../lib/request';
+import { errorMessage, send } from '../../lib/request';
 import { allowEntry, signIn } from '../../lib/session';
 
 Page({
   data: {
     visible: false,
     mode: '' as '' | 'COACH' | 'ADMIN',
-    password: '', error: '', busy: false,
-    coaches: [{ profile: 'coach-li', name: '李晨' }, { profile: 'coach-wang', name: '王悦' }]
+    password: '', error: '', busy: false, loadingCoaches: false,
+    coaches: [] as { profile: string; name: string }[]
   },
   onShow() { this.setData({ visible: allowEntry() }); },
   chooseRole(event: WechatMiniprogram.TouchEvent) {
@@ -17,6 +17,18 @@ Page({
       void this.login(role, { profile: 'parent' });
     } else {
       this.setData({ mode: role, password: '', error: '' });
+      if (role === 'COACH') void this.loadCoaches();
+    }
+  },
+  async loadCoaches() {
+    this.setData({ coaches: [], loadingCoaches: true, error: '' });
+    try {
+      const coaches = await send<{ profile: string; name: string }[]>('/api/dev/coach-profiles', 'GET');
+      if (this.data.mode === 'COACH') this.setData({ coaches });
+    } catch (error) {
+      if (this.data.mode === 'COACH') this.setData({ error: errorMessage(error) });
+    } finally {
+      this.setData({ loadingCoaches: false });
     }
   },
   goBack() {

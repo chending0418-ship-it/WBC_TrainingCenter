@@ -1,9 +1,9 @@
 import { errorMessage } from '../../lib/request';
 import { allowPage, signOut } from '../../lib/session';
-import { staffContext } from '../../lib/staff';
+import { staffApi } from '../../lib/staff';
 
 Page({
-  data: { authorized: false, loading: true, error: '' },
+  data: { authorized: false, loading: true, error: '', pending: 0, todayClasses: 0, todayAppointments: 0 },
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
@@ -12,7 +12,7 @@ Page({
   async refresh() {
     this.setData({ loading: true, error: '' });
     try {
-      await staffContext();
+      this.setData(await staffApi<{ pending: number; todayClasses: number; todayAppointments: number }>('/overview'));
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {

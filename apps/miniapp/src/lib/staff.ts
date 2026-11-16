@@ -13,14 +13,14 @@ export function hasPendingStaffWrite(path: string, data: object) {
   return pending.has(path + JSON.stringify(data));
 }
 
-export async function staffWrite<T>(path: string, data: object, expectedRevision?: string): Promise<T> {
-  const signature = path + JSON.stringify(data);
+export async function staffWrite<T>(path: string, data: object, expectedRevision?: string, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+  const signature = (method === 'PUT' ? 'PUT:' : '') + path + JSON.stringify(data);
   const confirmation = pending.get(signature) ?? {
     requestKey: Date.now() + '-' + Math.random().toString(36).slice(2), expectedRevision
   };
   pending.set(signature, confirmation);
   try {
-    const result = await staffApi<T>(path, 'POST', { ...data, ...confirmation });
+    const result = await staffApi<T>(path, method, { ...data, ...confirmation });
     pending.delete(signature);
     return result;
   } catch (error) {

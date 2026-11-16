@@ -2,14 +2,16 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypt
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import type { ClassDraft, ClassPlan, CourseType, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
-import { ApiError } from './booking.ts';
+import { ApiError, bookingStatus, cancellationLeadMs, templateAllowsBooking } from './booking.ts';
 import type { bookingService } from './booking.ts';
 import { audit, transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
+import { searchParents } from './parent-contact.ts';
 import { roleSessions } from './role-session.ts';
+import { addCoach, coachDraft, listCoaches, updateCoach } from './staff-coaches.ts';
 import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
-import { addDays, dateAt } from './time.ts';
+import { addDays, dateAt, venueDate } from './time.ts';
 
 const demoAdmin = 'local-admin';
 const demoPassword = 'wbc-demo-2026';
@@ -101,6 +103,37 @@ export function registerStaffRoutes(
       const { today, lastDate, coaches } = booking.schedule('');
       return { today, lastDate, coaches };
     });
+    routes.get('/overview', async () => {
+      const now = clock().toISOString();
+      const date = venueDate(now);
+      const pending = db.prepare(`
+        SELECT COUNT(*) AS total FROM bookings WHERE status = 'CONFIRMED' AND approval_pending = 1 AND starts_at > ?
+      `).get(now);
+      const starts = dateAt(date);
+      const ends = dateAt(addDays(date, 1));
+      const classes = db.prepare(`
+        SELECT COUNT(*) AS total FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
+        WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
+      `).get(starts, ends);
+      const appointments = db.prepare(`
+        SELECT COUNT(*) AS total FROM bookings WHERE status = 'CONFIRMED' AND approval_pending = 0
+          AND starts_at >= ? AND starts_at < ?
+      `).get(starts, ends);
+      return { pending: Number(pending?.total), todayClasses: Number(classes?.total), todayAppointments: Number(appointments?.total) };
+    });
+    routes.get('/coaches', async () => listCoaches(db));
+    routes.post('/coaches', async request => {
+      const body = object(request.body);
+      const draft = coachDraft(body);
+      return safeWrite(requiredText(body.requestKey), 'COACH_CREATED', draft,
+        () => addCoach(db, draft, demoAdmin, clock().toISOString()));
+    });
+    routes.put('/coaches/:id', async (request, reply) => {
+      const body = object(request.body);
+      if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'VALIDATION_ERROR', '请选择教练状态');
+      updateCoach(db, requiredText(object(request.params).id), coachDraft(body), body.enabled, demoAdmin, clock().toISOString());
+      return reply.code(204).send();
+    });
     routes.get('/course-types', async () => db.prepare(`
       SELECT id, name, max_students AS maxStudents, refund_basis_points / 100.0 AS refundPercent
       FROM course_types ORDER BY name
@@ -132,6 +165,16 @@ export function registerStaffRoutes(
       const plan = classPlan(body);
       return safeWrite(requiredText(body.requestKey), 'CLASS_CREATED', plan,
         () => schedule.add(plan, demoAdmin, clock().toISOString()));
+    });
+    routes.get('/class-templates', async () => schedule.templates());
+    routes.put('/class-templates/:id', async request => {
+      const id = requiredText(object(request.params).id);
+      const body = object(request.body);
+      const plan = classPlan(body);
+      if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'VALIDATION_ERROR', '请选择模板状态');
+      const enabled = body.enabled;
+      return safeWrite(requiredText(body.requestKey), 'TEMPLATE_UPDATED', { id, plan, enabled },
+        () => schedule.reviseTemplate(id, plan, enabled, demoAdmin, clock().toISOString()));
     });
     routes.put('/class-sessions/:id', async (request, reply) => {
       const id = requiredText(object(request.params).id);
@@ -174,10 +217,14 @@ export function registerStaffRoutes(
       return reply.code(204).send();
     });
     routes.get('/users', async () => users());
+    routes.get('/parents', async request => {
+      const query = object(request.query).q;
+      return searchParents(db, query === undefined || query === '' ? '' : requiredText(query, 50));
+    });
     routes.get('/accounts/:id', async request => {
       const userId = requiredText(object(request.params).id);
       requireUser(userId);
-      return readStaffAccount(db, userId);
+      return readStaffAccount(db, userId, clock().toISOString());
     });
     routes.get('/accounts/:id/bookings', async request => {
       const userId = requiredText(object(request.params).id);
@@ -198,18 +245,23 @@ export function registerStaffRoutes(
     });
     routes.get('/bookings', async request => {
       const query = object(request.query);
-      const date = dateInput(query.date);
+      const now = clock().toISOString();
+      const pendingOnly = query.pending === '1';
+      const date = pendingOnly ? '' : dateInput(query.date);
       const rows = db.prepare(`
-        SELECT b.id, b.type, b.status, b.title, c.name AS coachName, b.venue, b.points, b.user_id AS userId,
-          b.starts_at AS startsAt, b.ends_at AS endsAt, child.name AS childName,
+        SELECT b.id, b.type, ${bookingStatus} AS status, b.title, c.name AS coachName, b.venue, b.points, b.user_id AS userId,
+          b.starts_at AS startsAt, b.ends_at AS endsAt, b.refund_points AS refundPoints, child.name AS childName,
           EXISTS(SELECT 1 FROM audit_logs WHERE entity_id = b.id AND action = 'BOOKING_CREATED') AS staffCreated,
           EXISTS(SELECT 1 FROM audit_logs WHERE entity_id = b.id AND action = 'BOOKING_CANCELLED') AS staffCancelled
         FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.guardian_id = b.user_id
-        WHERE b.starts_at >= ? AND b.starts_at < ?
+        WHERE ${pendingOnly ? "b.status = 'CONFIRMED' AND b.approval_pending = 1 AND b.starts_at > ?" : 'b.starts_at >= ? AND b.starts_at < ?'}
         ORDER BY b.starts_at, b.created_at
-      `).all(dateAt(date), dateAt(addDays(date, 1))) as unknown as
-        (Omit<ManagedBooking, 'staffCreated' | 'staffCancelled'> & { staffCreated: number; staffCancelled: number })[];
-      return rows.map(row => ({ ...row, staffCreated: !!row.staffCreated, staffCancelled: !!row.staffCancelled }));
+      `).all(...(pendingOnly ? [now] : [dateAt(date), dateAt(addDays(date, 1))])) as unknown as
+        (Omit<ManagedBooking, 'staffCreated' | 'staffCancelled' | 'canCancel' | 'canApprove'> &
+          { staffCreated: number; staffCancelled: number })[];
+      return rows.map(row => ({ ...row, staffCreated: !!row.staffCreated, staffCancelled: !!row.staffCancelled,
+        canCancel: row.status === 'CONFIRMED' && Date.parse(row.startsAt) - Date.parse(now) >= cancellationLeadMs,
+        canApprove: row.status === 'PENDING' && row.startsAt > now }));
     });
     routes.get('/coaches/:id/slots', async request => booking.listSlots(requiredText(object(request.params).id),
       dateInput(object(request.query).date)));
@@ -225,11 +277,12 @@ export function registerStaffRoutes(
       requireUser(userId);
       return booking.book(userId, selection(body), 'staff:' + requiredText(body.requestKey), demoAdmin, expectedRevision(body.expectedRevision));
     });
+    routes.post('/bookings/:id/approve', async (request, reply) => {
+      booking.approve(requiredText(object(request.params).id), demoAdmin);
+      return reply.code(204).send();
+    });
     routes.delete('/bookings/:id', async (request, reply) => {
-      const id = requiredText(object(request.params).id);
-      const row = db.prepare('SELECT user_id FROM bookings WHERE id = ?').get(id);
-      if (!row) throw new ApiError(404, 'NOT_FOUND', '未找到该预约');
-      booking.cancel(String(row.user_id), id, demoAdmin);
+      booking.cancel(requiredText(object(request.params).id), demoAdmin);
       return reply.code(204).send();
     });
   }, { prefix: '/api/admin' });

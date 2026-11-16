@@ -6,9 +6,21 @@
     <button class="button quiet" bindtap="refresh" hover-class="press">重试</button>
   </view>
   <block wx:else>
+    <view class="list-row">
+      <view class="row-name">今日训练</view>
+      <view class="muted">{{todayClasses}} 个团课班次 · {{todayAppointments}} 笔已确认预约</view>
+    </view>
+    <navigator class="action-link" url="/pages/admin-bookings/index?pending=1" hover-class="press">
+      <view class="row-line"><text class="row-name">待确认预约</text><text class="accent">{{pending}} 笔</text></view>
+      <view class="muted">查看并处理家长的预约申请</view>
+    </navigator>
     <navigator class="action-link" url="/pages/admin-schedule/index" hover-class="press">
       <view class="row-name">排课管理</view>
-      <view class="muted">安排团课，维护私教开放时间</view>
+      <view class="muted">安排团课、周期模板和私教开放时间</view>
+    </navigator>
+    <navigator class="action-link" url="/pages/admin-coaches/index" hover-class="press">
+      <view class="row-name">教练管理</view>
+      <view class="muted">新增、编辑、启用或停用教练</view>
     </navigator>
     <navigator class="action-link" url="/pages/admin-course-types/index" hover-class="press">
       <view class="row-name">课程类型</view>
@@ -16,7 +28,11 @@
     </navigator>
     <navigator class="action-link" url="/pages/admin-bookings/index" hover-class="press">
       <view class="row-name">预约管理</view>
-      <view class="muted">查看、代约和取消</view>
+      <view class="muted">按日期查看、代约和取消</view>
+    </navigator>
+    <navigator class="action-link" url="/pages/admin-parents/index" hover-class="press">
+      <view class="row-name">家长资料</view>
+      <view class="muted">按孩子姓名、联系人或电话搜索账户</view>
     </navigator>
     <navigator class="action-link" url="/pages/admin-points/index" hover-class="press">
       <view class="row-name">积分管理</view>

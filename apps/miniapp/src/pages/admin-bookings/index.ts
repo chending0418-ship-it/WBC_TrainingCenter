@@ -1,10 +1,11 @@
 import { allowPage } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, ManagedBooking, ManagedClass, ManagedUser, PrivateSlot } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
-import { datetime, time, timeRange } from '../../lib/display';
+import { cancellationRefundText, datetime, time, timeRange } from '../../lib/display';
 import { confirmAction, hasPendingStaffWrite, staffApi, staffContext, staffWrite } from '../../lib/staff';
 
-type ListRow = ManagedBooking & { hours: string };
+type ListRow = ManagedBooking & { hours: string; statusLabel: string };
+const statusLabels = { PENDING: '待确认', CONFIRMED: '已确认', REJECTED: '已拒绝', CANCELLED: '已取消' };
 type ClassOption = ManagedClass & { label: string };
 type SlotOption = PrivateSlot & { label: string };
 let bookingRequest = 0;
@@ -13,11 +14,15 @@ let choicesRequest = 0;
 Page({
   data: {
     authorized: false,
+    pendingOnly: false,
     today: '', lastDate: '', date: '', loading: true, busy: false, loadError: '', saveError: '',
     bookings: [] as ListRow[], users: [] as { id: string; label: string }[], coaches: [] as Coach[],
     adding: false, type: 'GROUP' as BookingSelection['type'],
     userIndex: 0, coachIndex: 0, optionIndex: 0, choicesLoading: false, choicesError: '',
     classes: [] as ClassOption[], slots: [] as SlotOption[]
+  },
+  onLoad(options: Record<string, string | undefined>) {
+    if (options.pending === '1') this.setData({ pendingOnly: true });
   },
   onShow() {
     const authorized = allowPage('ADMIN');
@@ -45,15 +50,22 @@ Page({
     if (!this.data.date) return;
     this.setData({ loading: true, loadError: '' });
     try {
-      const bookings = await staffApi<ManagedBooking[]>('/bookings?date=' + this.data.date);
+      const bookings = await staffApi<ManagedBooking[]>(this.data.pendingOnly ? '/bookings?pending=1' : '/bookings?date=' + this.data.date);
       if (request === bookingRequest) {
-        this.setData({ bookings: bookings.map(row => ({ ...row, hours: timeRange(row.startsAt, row.endsAt) })) });
+        this.setData({ bookings: bookings.map(row => ({ ...row,
+          hours: this.data.pendingOnly ? datetime(row.startsAt) + '–' + time(row.endsAt) : timeRange(row.startsAt, row.endsAt),
+          statusLabel: row.status === 'PENDING' && !row.canApprove ? '已过期' : statusLabels[row.status] })) });
       }
     } catch (error) {
       if (request === bookingRequest) this.setData({ loadError: errorMessage(error) });
     } finally {
       if (request === bookingRequest) this.setData({ loading: false });
     }
+  },
+  changeView(event: WechatMiniprogram.TouchEvent) {
+    if (this.data.busy) return;
+    this.setData({ pendingOnly: event.currentTarget.dataset.view === 'pending', saveError: '' });
+    void this.refresh();
   },
   changeDate(event: WechatMiniprogram.PickerChange) {
     this.setData({ date: String(event.detail.value), saveError: '' });
@@ -96,7 +108,7 @@ Page({
         const now = new Date().toISOString();
         if (request !== choicesRequest) return;
         this.setData({ classes: rows.filter(row =>
-          row.status === 'PUBLISHED' && row.startsAt > now && row.bookedCount < row.capacity).map(row => ({
+          row.bookable && row.startsAt > now && row.bookedCount < row.capacity).map(row => ({
             ...row, label: time(row.startsAt) + ' · ' + row.title + ' · ' + row.points + ' 积分'
           })) });
       } else {
@@ -132,7 +144,8 @@ Page({
       let revision: string | undefined;
       if (!hasPendingStaffWrite('/bookings', data)) {
         const quote = await staffApi<BookingQuote>('/bookings/quote', 'POST', data);
-        const detail = user.label + '\n' + quote.title + ' · ' + datetime(quote.startsAt) + '\n扣除 ' + quote.points + ' 积分';
+        const detail = user.label + '\n' + quote.title + ' · ' + datetime(quote.startsAt) +
+          '\n扣除 ' + quote.points + ' 积分\n' + cancellationRefundText(quote.refundPoints);
         if (!await confirmAction('确认代约', detail, '确认代约')) return;
         revision = quote.revision;
       }
@@ -146,16 +159,22 @@ Page({
       this.setData({ busy: false });
     }
   },
-  async cancel(event: WechatMiniprogram.TouchEvent) {
+  async decide(event: WechatMiniprogram.TouchEvent) {
     const booking = this.data.bookings.find(row => row.id === event.currentTarget.dataset.id);
     if (this.data.busy || !booking) return;
+    const approving = event.currentTarget.dataset.action === 'approve';
+    const rejecting = booking.status === 'PENDING' && !approving;
+    if ((approving && !booking.canApprove) || (!approving && !rejecting && !booking.canCancel)) return;
+    const title = approving ? '确认预约' : rejecting ? '拒绝申请' : '取消预约';
     this.setData({ busy: true, saveError: '' });
     try {
-      const detail = booking.childName + ' · ' + booking.title + '\n取消后释放名额或时段，演示暂不退积分。';
-      if (!await confirmAction('取消这笔预约？', detail, '取消预约')) return;
-      await staffApi('/bookings/' + booking.id, 'DELETE');
+      const detail = booking.childName + ' · ' + booking.title + '\n' + (approving ? '确认后扣除 ' + booking.points + ' 积分。' :
+        rejecting ? '释放名额和预留积分，不扣分。' : cancellationRefundText(booking.refundPoints));
+      if (!await confirmAction(title + '？', detail, title)) return;
+      if (approving) await staffApi('/bookings/' + booking.id + '/approve', 'POST', {});
+      else await staffApi('/bookings/' + booking.id, 'DELETE');
       await this.refresh();
-      wx.showToast({ title: '预约已取消', icon: 'none' });
+      wx.showToast({ title: approving ? '预约已确认' : rejecting ? '申请已拒绝' : '预约已取消', icon: 'none' });
     } catch (error) {
       this.setData({ saveError: errorMessage(error) });
     } finally {

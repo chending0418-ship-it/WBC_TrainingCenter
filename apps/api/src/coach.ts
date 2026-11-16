@@ -6,16 +6,20 @@ import { object, requiredText } from './input.ts';
 import { roleSessions } from './role-session.ts';
 import { addDays, dateAt, venueDate, weekday } from './time.ts';
 
-const demoProfiles = new Map([['coach-li', 'li'], ['coach-wang', 'wang']]);
 type LessonRow = Omit<CoachLesson, 'childNames' | 'bookedCount'> & { childName: string | null };
 
 export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, clock: () => Date) {
   const sessions = roleSessions('COACH', clock, '请重新登录教练端');
 
+  app.get('/api/dev/coach-profiles', async () => db.prepare(`
+    SELECT 'coach-' || id AS profile, name FROM coaches WHERE enabled = 1 ORDER BY name
+  `).all());
   app.post('/api/dev/coach-session', async request => {
     const profile = requiredText(object(request.body).profile);
-    const coachId = demoProfiles.get(profile);
-    if (!coachId) throw new ApiError(400, 'VALIDATION_ERROR', '未知的演示教练');
+    const coachId = profile.startsWith('coach-') ? profile.slice(6) : '';
+    if (!coachId || !db.prepare('SELECT 1 FROM coaches WHERE id = ? AND enabled = 1').get(coachId)) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '该演示教练不可登录');
+    }
     return sessions.create(coachId);
   });
   app.delete('/api/dev/coach-session', async (request, reply) => {
@@ -27,7 +31,7 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
     const coachId = sessions.authorize(request.headers.authorization).subject;
     const period = object(request.query).period ?? 'today';
     if (period !== 'today' && period !== 'week') throw new ApiError(400, 'VALIDATION_ERROR', '请选择今日或本周');
-    const coach = db.prepare('SELECT name FROM coaches WHERE id = ?').get(coachId);
+    const coach = db.prepare('SELECT name FROM coaches WHERE id = ? AND enabled = 1').get(coachId);
     if (!coach) throw new ApiError(404, 'NOT_FOUND', '未找到当前教练');
 
     const today = venueDate(clock());
@@ -38,13 +42,14 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
     const rows = db.prepare(`
       SELECT s.id, 'GROUP' AS type, s.title, s.venue, s.starts_at AS startsAt, s.ends_at AS endsAt, child.name AS childName
       FROM class_sessions s
-      LEFT JOIN bookings b ON b.class_id = s.id AND b.status = 'CONFIRMED'
+      LEFT JOIN bookings b ON b.class_id = s.id AND b.status = 'CONFIRMED' AND b.approval_pending = 0
       LEFT JOIN children child ON child.guardian_id = b.user_id
       WHERE s.coach_id = ? AND s.status = 'PUBLISHED' AND s.starts_at >= ? AND s.starts_at < ?
       UNION ALL
       SELECT b.id, 'PRIVATE', b.title, b.venue, b.starts_at, b.ends_at, child.name
       FROM bookings b JOIN children child ON child.guardian_id = b.user_id
-      WHERE b.coach_id = ? AND b.type = 'PRIVATE' AND b.status = 'CONFIRMED' AND b.starts_at >= ? AND b.starts_at < ?
+      WHERE b.coach_id = ? AND b.type = 'PRIVATE' AND b.status = 'CONFIRMED' AND b.approval_pending = 0
+        AND b.starts_at >= ? AND b.starts_at < ?
       ORDER BY startsAt, id, childName
     `).all(coachId, lower, upper, coachId, lower, upper) as unknown as LessonRow[];
     const lessons = new Map<string, CoachLesson>();

@@ -5,9 +5,13 @@
     "pages/bookings/index",
     "pages/account/index",
     "pages/child/index",
+    "pages/contact/index",
+    "pages/agreements/index",
     "pages/admin/index",
     "pages/admin-schedule/index",
     "pages/admin-course-types/index",
+    "pages/admin-coaches/index",
+    "pages/admin-parents/index",
     "pages/admin-bookings/index",
     "pages/admin-points/index",
     "pages/coach/index"

@@ -36,10 +36,11 @@ function dateChoices(first: string, selected: string, last: string) {
 function confirm(quote: Quote): Promise<boolean> {
   return new Promise(resolve => {
     wx.showModal({
-      title: '确认预约',
+      title: '提交预约申请',
       content: quote.title + '\n' + datetime(quote.startsAt) + '–' + time(quote.endsAt) +
-        '\n' + quote.coachName + '教练 · ' + quote.venue + '\n扣除 ' + quote.points + ' 积分',
-      confirmText: '确认预约',
+        '\n' + quote.coachName + '教练 · ' + quote.venue + '\n确认后扣除 ' + quote.points + ' 积分\n' +
+        '按时取消：' + (quote.refundPoints ? '退回 ' + quote.refundPoints + ' 积分' : '不退积分'),
+      confirmText: '提交申请',
       confirmColor: '#761F32',
       success: result => resolve(result.confirm),
       fail: () => resolve(false)
@@ -101,7 +102,7 @@ Page({
     const now = new Date().toISOString();
     const visible = courses.filter(course => localTimestamp(course.startsAt).slice(0, 10) === date).map(course => {
       let action = '预约';
-      if (course.bookedByMe) action = '已预约';
+      if (course.bookedByMe) action = '已提交';
       else if (course.startsAt <= now) action = '已开课';
       else if (course.bookedCount >= course.capacity) action = '已满员';
       return { ...course, hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
@@ -197,7 +198,8 @@ Page({
       }
       const booking = await api<Booking>('/api/bookings', 'POST', { ...selection, ...pending });
       wx.removeStorageSync(storageKey);
-      wx.showToast({ title: booking.status === 'CONFIRMED' ? '预约成功' : '预约已取消', icon: 'none' });
+      wx.showToast({ title: booking.status === 'PENDING' ? '已提交，待确认' :
+        booking.status === 'CONFIRMED' ? '预约已确认' : '预约已结束', icon: 'none' });
       await this.refresh();
     } catch (error) {
       if (error instanceof RequestError && error.status >= 400 && error.status < 500) {
@@ -206,7 +208,7 @@ Page({
       if (error instanceof RequestError && error.code === 'CHILD_PROFILE_REQUIRED') {
         wx.showModal({
           title: '请先填写孩子资料',
-          content: '保存孩子姓名后即可预约课程。',
+          content: '填写姓名或昵称、出生年月和性别后即可提交预约。',
           confirmText: '去填写',
           confirmColor: '#761F32',
           success: result => { if (result.confirm) wx.navigateTo({ url: '/pages/child/index' }); }

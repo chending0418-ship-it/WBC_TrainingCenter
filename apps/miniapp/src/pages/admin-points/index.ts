@@ -25,6 +25,7 @@ Page({
     loading: true,
     error: '',
     balance: 0,
+    reservedPoints: 0,
     source: 'OFFLINE_CREDIT' as StaffLedgerSource,
     action: operations.OFFLINE_CREDIT.action,
     bookings: [] as { id: string; label: string }[],
@@ -69,7 +70,8 @@ Page({
         bookingLabel: entry.bookingId ? labels.get(entry.bookingId) ?? '' : '',
         canReverse: (entry.source === 'OFFLINE_CREDIT' || entry.source === 'ADJUSTMENT') && entry.reversalId === null
       }));
-      this.setData({ balance: account.balance, bookings: [{ id: '', label: '无关联预约' }, ...choices], ledger });
+      this.setData({ balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
+        bookings: [{ id: '', label: '无关联预约' }, ...choices], ledger });
     } catch (error) {
       if (current === request) this.setData({ error: errorMessage(error) });
     } finally {

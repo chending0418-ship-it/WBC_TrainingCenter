@@ -9,6 +9,7 @@
   </view>
   <block wx:elif="{{users.length}}">
     <view class="details">当前可用积分 <text class="accent">{{balance}}</text></view>
+    <view wx:if="{{reservedPoints}}" class="muted">待确认预约预留 {{reservedPoints}} 积分</view>
     <view wx:if="{{source !== 'REVERSAL'}}" class="section-actions">
       <button class="button {{source === 'OFFLINE_CREDIT' ? '' : 'quiet'}}" data-source="OFFLINE_CREDIT"
         bindtap="setMode" disabled="{{busy}}" aria-pressed="{{source === 'OFFLINE_CREDIT'}}" hover-class="press">线下入账</button>
