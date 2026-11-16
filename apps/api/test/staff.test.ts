@@ -7,7 +7,7 @@ import { Worker } from 'node:worker_threads';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
-import type { CoachSchedule, ManagedBooking, ManagedClass, StaffAccount } from '../../../packages/shared/contracts.js';
+import type { CoachSchedule, ManagedBooking, ManagedClass, Schedule, StaffAccount } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
 import { openDatabase } from '../src/database.ts';
 import { dateAt, weekday } from '../src/time.ts';
@@ -366,4 +366,67 @@ test('登录返回服务端角色，退出只撤销当前会话，过期后不�
     current = new Date(current.getTime() + 8 * 60 * 60 * 1000);
     assert.equal((await app.inject({ url: own, headers: second })).statusCode, 401);
   }
+});
+
+test('管理员新增课程类型，班次及周期排课沿用类型和人数上限', async context => {
+  let clock = now();
+  const { app } = fixture(context, () => clock);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const url = '/api/admin/course-types';
+  const draftType = { name: '双人专项', maxStudents: 2, refundPercent: 75.5, requestKey: 'new-type' };
+  const createType = (payload: object) => app.inject({ method: 'POST', url, headers: admin, payload });
+
+  assert.equal((await app.inject({ url, headers: parent })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url, headers: parent, payload: draftType })).statusCode, 401);
+  assert.equal((await createType({ ...draftType, refundPercent: 101 })).statusCode, 400);
+  assert.equal((await createType({ ...draftType, refundPercent: 5.555 })).statusCode, 400);
+  const created = await createType(draftType);
+  assert.equal(created.statusCode, 200);
+  const courseType = created.json();
+  assert.equal(courseType.refundPercent, 75.5);
+  assert.deepEqual((await createType(draftType)).json(), courseType);
+  assert.equal((await createType({ ...draftType, requestKey: 'duplicate' })).json().code, 'COURSE_TYPE_EXISTS');
+  for (const [name, refundPercent] of [['单人全退', 100], ['三人不退', 0]] as const) {
+    assert.equal((await createType({ ...draftType, name, refundPercent, requestKey: name })).json().refundPercent, refundPercent);
+  }
+  const listed = await app.inject({ url, headers: admin });
+  assert.equal(listed.json().length, 3);
+
+  const payload = { ...draft, courseTypeId: courseType.id, weekdays: [0, 1, 2, 3, 4, 5, 6], requestKey: 'typed-plan' };
+  const add = (body: object) => app.inject({ method: 'POST', url: '/api/admin/classes', headers: admin, payload: body });
+  assert.equal((await add({ ...payload, courseTypeId: 'missing' })).statusCode, 404);
+  assert.equal((await add({ ...payload, capacity: 3 })).json().code, 'COURSE_TYPE_CAPACITY');
+  assert.equal((await add(payload)).json().count, 30);
+  const list = (await app.inject({ url: scheduleUrl, headers: admin })).json<ManagedClass[]>();
+  const row = list.find(item => item.title === draft.title);
+  assert.ok(row);
+  assert.equal(row.courseTypeId, courseType.id);
+  assert.equal(row.courseTypeName, draftType.name);
+  assert.equal(list.find(item => item.id === today + '-strength')?.courseTypeId, null);
+  const schedule = (await app.inject({ url: '/api/schedule', headers: parent })).json<Schedule>();
+  assert.equal(schedule.courses.find(item => item.id === row.id)?.courseTypeName, draftType.name);
+
+  const configure = (fields: object) => app.inject({
+    method: 'PUT', url: '/api/admin/class-sessions/' + row.id, headers: admin,
+    payload: { ...draft, status: 'PUBLISHED', ...fields }
+  });
+  assert.equal((await configure({ capacity: 3 })).json().code, 'COURSE_TYPE_CAPACITY');
+  assert.equal((await configure({ capacity: 1 })).statusCode, 204);
+  const booking = await app.inject({
+    method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { type: 'GROUP', classSessionId: row.id, requestKey: 'book-typed' }
+  });
+  assert.equal(booking.statusCode, 200);
+  assert.equal((await configure({ courseTypeId: null })).json().code, 'CLASS_HAS_BOOKINGS');
+  assert.equal((await app.inject({
+    method: 'DELETE', url: '/api/me/bookings/' + booking.json().id, headers: parent, payload: {}
+  })).statusCode, 204);
+  const account = (await app.inject({ url: '/api/me/account', headers: parent })).json();
+  assert.equal(account.balance, 320 - draft.points);
+
+  clock = new Date(dateAt('2031-01-01', 480));
+  const renewed = await session(app);
+  const rolled = (await app.inject({ url: '/api/admin/classes?date=2031-01-30', headers: renewed })).json<ManagedClass[]>();
+  assert.equal(rolled.find(item => item.title === draft.title)?.courseTypeId, courseType.id);
 });

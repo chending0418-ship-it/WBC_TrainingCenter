@@ -10,6 +10,10 @@
       <view class="row-name">排课管理</view>
       <view class="muted">安排团课，维护私教开放时间</view>
     </navigator>
+    <navigator class="action-link" url="/pages/admin-course-types/index" hover-class="press">
+      <view class="row-name">课程类型</view>
+      <view class="muted">设置人数上限和取消退还比例</view>
+    </navigator>
     <navigator class="action-link" url="/pages/admin-bookings/index" hover-class="press">
       <view class="row-name">预约管理</view>
       <view class="muted">查看、代约和取消</view>

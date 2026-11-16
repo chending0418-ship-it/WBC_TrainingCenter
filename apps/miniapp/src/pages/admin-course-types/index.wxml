@@ -1,0 +1,46 @@
+<view wx:if="{{authorized}}" class="page-shell">
+  <text class="page-title" role="heading" aria-level="1">{{editing ? '新增课程类型' : '课程类型'}}</text>
+  <form wx:if="{{editing}}" bindsubmit="save">
+    <label class="form-field">
+      <text>类型名称</text>
+      <input class="field" value="{{name}}" maxlength="50" placeholder="例如 小班体能" data-field="name"
+        bindinput="changeField" disabled="{{busy}}" />
+    </label>
+    <label class="form-field">
+      <text>每位教练最多带几名学员</text>
+      <input class="field" type="number" value="{{maxStudents}}" maxlength="3" placeholder="一对二填 2"
+        data-field="maxStudents" bindinput="changeField" disabled="{{busy}}" />
+    </label>
+
+    <view class="section-title" role="heading" aria-level="2">取消退还</view>
+    <view class="row-line refund-toggle">
+      <text>可全额退还</text>
+      <switch color="#761F32" checked="{{fullRefund}}" bindchange="changeRefundMode"
+        disabled="{{busy}}" aria-label="可全额退还" />
+    </view>
+    <label wx:if="{{!fullRefund}}" class="form-field">
+      <text>退还比例（%）</text>
+      <input class="field" type="digit" value="{{partialRefund}}" maxlength="5" placeholder="例如 50，不退填 0"
+        data-field="partialRefund" bindinput="changeField" disabled="{{busy}}" />
+    </label>
+    <view class="muted">比例先保存到课程类型，取消后退还积分的规则待确认。</view>
+    <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+    <view class="section-actions">
+      <button class="button quiet" bindtap="close" disabled="{{busy}}" hover-class="press">返回</button>
+      <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">保存类型</button>
+    </view>
+  </form>
+
+  <view wx:elif="{{loading}}" class="message">正在查询课程类型…</view>
+  <view wx:elif="{{error}}" class="message">
+    <view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
+  </view>
+  <block wx:else>
+    <button class="button" bindtap="start" disabled="{{busy}}" hover-class="press">新增课程类型</button>
+    <view wx:if="{{!types.length}}" class="message">暂无课程类型。</view>
+    <view wx:for="{{types}}" wx:key="id" class="list-row">
+      <view class="row-name">{{item.name}}</view>
+      <view class="muted">1 对 {{item.maxStudents}} · {{item.refundPercent === 100 ? '全额退还' : item.refundPercent === 0 ? '不退还' : '退还 ' + item.refundPercent + '%'}}</view>
+    </view>
+  </block>
+</view>

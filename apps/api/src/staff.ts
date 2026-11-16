@@ -1,10 +1,10 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
-import type { ClassDraft, ClassPlan, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
+import type { ClassDraft, ClassPlan, CourseType, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
 import type { bookingService } from './booking.ts';
-import { transaction } from './database.ts';
+import { audit, transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
 import { roleSessions } from './role-session.ts';
 import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
@@ -16,7 +16,9 @@ const demoPassword = 'wbc-demo-2026';
 
 function classDraft(body: Record<string, unknown>): ClassDraft {
   const duration = integer(body.duration, 1, 720, '课程时长须为 1 至 720 分钟');
+  const courseTypeId = body.courseTypeId;
   return {
+    ...(courseTypeId === undefined ? {} : { courseTypeId: courseTypeId === null ? null : requiredText(courseTypeId) }),
     title: requiredText(body.title, 50), coachId: requiredText(body.coachId),
     venue: requiredText(body.venue, 50), date: dateInput(body.date),
     startMinute: integer(body.startMinute, 0, 1440 - duration, '课程须在同一天结束'),
@@ -98,6 +100,31 @@ export function registerStaffRoutes(
     routes.get('/context', async () => {
       const { today, lastDate, coaches } = booking.schedule('');
       return { today, lastDate, coaches };
+    });
+    routes.get('/course-types', async () => db.prepare(`
+      SELECT id, name, max_students AS maxStudents, refund_basis_points / 100.0 AS refundPercent
+      FROM course_types ORDER BY name
+    `).all() as unknown as CourseType[]);
+    routes.post('/course-types', async request => {
+      const body = object(request.body);
+      const name = requiredText(body.name, 50);
+      const maxStudents = integer(body.maxStudents, 1, 500, '人数上限须为 1 至 500 的整数');
+      const refundPercent = body.refundPercent;
+      if (typeof refundPercent !== 'number' || !Number.isFinite(refundPercent) || refundPercent < 0 || refundPercent > 100 ||
+          Math.abs(refundPercent * 100 - Math.round(refundPercent * 100)) > 1e-8) {
+        throw new ApiError(400, 'VALIDATION_ERROR', '退还比例须在 0% 到 100% 之间，最多两位小数');
+      }
+      const draft = { name, maxStudents, refundPercent };
+      return safeWrite(requiredText(body.requestKey), 'COURSE_TYPE_CREATED', draft, () => {
+        if (db.prepare('SELECT 1 FROM course_types WHERE name = ?').get(name)) {
+          throw new ApiError(409, 'COURSE_TYPE_EXISTS', '已存在同名课程类型');
+        }
+        const id = randomUUID();
+        db.prepare('INSERT INTO course_types (id, name, max_students, refund_basis_points) VALUES (?, ?, ?, ?)')
+          .run(id, name, maxStudents, Math.round(refundPercent * 100));
+        audit(db, demoAdmin, 'COURSE_TYPE_CREATED', id, clock().toISOString());
+        return { id, ...draft };
+      });
     });
     routes.get('/classes', async request => schedule.list(dateInput(object(request.query).date)));
     routes.post('/classes', async request => {

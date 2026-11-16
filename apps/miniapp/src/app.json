@@ -7,6 +7,7 @@
     "pages/child/index",
     "pages/admin/index",
     "pages/admin-schedule/index",
+    "pages/admin-course-types/index",
     "pages/admin-bookings/index",
     "pages/admin-points/index",
     "pages/coach/index"

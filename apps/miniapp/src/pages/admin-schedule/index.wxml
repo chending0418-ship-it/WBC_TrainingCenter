@@ -2,6 +2,10 @@
   <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.id ? '编辑班次' : '新增团课') : '排课管理'}}</text>
   <form wx:if="{{editor}}" bindsubmit="saveClass">
     <label class="form-field"><text>课程名称</text><input class="field" value="{{editor.title}}" data-field="title" bindinput="changeClassField" maxlength="50" placeholder="输入课程名称" disabled="{{busy}}" /></label>
+    <picker wx:if="{{typeOptions.length > 1}}" class="filter-row" range="{{typeOptions}}" range-key="label"
+      value="{{editor.typeIndex}}" bindchange="changeCourseType" disabled="{{busy}}">
+      <view class="picker"><text class="picker-label">课程类型</text><text class="picker-value">{{typeOptions[editor.typeIndex].label}}</text></view>
+    </picker>
     <picker range="{{coaches}}" range-key="name" value="{{editor.coachIndex}}" bindchange="changeClassCoach" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[editor.coachIndex].name}}</text></view>
     </picker>
@@ -50,6 +54,7 @@
       <view wx:for="{{classes}}" wx:key="id" class="list-row">
         <view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.status === 'CLOSED' ? '已停开' : '已发布'}}</text></view>
         <view>{{item.timeLabel}} · {{item.coachName}}教练</view>
+        <view wx:if="{{item.courseTypeName}}" class="muted">{{item.courseTypeName}}</view>
         <view class="muted">{{item.venue}} · {{item.bookedCount}}/{{item.capacity}} 人 · {{item.points}} 积分</view>
         <view wx:if="{{item.names}}" class="details">已预约 {{item.names}}</view>
         <view wx:if="{{item.editable}}" class="section-actions">

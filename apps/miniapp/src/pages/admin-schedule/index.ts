@@ -1,13 +1,16 @@
 import { allowPage } from '../../lib/session';
-import type { ClassDraft, ClassStatus, Coach, CoachHours, ManagedClass } from '../../../../../packages/shared/contracts.js';
+import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
 type ClassRow = ManagedClass & { timeLabel: string; names: string; editable: boolean };
+type TypeOption = { id: string | null; label: string; maxStudents: number };
+const untyped: TypeOption = { id: null, label: '未指定类型', maxStudents: 500 };
+
 type Editor = {
   id: string; title: string; venue: string; date: string; time: string; duration: string;
-  capacity: string; points: string; status: ClassStatus; coachIndex: number; repeat: boolean;
+  capacity: string; points: string; status: ClassStatus; coachIndex: number; typeIndex: number; repeat: boolean;
 };
 let request = 0;
 
@@ -18,6 +21,7 @@ Page({
     date: '', today: '', lastDate: '', dayLabel: '',
     loading: true, loadError: '', saveError: '', busy: false,
     coaches: [] as Coach[], coachIndex: 0, classes: [] as ClassRow[],
+    typeOptions: [untyped] as TypeOption[],
     editor: null as Editor | null, days: weekdays.map((label, index) => ({ label, index, active: false })),
     windows: [] as { key: number; start: string; end: string }[],
     exceptions: [] as (CoachHours['exceptions'][number] & { label: string })[],
@@ -32,8 +36,11 @@ Page({
   async load() {
     this.setData({ loading: true, loadError: '' });
     try {
-      const { today, lastDate, coaches } = await staffContext();
-      this.setData({ today, lastDate, coaches, date: this.data.date || today });
+      const [{ today, lastDate, coaches }, types] = await Promise.all([
+        staffContext(), staffApi<CourseType[]>('/course-types')
+      ]);
+      const options = types.map(type => ({ ...type, label: type.name + ' · 1 对 ' + type.maxStudents }));
+      this.setData({ today, lastDate, coaches, date: this.data.date || today, typeOptions: [untyped, ...options] });
       await this.refresh();
     } catch (error) {
       this.setData({ loading: false, loadError: errorMessage(error) });
@@ -88,7 +95,7 @@ Page({
     this.setData({
       editor: { id: '', title: '', venue: '训练室 A', date: this.data.date,
         time: '17:30', duration: '60', capacity: '6', points: '40',
-        status: 'PUBLISHED', coachIndex: 0, repeat: false },
+        status: 'PUBLISHED', coachIndex: 0, typeIndex: 0, repeat: false },
       days: weekdays.map((label, index) => ({ label, index, active: false })), saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
@@ -100,7 +107,8 @@ Page({
       editor: { id: row.id, title: row.title, venue: row.venue, date: row.date,
         time: minuteString(row.startMinute), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: row.status,
-        coachIndex: this.data.coaches.findIndex(coach => coach.id === row.coachId), repeat: false }, saveError: ''
+        coachIndex: this.data.coaches.findIndex(coach => coach.id === row.coachId),
+        typeIndex: Math.max(0, this.data.typeOptions.findIndex(type => type.id === row.courseTypeId)), repeat: false }, saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
@@ -115,6 +123,16 @@ Page({
   },
   changeClassCoach(event: WechatMiniprogram.PickerChange) {
     this.setData({ 'editor.coachIndex': Number(event.detail.value) });
+  },
+  changeCourseType(event: WechatMiniprogram.PickerChange) {
+    const typeIndex = Number(event.detail.value);
+    const type = this.data.typeOptions[typeIndex];
+    if (!type || !this.data.editor || typeIndex === this.data.editor.typeIndex) return;
+    this.setData({
+      'editor.typeIndex': typeIndex,
+      'editor.capacity': type.id ? String(type.maxStudents) : this.data.editor.capacity,
+      saveError: ''
+    });
   },
   changeRepeat(event: WechatMiniprogram.SwitchChange) {
     this.setData({ 'editor.repeat': event.detail.value, saveError: '' });
@@ -136,6 +154,7 @@ Page({
         throw new Error('请填写课程、场地、教练和有效时段。周期排课需要选择星期。');
       }
       const draft: ClassDraft = {
+        courseTypeId: this.data.typeOptions[editor.typeIndex].id,
         title: editor.title, venue: editor.venue, coachId, date: editor.date, startMinute: startMinutes[0],
         duration: Number(editor.duration), capacity: Number(editor.capacity), points: Number(editor.points)
       };
