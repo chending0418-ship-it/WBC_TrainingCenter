@@ -8,13 +8,6 @@
   </view>
 
   <block wx:else>
-    <view class="modes">
-      <button class="button {{mode === 'GROUP' ? '' : 'quiet'}}" data-mode="GROUP"
-        bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'GROUP'}}">团课</button>
-      <button class="button {{mode === 'PRIVATE' ? '' : 'quiet'}}" data-mode="PRIVATE"
-        bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'PRIVATE'}}">私教</button>
-    </view>
-
     <view class="week">
       <button class="button quiet week-step" data-step="-1" disabled="{{!hasPrevious || booking}}"
         bindtap="changeWeek" hover-class="press">上一周</button>
@@ -31,54 +24,23 @@
       </button>
     </view>
 
-    <block wx:if="{{mode === 'GROUP'}}">
-      <view class="section-title" role="heading" aria-level="2">团课安排</view>
-      <view wx:if="{{!courses.length}}" class="message">这天没有团课，可以选择其他日期。</view>
-      <view wx:for="{{courses}}" wx:key="id" class="list-row course">
-        <view class="row-line">
-          <text class="course-title">{{item.title}}</text>
-          <text class="accent course-time">{{item.hours}}</text>
-        </view>
-        <view class="muted">{{item.coachName}}教练 · {{item.venue}}{{item.courseTypeName ? ' · ' + item.courseTypeName : ''}}</view>
-        <view class="course-action">
-          <view>
-            <view class="row-name">{{item.points}} 积分</view>
-            <view class="muted">{{item.bookedCount}}/{{item.capacity}} 人 · 剩余 {{item.capacity - item.bookedCount}} 位</view>
-          </view>
-          <text wx:if="{{item.unavailable}}" class="course-status">{{item.action}}</text>
-          <button wx:else class="button" data-id="{{item.id}}" bindtap="bookGroup" hover-class="press"
-            disabled="{{booking}}" aria-label="{{item.title}} 预约">预约</button>
-        </view>
+    <view class="section-title" role="heading" aria-level="2">团课安排</view>
+    <view wx:if="{{!courses.length}}" class="message">这天没有团课，可以选择其他日期。</view>
+    <view wx:for="{{courses}}" wx:key="id" class="list-row course">
+      <view class="row-line">
+        <text class="course-title">{{item.title}}</text>
+        <text class="accent course-time">{{item.hours}}</text>
       </view>
-    </block>
-
-    <block wx:else>
-      <view class="section-title" role="heading" aria-level="2">选择私教时段</view>
-      <picker wx:if="{{coaches.length}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}"
-        bindchange="changeCoach" disabled="{{booking}}">
-        <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text></view>
-      </picker>
-      <view wx:if="{{slotLoading}}" class="message">正在查询可约时段…</view>
-      <view wx:elif="{{slotError}}" class="message">
-        <view>{{slotError}}</view>
-        <button class="button quiet" bindtap="refreshSlots" hover-class="press">重新查询</button>
-      </view>
-      <view wx:elif="{{!starts.length}}" class="message">这天没有可约时段，可以更换教练或日期。</view>
-      <block wx:else>
-        <view class="time-pickers">
-          <picker range="{{starts}}" range-key="label" value="{{startIndex < 0 ? 0 : startIndex}}"
-            bindchange="changeStart" disabled="{{booking}}">
-            <view class="picker"><text class="picker-label">开始</text><text class="picker-value">{{startIndex < 0 ? '选择时间' : starts[startIndex].label}}</text></view>
-          </picker>
-          <picker range="{{ends}}" range-key="label" value="{{endIndex < 0 ? 0 : endIndex}}"
-            bindchange="changeEnd" disabled="{{booking || startIndex < 0}}">
-            <view class="picker"><text class="picker-label">结束</text><text class="picker-value">{{endIndex < 0 ? '选择时间' : ends[endIndex].label}}</text></view>
-          </picker>
+      <view class="muted">{{item.coachName}}教练 · {{item.venue}}{{item.courseTypeName ? ' · ' + item.courseTypeName : ''}}</view>
+      <view class="course-action">
+        <view>
+          <view class="row-name">{{item.points}} 积分</view>
+          <view class="muted">{{item.bookedCount}}/{{item.capacity}} 人 · 剩余 {{item.capacity - item.bookedCount}} 位</view>
         </view>
-        <view class="muted private-venue">一对一训练 · 训练室 B</view>
-        <button class="button" bindtap="bookPrivate" hover-class="press" loading="{{booking}}"
-          disabled="{{endIndex < 0 || booking}}">预约私教</button>
-      </block>
-    </block>
+        <text wx:if="{{item.unavailable}}" class="course-status">{{item.action}}</text>
+        <button wx:else class="button" data-id="{{item.id}}" bindtap="bookGroup" hover-class="press"
+          disabled="{{booking}}" aria-label="{{item.title}} 预约">预约</button>
+      </view>
+    </view>
   </block>
 </view>

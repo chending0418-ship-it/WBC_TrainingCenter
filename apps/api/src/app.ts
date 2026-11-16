@@ -4,28 +4,28 @@ import type { FastifyRequest } from 'fastify';
 import { ApiError, bookingService } from './booking.ts';
 import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
-import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
+import { expectedRevision, object, requiredText, selection } from './input.ts';
 import { readContact, saveContact } from './parent-contact.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
 import { venueDate } from './time.ts';
 
-export function createApp(db: DatabaseSync, clock = () => new Date()) {
+export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = true } = {}) {
   const app = Fastify({ logger: false, bodyLimit: 4096 });
   const service = bookingService(db, clock);
   const scheduling = staffSchedule(db, clock);
   const parents = roleSessions('PARENT', clock, '请重新登录家长端');
   const initialTime = clock();
   let seededDate = venueDate(initialTime);
-  seedDemo(db, initialTime);
+  if (demo) seedDemo(db, initialTime);
   scheduling.roll(initialTime);
 
   app.addHook('preHandler', async () => {
     const now = clock();
     const today = venueDate(now);
     if (seededDate !== today) {
-      seedDemo(db, now);
+      if (demo) seedDemo(db, now);
       scheduling.roll(now);
       seededDate = today;
     }
@@ -34,6 +34,11 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
 
   function user(request: FastifyRequest): string {
     return parents.authorize(request.headers.authorization).subject;
+  }
+
+  function parentSelection(body: Record<string, unknown>) {
+    if (body.type === 'PRIVATE') throw new ApiError(403, 'ADMIN_ONLY', '私教由场馆管理员安排');
+    return selection(body);
   }
 
   app.setErrorHandler((error, _request, reply) => {
@@ -47,23 +52,24 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
-  app.post('/api/dev/session', async request => {
-    const { profile } = object(request.body);
-    if (!mockProfiles.some(name => name === profile) || typeof profile !== 'string') {
-      throw new ApiError(400, 'VALIDATION_ERROR', '未知的演示账号');
-    }
-    return parents.create(profile);
-  });
-  app.delete('/api/dev/session', async (request, reply) => {
-    parents.revoke(request.headers.authorization);
-    return reply.code(204).send();
-  });
+  if (demo) {
+    app.post('/api/dev/session', async request => {
+      const { profile } = object(request.body);
+      if (!mockProfiles.some(name => name === profile) || typeof profile !== 'string') {
+        throw new ApiError(400, 'VALIDATION_ERROR', '未知的演示账号');
+      }
+      return parents.create(profile);
+    });
+    app.delete('/api/dev/session', async (request, reply) => {
+      parents.revoke(request.headers.authorization);
+      return reply.code(204).send();
+    });
+  }
+
   app.get('/api/schedule', async request => service.schedule(user(request)));
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
-    const coachId = requiredText(object(request.params).id);
-    const date = dateInput(object(request.query).date);
-    return service.listSlots(coachId, date);
+    throw new ApiError(403, 'ADMIN_ONLY', '私教时段由场馆管理员安排');
   });
   app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
   app.put('/api/me/child', async request => {
@@ -84,17 +90,17 @@ export function createApp(db: DatabaseSync, clock = () => new Date()) {
   });
   app.get('/api/me/account', async request => service.account(user(request)));
   app.get('/api/me/bookings', async request => service.bookings(user(request)));
-  app.post('/api/bookings/quote', async request => service.quote(user(request), selection(object(request.body))));
+  app.post('/api/bookings/quote', async request => service.quote(user(request), parentSelection(object(request.body))));
   app.post('/api/bookings', async request => {
     const profile = user(request);
     const body = object(request.body);
-    return service.book(profile, selection(body), requiredText(body.requestKey), profile, expectedRevision(body.expectedRevision));
+    return service.book(profile, parentSelection(body), requiredText(body.requestKey), profile, expectedRevision(body.expectedRevision));
   });
   app.delete('/api/me/bookings/:id', async request => {
     user(request);
     throw new ApiError(403, 'ADMIN_ONLY', '请线下联系管理员处理取消');
   });
-  registerStaffRoutes(app, db, clock, service, scheduling);
-  registerCoachRoutes(app, db, clock);
+  registerStaffRoutes(app, db, clock, service, scheduling, demo);
+  registerCoachRoutes(app, db, clock, demo);
   return app;
 }

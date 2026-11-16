@@ -13,7 +13,7 @@ import { dateAt } from '../src/time.ts';
 const date = '2030-12-31';
 const now = () => new Date(dateAt(date, 480));
 const group: BookingSelection = { type: 'GROUP', classSessionId: date + '-strength' };
-function privateTraining(start: number, end: number, coachId = 'li', day = date): BookingSelection {
+function privateTraining(start: number, end: number, coachId = 'li', day = date): Extract<BookingSelection, { type: 'PRIVATE' }> {
   return { type: 'PRIVATE', coachId, startsAt: dateAt(day, start), endsAt: dateAt(day, end) };
 }
 
@@ -65,7 +65,7 @@ test('团课申请保留积分，管理员确认才扣分，重试不会重复�
   const booking = initial.json<Booking>();
   assert.equal(booking.status, 'PENDING');
   assert.deepEqual((await book(app, parent, group, 'first')).json(), booking);
-  assert.equal((await book(app, parent, privateTraining(840, 870), 'first')).json().code, 'REQUEST_KEY_REUSED');
+  assert.equal((await book(app, parent, { type: 'GROUP', classSessionId: date + '-stability' }, 'first')).json().code, 'REQUEST_KEY_REUSED');
   assert.equal((await book(app, parent, group, 'duplicate')).json().code, 'ALREADY_BOOKED');
   const pending = await account(app, parent);
   assert.equal(pending.balance, 320);
@@ -113,36 +113,58 @@ test('多个请求争抢最后一个团课名额，仅一笔可以预留', async
   assert.equal(schedule.lastDate, '2031-01-29');
 });
 
-test('私教连续开放、团课互斥、教练独立、重叠请求和取消释放', async context => {
+test('私教由管理员代约，校验完整的开放时段、时间冲突和取消释放', async context => {
   const { app, db } = fixture(context);
   const parent = await login(app);
   const other = await login(app, 'other-parent');
-  const slots = (await app.inject({ url: '/api/coaches/li/slots?date=' + date, headers: parent })).json<PrivateSlot[]>();
+  const admin = await adminSession(app);
+  for (const url of ['/api/bookings/quote', '/api/bookings']) {
+    const denied = await app.inject({
+      method: 'POST', url, headers: parent, payload: { ...privateTraining(1050, 1110), requestKey: 'parent-private' }
+    });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(denied.json().code, 'ADMIN_ONLY');
+  }
+  assert.equal((await app.inject({ url: '/api/coaches/li/slots?date=' + date, headers: parent })).statusCode, 403);
+  assert.equal((await app.inject({ url: '/api/admin/coaches/li/slots?date=' + date, headers: parent })).statusCode, 401);
+  const adminBook = (userId: string, slot: BookingSelection, requestKey: string) =>
+    app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin, payload: { ...slot, userId, requestKey } });
+  const slots = (await app.inject({ url: '/api/admin/coaches/li/slots?date=' + date, headers: admin })).json<PrivateSlot[]>();
   assert.ok(slots.some(slot => slot.startsAt === dateAt(date, 1050) && slot.endsAt === dateAt(date, 1110)));
   assert.ok(!slots.some(slot => slot.startsAt < dateAt(date, 660) && slot.endsAt > dateAt(date, 600)));
-  assert.equal((await book(app, parent, privateTraining(570, 630), 'group-conflict')).json().code, 'SLOT_TAKEN');
-  assert.equal((await book(app, parent, privateTraining(690, 780), 'gap')).json().code, 'SLOT_TAKEN');
-  assert.equal((await book(app, parent, privateTraining(1410, 1470), 'midnight')).statusCode, 400);
+  assert.equal((await adminBook('parent', privateTraining(570, 630), 'group-conflict')).json().code, 'SLOT_TAKEN');
+  assert.equal((await adminBook('parent', privateTraining(690, 780), 'gap')).json().code, 'SLOT_TAKEN');
+  assert.equal((await adminBook('parent', privateTraining(1410, 1470), 'midnight')).statusCode, 400);
 
   db.prepare("INSERT INTO coach_exceptions (coach_id, starts_at, ends_at) VALUES ('li', ?, ?)").run(dateAt(date, 960), dateAt(date, 990));
-  assert.equal((await book(app, parent, privateTraining(930, 990), 'exception')).json().code, 'SLOT_TAKEN');
+  assert.equal((await adminBook('parent', privateTraining(930, 990), 'exception')).json().code, 'SLOT_TAKEN');
+  db.prepare('INSERT INTO course_types (id, name, max_students, refund_basis_points) VALUES (?, ?, 1, 5000)')
+    .run('private-type', '专项私教');
   const results = await Promise.all([
-    book(app, parent, privateTraining(1050, 1110), 'overlap-1'),
-    book(app, other, privateTraining(1080, 1140), 'overlap-2')
+    adminBook('parent', { ...privateTraining(1050, 1110), courseTypeId: 'private-type' }, 'overlap-1'),
+    adminBook('other-parent', { ...privateTraining(1080, 1140), courseTypeId: 'private-type' }, 'overlap-2')
   ]);
   const winner = results.findIndex(result => result.statusCode === 200);
   assert.notEqual(winner, -1);
   assert.equal(results[1 - winner].json().code, 'SLOT_TAKEN');
+  const created = results[winner].json<Booking>();
   const headers = [parent, other];
-  assert.equal((await account(app, headers[winner])).reservedPoints, 60);
-  assert.equal((await book(app, headers[1 - winner], privateTraining(1080, 1140, 'wang'), 'other-coach')).statusCode, 200);
+  const users = ['parent', 'other-parent'];
+  assert.equal(created.status, 'CONFIRMED');
+  assert.equal(created.title, '专项私教');
+  assert.equal(created.refundPoints, 30);
+  assert.equal((await account(app, headers[winner])).balance, 260);
+  assert.deepEqual((await app.inject({ url: '/api/me/bookings', headers: headers[winner] })).json(), [created]);
+  assert.deepEqual((await app.inject({ url: '/api/me/bookings', headers: headers[1 - winner] })).json(), []);
+  assert.equal((await adminBook(users[1 - winner], privateTraining(1080, 1140, 'wang'), 'other-coach')).statusCode, 200);
   assert.equal((await app.inject({
-    method: 'DELETE', url: '/api/admin/bookings/' + results[winner].json<Booking>().id, headers: await adminSession(app)
+    method: 'DELETE', url: '/api/admin/bookings/' + created.id, headers: admin
   })).statusCode, 204);
-  const rejected = await account(app, headers[winner]);
-  assert.equal(rejected.reservedPoints, 0);
-  assert.deepEqual(rejected.ledger.map(entry => entry.delta), [320]);
-  assert.equal((await book(app, headers[winner], privateTraining(1050, 1110), 'opened-again')).statusCode, 200);
+  const cancelled = await account(app, headers[winner]);
+  assert.equal(cancelled.reservedPoints, 0);
+  assert.equal(cancelled.balance, 290);
+  assert.deepEqual(cancelled.ledger.map(entry => entry.delta), [30, -60, 320]);
+  assert.equal((await adminBook(users[winner], privateTraining(1050, 1110), 'opened-again')).statusCode, 200);
 });
 
 test('资料和积分校验失败无占用，账户读取与孩子资料按会话隔离', async context => {
@@ -167,14 +189,14 @@ test('资料和积分校验失败无占用，账户读取与孩子资料按会�
   `).run(now().toISOString());
   const result = await Promise.all([
     book(app, parent, group, 'race-points-group'),
-    book(app, parent, privateTraining(840, 870), 'race-points-private')
+    book(app, parent, { type: 'GROUP', classSessionId: date + '-stability' }, 'race-points-other-class')
   ]);
   assert.equal(result.filter(response => response.statusCode === 200).length, 1);
   assert.equal(result.find(response => response.statusCode !== 200)?.json().code, 'INSUFFICIENT_POINTS');
   assert.equal((await app.inject({ url: '/api/me/bookings', headers: parent })).json().length, 1);
   assert.deepEqual((await app.inject({ url: '/api/me/bookings', headers: other })).json(), []);
   const available = await account(app, parent);
-  assert.ok([10, 20].includes(available.balance - available.reservedPoints));
+  assert.ok([0, 10].includes(available.balance - available.reservedPoints));
   assert.equal((await account(app, other)).balance, 320);
 });
 
@@ -212,4 +234,29 @@ test('待确认的申请到开课时释放预留积分，之后不能确认或�
   const result = await account(app, parent);
   assert.equal(result.reservedPoints, 0);
   assert.deepEqual(result.ledger.map(entry => entry.delta), [320]);
+});
+
+test('生产模式健康检查可用，业务需要登录，不注册演示入口或生成种子数据', async context => {
+  let current = now();
+  const db = openDatabase(':memory:');
+  const app = createApp(db, () => current, { demo: false });
+  context.after(() => app.close());
+  for (const [url, payload] of [
+    ['/api/dev/session', { profile: 'parent' }],
+    ['/api/dev/coach-session', { profile: 'coach-li' }],
+    ['/api/admin/session', { password: 'wbc-demo-2026' }]
+  ] as const) {
+    assert.equal((await app.inject({ method: 'POST', url, payload })).statusCode, 404);
+  }
+  assert.equal((await app.inject({ url: '/api/dev/coach-profiles' })).statusCode, 404);
+  for (const url of ['/api/schedule', '/api/admin/overview', '/api/coach/me/schedule']) {
+    assert.equal((await app.inject({ url })).statusCode, 401);
+  }
+  current = new Date(dateAt('2031-01-01'));
+  const health = await app.inject({ url: '/health' });
+  assert.equal(health.statusCode, 200);
+  assert.deepEqual(health.json(), { status: 'ok' });
+  for (const table of ['users', 'coaches', 'class_sessions', 'ledger']) {
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM ' + table).get()?.n, 0);
+  }
 });

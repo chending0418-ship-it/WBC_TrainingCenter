@@ -22,7 +22,10 @@ export function selection(body: Record<string, unknown>): BookingSelection {
     const coachId = requiredText(body.coachId);
     const startsAt = requiredText(body.startsAt);
     const endsAt = requiredText(body.endsAt);
-    if (isInstant(startsAt) && isInstant(endsAt)) return { type: 'PRIVATE', coachId, startsAt, endsAt };
+    if (isInstant(startsAt) && isInstant(endsAt)) {
+      const courseTypeId = body.courseTypeId === undefined ? undefined : requiredText(body.courseTypeId);
+      return { type: 'PRIVATE', coachId, startsAt, endsAt, ...(courseTypeId ? { courseTypeId } : {}) };
+    }
   }
   throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的课程或时段');
 }
