@@ -200,6 +200,28 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 8;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 9) return;
+    db.exec(`
+      CREATE TABLE wechat_accounts (
+        user_id TEXT PRIMARY KEY REFERENCES users(id),
+        app_id TEXT NOT NULL,
+        open_id TEXT NOT NULL,
+        is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+        coach_id TEXT REFERENCES coaches(id),
+        UNIQUE (app_id, open_id),
+        UNIQUE (app_id, coach_id)
+      ) STRICT;
+      CREATE TABLE wechat_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES wechat_accounts(user_id),
+        active_role TEXT CHECK (active_role IN ('PARENT', 'COACH', 'ADMIN')),
+        expires_at INTEGER NOT NULL
+      ) STRICT;
+      CREATE INDEX wechat_sessions_expiry ON wechat_sessions(expires_at);
+      PRAGMA user_version = 9;
+    `);
+  });
   return db;
 }
 

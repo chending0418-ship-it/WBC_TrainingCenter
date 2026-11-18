@@ -10,11 +10,17 @@ import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
 import { venueDate } from './time.ts';
+import { wechatAuth } from './wechat-auth.ts';
+import type { WechatLoginConfig } from './wechat-login.ts';
 
-export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = true } = {}) {
+export function createApp(db: DatabaseSync, clock = () => new Date(),
+  { demo = true, wechat }: { demo?: boolean; wechat?: WechatLoginConfig } = {}
+) {
   const app = Fastify({ logger: false, bodyLimit: 4096 });
   const service = bookingService(db, clock);
   const scheduling = staffSchedule(db, clock);
+  if (demo && wechat) throw new Error('Demo sessions and WeChat login require separate environments.');
+  const auth = wechat && wechatAuth(db, clock, wechat);
   const parents = roleSessions('PARENT', clock, '请重新登录家长端');
   const initialTime = clock();
   let seededDate = venueDate(initialTime);
@@ -33,7 +39,8 @@ export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = t
   app.addHook('onClose', async () => db.close());
 
   function user(request: FastifyRequest): string {
-    return parents.authorize(request.headers.authorization).subject;
+    const authorization = request.headers.authorization;
+    return (auth ? auth.authorize(authorization, 'PARENT') : parents.authorize(authorization)).subject;
   }
 
   function parentSelection(body: Record<string, unknown>) {
@@ -54,6 +61,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = t
     return reply.code(500).send({ code: 'INTERNAL_ERROR', message: '服务暂时不可用，请重试' });
   });
 
+  auth?.registerRoutes(app);
   app.get('/health', async () => ({ status: 'ok' }));
   if (demo) {
     app.post('/api/dev/session', async request => {
@@ -97,13 +105,15 @@ export function createApp(db: DatabaseSync, clock = () => new Date(), { demo = t
   app.post('/api/bookings', async request => {
     const profile = user(request);
     const body = object(request.body);
-    return service.book(profile, parentSelection(body), requiredText(body.requestKey), profile, expectedRevision(body.expectedRevision));
+    return service.book(profile, parentSelection(body), requiredText(body.requestKey), {
+      expectedRevision: expectedRevision(body.expectedRevision)
+    });
   });
   app.delete('/api/me/bookings/:id', async request => {
     user(request);
     throw new ApiError(403, 'ADMIN_ONLY', '请线下联系管理员处理取消');
   });
-  registerStaffRoutes(app, db, clock, service, scheduling, demo);
-  registerCoachRoutes(app, db, clock, demo);
+  registerStaffRoutes(app, db, clock, service, scheduling, demo, auth && (header => auth.authorize(header, 'ADMIN')));
+  registerCoachRoutes(app, db, clock, demo, auth && (header => auth.authorize(header, 'COACH')));
   return app;
 }

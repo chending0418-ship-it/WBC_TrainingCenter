@@ -1,6 +1,6 @@
 import type { CoachLesson, CoachSchedule } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/request';
-import { allowPage, roleRequest, signOut } from '../../lib/session';
+import { allowPage, canSwitchRole, roleRequest, signOut, switchRole } from '../../lib/session';
 import { dateLabel, localTimestamp, timeRange } from '../../lib/display';
 
 type Period = 'today' | 'week';
@@ -31,13 +31,13 @@ function groupLessons(lessons: CoachLesson[]): Day[] {
 
 Page({
   data: {
-    authorized: false,
+    authorized: false, switchable: false,
     coachName: '', period: 'today' as Period,
     rangeLabel: '', days: [] as Day[], loading: true, error: ''
   },
   onShow() {
     const authorized = allowPage('COACH');
-    this.setData({ authorized });
+    this.setData({ authorized, switchable: authorized && canSwitchRole() });
     if (authorized) void this.refresh();
   },
   async onPullDownRefresh() {
@@ -47,6 +47,7 @@ Page({
       wx.stopPullDownRefresh();
     }
   },
+  switchRole,
   signOut,
   changePeriod(event: WechatMiniprogram.TouchEvent) {
     const period = event.currentTarget.dataset.period as Period;

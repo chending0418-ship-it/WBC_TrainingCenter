@@ -1,4 +1,4 @@
-import type { RoleSession, SessionRole } from '../../../../packages/shared/contracts.js';
+import type { RoleSession, SessionRole, WechatLogin } from '../../../../packages/shared/contracts.js';
 import { RequestError, send } from './request';
 import type { Method } from './request';
 
@@ -16,6 +16,7 @@ const endpoint = {
 
 const entry = '/pages/entry/index';
 let active: RoleSession | undefined;
+let wechat: WechatLogin | undefined;
 
 function openCurrentHome() {
   wx.reLaunch({ url: active ? home[active.role] : entry });
@@ -45,11 +46,50 @@ export async function signIn(role: SessionRole, data: object) {
   openCurrentHome();
 }
 
+export function wechatIdentity(): WechatLogin | undefined {
+  return wechat;
+}
+
+export async function signInWechat(): Promise<WechatLogin> {
+  const code = await new Promise<string>((resolve, reject) => {
+    const failed = () => reject(new RequestError('WECHAT_LOGIN_FAILED', '无法获取微信登录凭证，请重试', 0));
+    wx.login({ success: result => { if (result.code) resolve(result.code); else failed(); }, fail: failed });
+  });
+  wechat = await send<WechatLogin>('/api/auth/wechat', 'POST', { code });
+  return wechat;
+}
+
+export async function selectWechatRole(role: SessionRole) {
+  if (!wechat) throw new RequestError('NOT_AUTHORIZED', '请先使用微信登录', 401);
+  try {
+    const session = await send<RoleSession>('/api/auth/role', 'POST', { role }, wechat.token);
+    wechat = { ...wechat, token: session.token };
+    active = session;
+    openCurrentHome();
+  } catch (error) {
+    if (error instanceof RequestError && (error.status === 401 || error.status === 403)) wechat = undefined;
+    throw error;
+  }
+}
+
+export function canSwitchRole(): boolean {
+  return (wechat?.roles.length ?? 0) > 1;
+}
+
+export function switchRole() {
+  if (!wechat) return;
+  active = undefined;
+  openCurrentHome();
+}
+
 export function signOut() {
   const previous = active;
+  const identity = wechat;
   active = undefined;
+  wechat = undefined;
   // Local access ends immediately. The server also revokes the token if reachable.
-  if (previous) void send(endpoint[previous.role], 'DELETE', undefined, previous.token).catch(() => undefined);
+  if (identity) void send('/api/auth/session', 'DELETE', undefined, identity.token).catch(() => undefined);
+  else if (previous) void send(endpoint[previous.role], 'DELETE', undefined, previous.token).catch(() => undefined);
   openCurrentHome();
 }
 
@@ -63,6 +103,7 @@ export async function roleRequest<T>(role: SessionRole, path: string, method: Me
   } catch (error) {
     if (error instanceof RequestError && error.status === 401 && session === active) {
       active = undefined;
+      wechat = undefined;
       wx.showToast({ title: '登录已失效，请重新登录', icon: 'none' });
       openCurrentHome();
     }
