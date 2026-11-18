@@ -223,7 +223,9 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     VALUES (?, ?, 'BOOKING', ?, ?, ?, ?)
   `);
 
-  function book(user: string, selection: BookingSelection, requestKey: string, operator = user, expectedRevision?: string): Booking {
+  function book(user: string, selection: BookingSelection, requestKey: string,
+    { staffActor, expectedRevision }: { staffActor?: string; expectedRevision?: string } = {}
+  ): Booking {
     return transaction(db, () => {
       const payload = JSON.stringify(selection);
       const previous = db.prepare(`
@@ -252,7 +254,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       if (balance(user) - reservedPoints(db, user, createdAt) < details.points) {
         throw new ApiError(409, 'INSUFFICIENT_POINTS', '可用积分不足，无法预约');
       }
-      const pending = operator === user;
+      const pending = staffActor === undefined;
       db.prepare(`
         INSERT INTO bookings
           (id, user_id, type, class_id, coach_id, title, venue, starts_at, ends_at, points, refund_points,
@@ -260,9 +262,9 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, user, selection.type, selection.type === 'GROUP' ? selection.classSessionId : null, coachId,
         details.title, details.venue, details.startsAt, details.endsAt, details.points, details.refundPoints, requestKey, payload, createdAt, Number(pending));
-      if (!pending) {
-        charge.run(user, id, -details.points, '预约 · ' + details.title, createdAt, operator);
-        audit(db, operator, 'BOOKING_CREATED', id, createdAt);
+      if (staffActor !== undefined) {
+        charge.run(user, id, -details.points, '预约 · ' + details.title, createdAt, staffActor);
+        audit(db, staffActor, 'BOOKING_CREATED', id, createdAt);
       }
       return { ...details, id, type: selection.type, status: pending ? 'PENDING' : 'CONFIRMED' };
     });

@@ -4,11 +4,12 @@ import type { CoachLesson, CoachSchedule } from '../../../packages/shared/contra
 import { ApiError } from './booking.ts';
 import { object, requiredText } from './input.ts';
 import { roleSessions } from './role-session.ts';
+import type { Authorize } from './wechat-auth.ts';
 import { addDays, dateAt, venueDate, weekday } from './time.ts';
 
 type LessonRow = Omit<CoachLesson, 'childNames' | 'bookedCount'> & { childName: string | null };
 
-export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, clock: () => Date, demo: boolean) {
+export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, clock: () => Date, demo: boolean, authorizeWechat?: Authorize) {
   const sessions = roleSessions('COACH', clock, '请重新登录教练端');
 
   if (demo) {
@@ -30,7 +31,7 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
   }
 
   app.get('/api/coach/me/schedule', async (request): Promise<CoachSchedule> => {
-    const coachId = sessions.authorize(request.headers.authorization).subject;
+    const coachId = (authorizeWechat ?? sessions.authorize)(request.headers.authorization).subject;
     const period = object(request.query).period ?? 'today';
     if (period !== 'today' && period !== 'week') throw new ApiError(400, 'VALIDATION_ERROR', '请选择今日或本周');
     const coach = db.prepare('SELECT name FROM coaches WHERE id = ? AND enabled = 1').get(coachId);

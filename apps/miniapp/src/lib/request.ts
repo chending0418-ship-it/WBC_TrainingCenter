@@ -1,6 +1,5 @@
 import type { ApiFailure } from '../../../../packages/shared/contracts.js';
-
-const apiBase = 'http://127.0.0.1:3000';
+import { config } from './config';
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -18,7 +17,7 @@ export class RequestError extends Error {
 export function send<T>(path: string, method: Method, data?: object, token?: string): Promise<T> {
   return new Promise((resolve, reject) => {
     wx.request({
-      url: apiBase + path,
+      url: config.apiBase + path,
       method,
       // 微信会给无正文请求带 JSON 请求头，DELETE 传空对象供服务端解析。
       data: method === 'DELETE' ? (data ?? {}) : data,
@@ -33,7 +32,8 @@ export function send<T>(path: string, method: Method, data?: object, token?: str
         reject(new RequestError(body?.code ?? 'REQUEST_FAILED', body?.message ?? '请求失败，请重试', result.statusCode));
       },
       fail() {
-        reject(new RequestError('NETWORK', '无法连接本地 API，请检查服务后重试', 0));
+        const message = config.mode === 'demo' ? '无法连接本地 API，请检查服务后重试' : '暂时无法连接服务器，请重试';
+        reject(new RequestError('NETWORK', message, 0));
       }
     });
   });

@@ -191,3 +191,9 @@ export interface RoleSession {
   role: SessionRole;
   token: string;
 }
+
+export interface WechatLogin {
+  accountId: string;
+  roles: SessionRole[];
+  token: string;
+}

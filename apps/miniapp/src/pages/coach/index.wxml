@@ -2,6 +2,7 @@
   <text class="page-title" role="heading" aria-level="1">授课日程</text>
   <view class="row-line coach-toolbar">
     <view class="row-name">{{coachName ? coachName + '教练' : '教练端'}}</view>
+    <button wx:if="{{switchable}}" class="button quiet row-action" bindtap="switchRole" hover-class="press">切换身份</button>
     <button class="button quiet" bindtap="signOut" hover-class="press">退出教练登录</button>
   </view>
   <view class="section-actions">

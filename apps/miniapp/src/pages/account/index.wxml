@@ -21,6 +21,7 @@
       <text>使用协议与隐私说明</text><text class="accent">查看</text>
     </navigator>
   </block>
+  <button wx:if="{{switchable}}" class="button quiet row-action" bindtap="switchRole" hover-class="press">切换身份</button>
   <button class="button quiet logout-button" bindtap="signOut" hover-class="press">退出家长登录</button>
 
   <block wx:if="{{!loading && !error}}">

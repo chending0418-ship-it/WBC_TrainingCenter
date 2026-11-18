@@ -39,5 +39,6 @@
       <view class="muted">线下入账、人工调整和冲正</view>
     </navigator>
   </block>
+  <button wx:if="{{switchable}}" class="button quiet row-action" bindtap="switchRole" hover-class="press">切换身份</button>
   <button class="button quiet row-action" bindtap="signOut" hover-class="press">退出管理员登录</button>
 </view>

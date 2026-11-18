@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ClassDraft, ClassPlan, CourseType, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError, bookingStatus, cancellationLeadMs, templateAllowsBooking } from './booking.ts';
 import type { bookingService } from './booking.ts';
@@ -12,6 +12,7 @@ import { addCoach, coachDraft, listCoaches, updateCoach } from './staff-coaches.
 import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
 import { addDays, dateAt, venueDate } from './time.ts';
+import type { Authorize } from './wechat-auth.ts';
 
 const demoAdmin = 'local-admin';
 const demoPassword = 'wbc-demo-2026';
@@ -50,7 +51,7 @@ function windowInput(input: unknown): MinuteWindow {
 
 export function registerStaffRoutes(
   app: FastifyInstance, db: DatabaseSync, clock: () => Date,
-  booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>, demo: boolean
+  booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>, demo: boolean, authorizeWechat?: Authorize
 ) {
   const sessions = roleSessions('ADMIN', clock, '请先登录管理端');
   if (demo) {
@@ -95,12 +96,18 @@ export function registerStaffRoutes(
     }
   }
 
+  function actor(request: FastifyRequest) {
+    return (authorizeWechat ?? sessions.authorize)(request.headers.authorization).subject;
+  }
+
   void app.register(async routes => {
-    routes.addHook('preHandler', async request => { sessions.authorize(request.headers.authorization); });
-    routes.delete('/session', async (request, reply) => {
-      sessions.revoke(request.headers.authorization);
-      return reply.code(204).send();
-    });
+    routes.addHook('preHandler', async request => { actor(request); });
+    if (demo) {
+      routes.delete('/session', async (request, reply) => {
+        sessions.revoke(request.headers.authorization);
+        return reply.code(204).send();
+      });
+    }
     routes.get('/context', async () => {
       const { today, lastDate, coaches } = booking.schedule('');
       return { today, lastDate, coaches };
@@ -128,12 +135,12 @@ export function registerStaffRoutes(
       const body = object(request.body);
       const draft = coachDraft(body);
       return safeWrite(requiredText(body.requestKey), 'COACH_CREATED', draft,
-        () => addCoach(db, draft, demoAdmin, clock().toISOString()));
+        () => addCoach(db, draft, actor(request), clock().toISOString()));
     });
     routes.put('/coaches/:id', async (request, reply) => {
       const body = object(request.body);
       if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'VALIDATION_ERROR', '请选择教练状态');
-      updateCoach(db, requiredText(object(request.params).id), coachDraft(body), body.enabled, demoAdmin, clock().toISOString());
+      updateCoach(db, requiredText(object(request.params).id), coachDraft(body), body.enabled, actor(request), clock().toISOString());
       return reply.code(204).send();
     });
     routes.get('/course-types', async () => db.prepare(`
@@ -157,7 +164,7 @@ export function registerStaffRoutes(
         const id = randomUUID();
         db.prepare('INSERT INTO course_types (id, name, max_students, refund_basis_points) VALUES (?, ?, ?, ?)')
           .run(id, name, maxStudents, Math.round(refundPercent * 100));
-        audit(db, demoAdmin, 'COURSE_TYPE_CREATED', id, clock().toISOString());
+        audit(db, actor(request), 'COURSE_TYPE_CREATED', id, clock().toISOString());
         return { id, ...draft };
       });
     });
@@ -166,7 +173,7 @@ export function registerStaffRoutes(
       const body = object(request.body);
       const plan = classPlan(body);
       return safeWrite(requiredText(body.requestKey), 'CLASS_CREATED', plan,
-        () => schedule.add(plan, demoAdmin, clock().toISOString()));
+        () => schedule.add(plan, actor(request), clock().toISOString()));
     });
     routes.get('/class-templates', async () => schedule.templates());
     routes.put('/class-templates/:id', async request => {
@@ -176,7 +183,7 @@ export function registerStaffRoutes(
       if (typeof body.enabled !== 'boolean') throw new ApiError(400, 'VALIDATION_ERROR', '请选择模板状态');
       const enabled = body.enabled;
       return safeWrite(requiredText(body.requestKey), 'TEMPLATE_UPDATED', { id, plan, enabled },
-        () => schedule.reviseTemplate(id, plan, enabled, demoAdmin, clock().toISOString()));
+        () => schedule.reviseTemplate(id, plan, enabled, actor(request), clock().toISOString()));
     });
     routes.put('/class-sessions/:id', async (request, reply) => {
       const id = requiredText(object(request.params).id);
@@ -184,7 +191,7 @@ export function registerStaffRoutes(
       if (body.status !== 'PUBLISHED' && body.status !== 'CLOSED') {
         throw new ApiError(400, 'VALIDATION_ERROR', '请选择班次状态');
       }
-      schedule.update(id, classDraft(body), body.status, demoAdmin);
+      schedule.update(id, classDraft(body), body.status, actor(request));
       return reply.code(204).send();
     });
     routes.get('/coaches/:id/hours', async request => {
@@ -201,7 +208,7 @@ export function registerStaffRoutes(
       if (windows.some((window, index) => index > 0 && windows[index - 1].end > window.start)) {
         throw new ApiError(400, 'VALIDATION_ERROR', '开放时段不能重叠');
       }
-      schedule.saveHours(id, weekday, windows, demoAdmin);
+      schedule.saveHours(id, weekday, windows, actor(request));
       return reply.code(204).send();
     });
     routes.post('/coaches/:id/exceptions', async request => {
@@ -211,11 +218,11 @@ export function registerStaffRoutes(
       const reason = requiredText(body.reason, 100);
       const window = windowInput(body);
       return safeWrite(requiredText(body.requestKey), 'COACH_BLOCK_CREATED', { id, date, window, reason },
-        () => schedule.block(id, date, window, reason, demoAdmin, clock().toISOString()));
+        () => schedule.block(id, date, window, reason, actor(request), clock().toISOString()));
     });
     routes.delete('/coaches/:id/exceptions/:exception', async (request, reply) => {
       const params = object(request.params);
-      schedule.unblock(requiredText(params.id), requiredText(params.exception), demoAdmin);
+      schedule.unblock(requiredText(params.id), requiredText(params.exception), actor(request));
       return reply.code(204).send();
     });
     routes.get('/users', async () => users());
@@ -243,7 +250,7 @@ export function registerStaffRoutes(
         ? { userId, points: input.delta, reason: input.reason, reference: input.reference }
         : { userId, ...input };
       return safeWrite(requiredText(body.requestKey), ledgerActions[input.source], payload,
-        () => postLedgerEntry(db, userId, input, demoAdmin, clock().toISOString()));
+        () => postLedgerEntry(db, userId, input, actor(request), clock().toISOString()));
     });
     routes.get('/bookings', async request => {
       const query = object(request.query);
@@ -277,14 +284,16 @@ export function registerStaffRoutes(
       const body = object(request.body);
       const userId = requiredText(body.userId);
       requireUser(userId);
-      return booking.book(userId, selection(body), 'staff:' + requiredText(body.requestKey), demoAdmin, expectedRevision(body.expectedRevision));
+      return booking.book(userId, selection(body), 'staff:' + requiredText(body.requestKey), {
+        staffActor: actor(request), expectedRevision: expectedRevision(body.expectedRevision)
+      });
     });
     routes.post('/bookings/:id/approve', async (request, reply) => {
-      booking.approve(requiredText(object(request.params).id), demoAdmin);
+      booking.approve(requiredText(object(request.params).id), actor(request));
       return reply.code(204).send();
     });
     routes.delete('/bookings/:id', async (request, reply) => {
-      booking.cancel(requiredText(object(request.params).id), demoAdmin);
+      booking.cancel(requiredText(object(request.params).id), actor(request));
       return reply.code(204).send();
     });
   }, { prefix: '/api/admin' });
