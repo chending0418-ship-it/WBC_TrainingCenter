@@ -1,10 +1,10 @@
 {
-  "appid": "touristappid",
+  "appid": "wxe552f53bf7925b46",
   "projectname": "WBC Training Center",
   "compileType": "miniprogram",
   "miniprogramRoot": "dist/",
   "setting": {
-    "urlCheck": false,
+    "urlCheck": true,
     "es6": true,
     "postcss": false,
     "compileWorklet": false,
