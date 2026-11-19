@@ -222,6 +222,14 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 9;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 10) return;
+    db.exec(`
+      ALTER TABLE coaches ADD COLUMN avatar_key TEXT;
+      ALTER TABLE coaches ADD COLUMN avatar_jpeg BLOB;
+      PRAGMA user_version = 10;
+    `);
+  });
   return db;
 }
 

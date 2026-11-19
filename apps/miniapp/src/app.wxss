@@ -270,3 +270,38 @@ button.button[disabled] {
 .card-fields .field {
   width: 100%;
 }
+
+.coach-face {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90rpx;
+  height: 90rpx;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #f0e4e5;
+  color: #761f32;
+  font-size: 36rpx;
+  font-weight: 650;
+}
+
+.coach-face image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.utility-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 32rpx;
+  margin-top: 28rpx;
+  color: #66595c;
+  font-size: 26rpx;
+  text-align: left;
+}
+
+.utility-links > navigator, .utility-links > text {
+  padding: 12rpx 0;
+}

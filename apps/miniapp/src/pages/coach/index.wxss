@@ -3,8 +3,20 @@
   flex-wrap: wrap;
 }
 
-.coach-toolbar .button {
-  flex-shrink: 0;
+.coach-toolbar .profile-avatar {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
   width: auto;
-  margin-right: 0;
+  margin: 0 auto 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  line-height: 1.5;
+  font-size: 30rpx;
+}
+
+.profile-avatar::after {
+  border: 0;
 }

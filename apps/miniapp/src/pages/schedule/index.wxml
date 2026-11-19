@@ -1,3 +1,4 @@
+<page-meta page-style="{{confirmation ? 'overflow: hidden' : ''}}" />
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">课程表</text>
 
@@ -56,10 +57,19 @@
     </block>
 
     <block wx:else>
-      <picker wx:if="{{coaches.length}}" class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}"
-        bindchange="changeCoach" disabled="{{booking}}">
-        <view class="picker"><text class="picker-label">私教教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text></view>
-      </picker>
+      <scroll-view wx:if="{{coaches.length}}" class="coach-strip" scroll-x="{{true}}" aria-label="选择私教教练">
+        <view class="coach-choices">
+          <button wx:for="{{coaches}}" wx:key="id" class="coach-choice {{index === coachIndex ? 'active' : ''}}"
+            data-index="{{index}}" bindtap="changeCoach" disabled="{{booking}}" hover-class="press"
+            aria-pressed="{{index === coachIndex}}" aria-label="{{item.label}}">
+            <view class="coach-face">
+              <image wx:if="{{item.avatarUrl}}" src="{{item.avatarUrl}}" mode="aspectFill" data-index="{{index}}" data-url="{{item.avatarUrl}}" binderror="avatarFailed" />
+              <text wx:else>{{item.initial}}</text>
+            </view>
+            <text class="coach-name">{{item.label}}</text>
+          </button>
+        </view>
+      </scroll-view>
       <view wx:if="{{slotLoading}}" class="message">正在查询可约时段…</view>
       <view wx:elif="{{slotError}}" class="message">
         <view>{{slotError}}</view>
@@ -100,4 +110,21 @@
       </block>
     </block>
   </block>
+  <view wx:if="{{confirmation}}" class="quote-overlay">
+    <view class="quote-dialog" aria-role="dialog" aria-label="提交预约申请">
+      <view class="card-title">提交预约申请</view>
+      <view class="quote-title">{{confirmation.title}}</view>
+      <view class="quote-details">
+        <text>时间</text><text>{{confirmation.when}}</text>
+        <text>教练</text><text>{{confirmation.coach}}</text>
+        <text>场地</text><text>{{confirmation.venue}}</text>
+        <text>积分</text><text>确认后扣除 {{confirmation.points}} 积分</text>
+        <text>按时取消</text><text>{{confirmation.refundPoints ? '退回 ' + confirmation.refundPoints + ' 积分' : '不退积分'}}</text>
+      </view>
+      <view class="quote-actions">
+        <button class="button quiet" bindtap="dismissQuote" hover-class="press">取消</button>
+        <button class="button" bindtap="submitQuote" hover-class="press">提交申请</button>
+      </view>
+    </view>
+  </view>
 </view>

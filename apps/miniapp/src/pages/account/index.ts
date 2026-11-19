@@ -1,11 +1,11 @@
-import { allowPage, canSwitchRole, signOut, switchRole } from '../../lib/session';
+import { allowPage } from '../../lib/session';
 import type { Account, Child } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { datetime } from '../../lib/display';
 
 Page({
   data: {
-    authorized: false, switchable: false,
+    authorized: false,
     balance: 0,
     reservedPoints: 0,
     ledger: [] as { id: number; reason: string; change: string; date: string }[],
@@ -16,12 +16,10 @@ Page({
 
   onShow() {
     const authorized = allowPage('PARENT', true);
-    this.setData({ authorized, switchable: authorized && canSwitchRole() });
+    this.setData({ authorized });
     if (authorized) void this.refresh();
   },
 
-  switchRole,
-  signOut,
 
   async refresh() {
     this.setData({ loading: true, error: '' });

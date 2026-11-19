@@ -21,8 +21,8 @@
       <text class="shortcut-label">{{item.label}}</text>
     </navigator>
   </view>
-  <view class="section-actions">
-    <button wx:if="{{switchable}}" class="button quiet" bindtap="switchRole" hover-class="press">切换身份</button>
-    <button class="button quiet" bindtap="signOut" hover-class="press">退出管理员登录</button>
+  <view class="utility-links">
+    <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
+    <text aria-role="button" bindtap="switchRole" hover-class="press">切换身份</text>
   </view>
 </view>

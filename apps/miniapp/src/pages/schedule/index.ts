@@ -1,5 +1,6 @@
+import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
 import { allowPage } from '../../lib/session';
-import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
+import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { addDays, availableRanges, mondayOfWeek } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
@@ -29,20 +30,10 @@ function dateChoices(first: string, selected: string, last: string, calendarWeek
   };
 }
 
-function confirm(quote: Quote): Promise<boolean> {
-  return new Promise(resolve => {
-    wx.showModal({
-      title: '提交预约申请',
-      content: quote.title + '\n' + datetime(quote.startsAt) + '–' + time(quote.endsAt) +
-        '\n' + quote.coachName + '教练 · ' + quote.venue + '\n确认后扣除 ' + quote.points + ' 积分\n' +
-        '按时取消：' + (quote.refundPoints ? '退回 ' + quote.refundPoints + ' 积分' : '不退积分'),
-      confirmText: '提交申请',
-      confirmColor: '#761F32',
-      success: result => resolve(result.confirm),
-      fail: () => resolve(false)
-    });
-  });
-}
+type Confirmation = {
+  selection: BookingSelection; revision: string; title: string; when: string; coach: string;
+  venue: string; points: number; refundPoints: number;
+};
 
 Page({
   data: {
@@ -58,16 +49,24 @@ Page({
     loading: true,
     error: '',
     courses: [] as VisibleCourse[],
-    coaches: [] as Coach[],
+    coaches: [] as (Coach & ReturnType<typeof coachIdentity>)[],
     coachIndex: 0,
     privateDays: [] as PrivateDay[],
     selectedRange: '',
     selectedStart: '',
     slotLoading: false,
     slotError: '',
+    confirmation: null as Confirmation | null,
     booking: false
   },
 
+  quoteSequence: 0,
+  onHide() {
+    this.dismissQuote();
+  },
+  onUnload() {
+    this.dismissQuote();
+  },
   onShow() {
     const authorized = allowPage('PARENT', true);
     this.setData({ authorized });
@@ -98,7 +97,7 @@ Page({
       const date = this.data.date >= schedule.today && this.data.date <= schedule.lastDate ? this.data.date : schedule.today;
       const coachId = this.data.coaches[this.data.coachIndex]?.id;
       const coachIndex = Math.max(0, schedule.coaches.findIndex(coach => coach.id === coachId));
-      this.setData({ today: schedule.today, lastDate: schedule.lastDate, coaches: schedule.coaches, coachIndex });
+      this.setData({ today: schedule.today, lastDate: schedule.lastDate, coaches: schedule.coaches.map(c => ({ ...c, ...coachIdentity(c.name, c.avatarKey) })), coachIndex });
       this.selectDate(date);
     } catch (error) {
       if (request === scheduleRequest) this.setData({ error: errorMessage(error) });
@@ -114,8 +113,7 @@ Page({
       if (course.bookedByMe) action = '已提交';
       else if (course.startsAt <= now) action = '已开课';
       else if (course.bookedCount >= course.capacity) action = '已满员';
-      const coachLabel = course.coachName.endsWith('教练') ? course.coachName : course.coachName + '教练';
-      return { ...course, coachLabel, hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
+      return { ...course, coachLabel: coachLabel(course.coachName), hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
     });
     this.setData({ date, courses: visible, ...dateChoices(this.data.today, date, this.data.lastDate, this.data.mode === 'PRIVATE') });
     if (this.data.mode === 'PRIVATE') void this.refreshSlots();
@@ -141,9 +139,14 @@ Page({
     this.selectDate(this.data.date);
   },
 
-  changeCoach(event: WechatMiniprogram.PickerChange) {
-    if (this.data.booking) return;
-    this.setData({ coachIndex: Number(event.detail.value) });
+  avatarFailed(event: WechatMiniprogram.CustomEvent) {
+    const { index, url } = event.currentTarget.dataset;
+    if (this.data.coaches[index]?.avatarUrl === url) this.setData({ ['coaches[' + index + '].avatarUrl']: '' });
+  },
+  changeCoach(event: WechatMiniprogram.TouchEvent) {
+    const index = Number(event.currentTarget.dataset.index);
+    if (this.data.booking || this.data.coachIndex === index || !this.data.coaches[index]) return;
+    this.setData({ coachIndex: index });
     void this.refreshSlots();
   },
 
@@ -187,7 +190,17 @@ Page({
     void this.book({ type: 'PRIVATE', coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt });
   },
 
-  async book(selection: BookingSelection) {
+  dismissQuote() {
+    this.quoteSequence++;
+    if (this.data.confirmation) this.setData({ confirmation: null });
+  },
+  submitQuote() {
+    const quote = this.data.confirmation;
+    if (!quote || this.data.booking) return;
+    this.dismissQuote();
+    void this.book(quote.selection, quote.revision);
+  },
+  async book(selection: BookingSelection, revision?: string) {
     if (this.data.booking) return;
     this.setData({ booking: true });
     const storageKey = 'pending-booking:' + JSON.stringify(selection);
@@ -195,9 +208,16 @@ Page({
       const stored = wx.getStorageSync<string | { requestKey: string; expectedRevision: string }>(storageKey);
       let pending = typeof stored === 'string' ? { requestKey: stored } : stored;
       if (!pending?.requestKey) {
-        const quote = await api<BookingQuote>('/api/bookings/quote', 'POST', selection);
-        if (!await confirm(quote)) return;
-        pending = { requestKey: Date.now() + '-' + Math.random().toString(36).slice(2), expectedRevision: quote.revision };
+        if (!revision) {
+          const sequence = ++this.quoteSequence;
+          const quote = await api<BookingQuote>('/api/bookings/quote', 'POST', selection);
+          if (sequence === this.quoteSequence) this.setData({ confirmation: {
+            selection, revision: quote.revision, title: quote.title, when: datetime(quote.startsAt) + '–' + time(quote.endsAt),
+            coach: coachLabel(quote.coachName), venue: quote.venue, points: quote.points, refundPoints: quote.refundPoints
+          } });
+          return;
+        }
+        pending = { requestKey: Date.now() + '-' + Math.random().toString(36).slice(2), expectedRevision: revision };
         wx.setStorageSync(storageKey, pending);
       }
       const booking = await api<Booking>('/api/bookings', 'POST', { ...selection, ...pending });

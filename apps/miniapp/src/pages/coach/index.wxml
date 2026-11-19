@@ -1,9 +1,13 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">授课日程</text>
   <view class="row-line coach-toolbar">
-    <view class="row-name">{{coachName ? coachName + '教练' : '教练端'}}</view>
-    <button wx:if="{{switchable}}" class="button quiet row-action" bindtap="switchRole" hover-class="press">切换身份</button>
-    <button class="button quiet" bindtap="signOut" hover-class="press">退出教练登录</button>
+    <button wx:if="{{hasProfile}}" class="profile-avatar" open-type="chooseAvatar" bindchooseavatar="setAvatar" disabled="{{uploading}}" hover-class="press" aria-label="更换{{identity.label}}的头像">
+      <view class="coach-face">
+        <image wx:if="{{identity.avatarUrl}}" src="{{identity.avatarUrl}}" mode="aspectFill" binderror="avatarFailed" />
+        <text wx:else>{{identity.initial}}</text>
+      </view>
+      <view><view class="row-name">{{identity.label}}</view><view class="card-note">{{uploading ? '保存中…' : '更换头像'}}</view></view>
+    </button>
   </view>
   <view class="section-actions">
     <button class="button {{period === 'today' ? '' : 'quiet'}}" data-period="today" bindtap="changePeriod"
