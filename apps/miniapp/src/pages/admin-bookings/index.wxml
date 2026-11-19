@@ -36,7 +36,7 @@
     </picker>
     <view wx:else class="message">没有可约课程或时段，试试其他日期。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view class="section-actions">
+    <view class="section-actions form-actions">
       <button class="button quiet" bindtap="closeForm" disabled="{{busy}}" hover-class="press">返回</button>
       <button class="button" bindtap="book" loading="{{busy}}" disabled="{{busy || choicesLoading || !users.length || !(classes.length || slots.length)}}" hover-class="press">确认代约</button>
     </view>
@@ -55,7 +55,7 @@
       <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}} · {{item.coachName}}教练</view>
       <view class="muted">{{item.venue}} · {{item.points}} 积分</view>
       <view class="muted">{{item.staffCreated ? '管理员代约' : '家长预约'}}{{item.staffCancelled ? ' · 管理员取消' : ''}}</view>
-      <view wx:if="{{item.status === 'PENDING'}}" class="section-actions">
+      <view wx:if="{{item.status === 'PENDING'}}" class="section-actions item-actions">
         <button wx:if="{{item.canApprove}}" class="button" data-id="{{item.id}}" data-action="approve" bindtap="decide" disabled="{{busy}}" hover-class="press">确认预约</button>
         <button class="button quiet" data-id="{{item.id}}" data-action="reject" bindtap="decide" disabled="{{busy}}" hover-class="press">拒绝申请</button>
       </view>

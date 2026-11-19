@@ -1,5 +1,5 @@
 import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
-import { allowPage } from '../../lib/session';
+import { showParentTab } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { addDays, availableRanges, mondayOfWeek } from '../../lib/private-availability';
@@ -68,7 +68,7 @@ Page({
     this.dismissQuote();
   },
   onShow() {
-    const authorized = allowPage('PARENT', true);
+    const authorized = showParentTab(this);
     this.setData({ authorized });
     if (authorized) void this.refresh();
   },

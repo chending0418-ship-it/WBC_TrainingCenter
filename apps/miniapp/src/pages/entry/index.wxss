@@ -12,3 +12,7 @@
 .entry-actions .entry-back {
   margin-top: 14rpx;
 }
+
+.entry-actions .role-choice {
+  text-align: left;
+}

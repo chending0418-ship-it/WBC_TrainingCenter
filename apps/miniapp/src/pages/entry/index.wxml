@@ -2,7 +2,7 @@
   <text class="page-title" role="heading" aria-level="1">{{wechatMode && accountId ? '选择身份' : (mode === 'ADMIN' ? '管理员登录' : (mode === 'COACH' ? '教练登录' : 'WBC 训练助手'))}}</text>
   <block wx:if="{{wechatMode}}">
     <view wx:if="{{accountId}}" class="entry-actions">
-      <button wx:for="{{allowedRoles}}" wx:key="role" class="button {{index ? 'quiet' : ''}}"
+      <button wx:for="{{allowedRoles}}" wx:key="role" class="button role-choice {{index ? 'quiet' : ''}}"
         data-role="{{item.role}}" bindtap="chooseWechatRole" disabled="{{busy}}" hover-class="press">{{item.label}}</button>
       <button class="button quiet" bindtap="copyAccountId" disabled="{{busy}}" hover-class="press">复制账号 ID</button>
     </view>
@@ -18,7 +18,7 @@
         placeholder="输入管理员密码" bindinput="changePassword" aria-label="管理员密码" />
     </label>
     <view wx:if="{{error}}" class="form-error" aria-live="polite">{{error}}</view>
-    <view class="section-actions">
+    <view class="section-actions form-actions">
       <button class="button quiet" bindtap="goBack" disabled="{{busy}}" hover-class="press">返回</button>
       <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy || !password}}" hover-class="press">登录管理端</button>
     </view>
@@ -29,7 +29,7 @@
     <view wx:if="{{loadingCoaches}}" class="message">正在查询教练…</view>
     <view wx:elif="{{!error && !coaches.length}}" class="message">目前没有已启用的教练。</view>
     <view class="entry-actions">
-      <button wx:for="{{coaches}}" wx:key="profile" class="button quiet" bindtap="chooseCoach"
+      <button wx:for="{{coaches}}" wx:key="profile" class="button quiet role-choice" bindtap="chooseCoach"
         data-profile="{{item.profile}}" disabled="{{busy}}" hover-class="press">{{item.name}}教练</button>
       <button class="button quiet entry-back" bindtap="goBack" disabled="{{busy}}" hover-class="press">返回</button>
     </view>
@@ -39,9 +39,9 @@
   <block wx:else>
     <view class="muted">本地演示，请选择登录身份。</view>
     <view class="entry-actions">
-      <button class="button" data-role="PARENT" bindtap="chooseRole" loading="{{busy}}" disabled="{{busy}}" hover-class="press">家长登录</button>
-      <button class="button quiet" data-role="COACH" bindtap="chooseRole" disabled="{{busy}}" hover-class="press">教练登录</button>
-      <button class="button quiet" data-role="ADMIN" bindtap="chooseRole" disabled="{{busy}}" hover-class="press">管理员登录</button>
+      <button class="button role-choice" data-role="PARENT" bindtap="chooseRole" loading="{{busy}}" disabled="{{busy}}" hover-class="press">家长登录</button>
+      <button class="button quiet role-choice" data-role="COACH" bindtap="chooseRole" disabled="{{busy}}" hover-class="press">教练登录</button>
+      <button class="button quiet role-choice" data-role="ADMIN" bindtap="chooseRole" disabled="{{busy}}" hover-class="press">管理员登录</button>
     </view>
     <view wx:if="{{error}}" class="form-error" aria-live="polite">{{error}}</view>
   </block>

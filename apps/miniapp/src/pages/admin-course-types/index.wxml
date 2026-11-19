@@ -25,7 +25,7 @@
     </label>
     <view class="muted">取消预约时自动退回积分，小数部分舍去。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view class="section-actions">
+    <view class="section-actions form-actions">
       <button class="button quiet" bindtap="close" disabled="{{busy}}" hover-class="press">返回</button>
       <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">保存类型</button>
     </view>
@@ -36,7 +36,7 @@
     <view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
   </view>
   <block wx:else>
-    <button class="button" bindtap="start" disabled="{{busy}}" hover-class="press">新增课程类型</button>
+    <button class="button row-action" bindtap="start" disabled="{{busy}}" hover-class="press">新增课程类型</button>
     <view wx:if="{{!types.length}}" class="message">暂无课程类型。</view>
     <view wx:for="{{types}}" wx:key="id" class="list-row">
       <view class="row-name">{{item.name}}</view>

@@ -89,3 +89,7 @@
   font-size: 28rpx;
   font-weight: 600;
 }
+
+.utility-links {
+  justify-content: space-between;
+}

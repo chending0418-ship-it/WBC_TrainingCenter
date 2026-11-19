@@ -1,0 +1,31 @@
+.tab-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  border-top: 1rpx solid #ded5d3;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #fff;
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  color: #66595c;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.tab.current {
+  color: #761f32;
+  font-weight: 650;
+}
+
+.tab.pressed {
+  background: #f8f6f3;
+}

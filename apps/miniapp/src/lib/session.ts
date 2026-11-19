@@ -28,14 +28,18 @@ export function allowEntry(): boolean {
   return false;
 }
 
-export function allowPage(role: SessionRole | 'SIGNED_IN', tabPage = false): boolean {
+export function allowPage(role: SessionRole | 'SIGNED_IN'): boolean {
   if (!active || (role !== 'SIGNED_IN' && active.role !== role)) {
-    if (tabPage) wx.hideTabBar({ fail: () => undefined });
     openCurrentHome();
     return false;
   }
-  if (tabPage) wx.showTabBar({ fail: () => undefined });
   return true;
+}
+
+export function showParentTab(page: Pick<WechatMiniprogram.Page.TrivialInstance, 'route' | 'getTabBar'>) {
+  const authorized = allowPage('PARENT');
+  page.getTabBar()?.setData({ activePath: authorized ? page.route : '' });
+  return authorized;
 }
 
 export async function signIn(role: SessionRole, data: object) {

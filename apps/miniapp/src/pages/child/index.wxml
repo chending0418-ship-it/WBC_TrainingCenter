@@ -18,6 +18,6 @@
       <view class="picker"><text class="picker-label">性别</text><text class="picker-value">{{genderIndex < 0 ? '请选择' : genders[genderIndex].label}}</text></view>
     </picker>
     <view wx:if="{{saveError}}" class="accent row-action">{{saveError}}</view>
-    <button class="button row-action" form-type="submit" loading="{{saving}}" disabled="{{saving}}" hover-class="press">保存资料</button>
+    <button class="button row-action save-profile" form-type="submit" loading="{{saving}}" disabled="{{saving}}" hover-class="press">保存资料</button>
   </form>
 </view>
