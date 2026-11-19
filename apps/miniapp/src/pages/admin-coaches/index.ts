@@ -7,7 +7,7 @@ const defaultPrivateType = { id: null, name: '一对一训练（默认）' };
 
 Page({
   data: {
-    authorized: false, loading: true, busy: false, error: '', saveError: '', coaches: [] as ManagedCoach[],
+    authorized: false, loading: true, busy: false, error: '', saveError: '', coaches: [] as (ManagedCoach & { privateTypeName: string })[],
     privateTypes: [defaultPrivateType] as { id: string | null; name: string }[],
     editor: null as { id: string; name: string; points: string; enabled: boolean; privateTypeIndex: number } | null
   },
@@ -22,7 +22,13 @@ Page({
       const [coaches, types] = await Promise.all([
         staffApi<ManagedCoach[]>('/coaches'), staffApi<CourseType[]>('/course-types')
       ]);
-      this.setData({ coaches, privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)] });
+      const privateTypes = [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)];
+      this.setData({
+        privateTypes,
+        coaches: coaches.map(coach => ({
+          ...coach, privateTypeName: privateTypes.find(type => type.id === coach.privateCourseTypeId)?.name ?? '未指定'
+        }))
+      });
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {
@@ -81,7 +87,10 @@ Page({
     this.setData({ busy: true, saveError: '' });
     try {
       if (!await confirmAction(label + '？', coach.name + (coach.enabled ? '将从家长端的可约教练和班次中隐藏。' : '将恢复可约。'), label)) return;
-      await staffApi('/coaches/' + coach.id, 'PUT', { ...coach, enabled: !coach.enabled });
+      await staffApi('/coaches/' + coach.id, 'PUT', {
+        name: coach.name, pointsPerSlot: coach.pointsPerSlot,
+        privateCourseTypeId: coach.privateCourseTypeId, enabled: !coach.enabled
+      });
       await this.load();
     } catch (error) {
       this.setData({ saveError: errorMessage(error) });

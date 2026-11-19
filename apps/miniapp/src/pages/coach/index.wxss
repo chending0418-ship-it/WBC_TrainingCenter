@@ -1,13 +1,10 @@
 .coach-toolbar {
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .coach-toolbar .button {
   flex-shrink: 0;
   width: auto;
   margin-right: 0;
-}
-
-.lesson-type {
-  flex-shrink: 0;
 }
