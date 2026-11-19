@@ -1,0 +1,42 @@
+.weekly-hours {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.weekday-row {
+  padding: 14rpx 0;
+}
+
+.weekday-row + .weekday-row, .window-editor + .window-editor {
+  border-top: 1rpx solid #e6dfdc;
+}
+
+.weekday-summary {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-height: 76rpx;
+}
+
+.weekday-summary .row-name {
+  flex-shrink: 0;
+}
+
+.weekday-times {
+  color: #761f32;
+  font-variant-numeric: tabular-nums;
+  font-size: 28rpx;
+}
+
+.button.edit-day {
+  flex-shrink: 0;
+  width: auto;
+  min-height: 76rpx;
+  margin-left: auto;
+  padding: 12rpx 16rpx;
+  font-size: 26rpx;
+}
+
+.window-editor {
+  padding: 16rpx 0;
+}

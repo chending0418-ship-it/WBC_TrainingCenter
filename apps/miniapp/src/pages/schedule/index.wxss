@@ -112,3 +112,47 @@
   font-size: 26rpx;
   font-variant-numeric: tabular-nums;
 }
+
+.availability-day {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #ded5d3;
+}
+
+.time-range {
+  margin-top: 10rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #d5c4c5;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.button.range-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16rpx 0;
+  border: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.range-action {
+  font-size: 24rpx;
+}
+
+.range-detail {
+  padding: 12rpx 0 22rpx;
+  border-top: 1rpx solid #e6dfdc;
+}
+
+.start-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10rpx;
+  margin: 12rpx 0 18rpx;
+}
+
+.start-options .button {
+  width: 100%;
+  padding: 12rpx 4rpx;
+}
