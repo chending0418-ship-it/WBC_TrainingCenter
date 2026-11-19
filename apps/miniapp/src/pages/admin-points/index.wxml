@@ -1,6 +1,6 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">{{source === 'REVERSAL' ? '冲正流水' : '积分管理'}}</text>
-  <picker wx:if="{{users.length}}" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy || source === 'REVERSAL'}}">
+  <picker wx:if="{{users.length}}" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy || targetUserId || source === 'REVERSAL'}}">
     <view class="picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text></view>
   </picker>
   <view wx:if="{{loading}}" class="message">正在查询积分账户…</view>
