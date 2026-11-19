@@ -64,18 +64,8 @@
   font-weight: 500;
 }
 
-.day-number, .course-time {
+.day-number {
   font-variant-numeric: tabular-nums;
-}
-
-.course-title {
-  font-size: 34rpx;
-  font-weight: 650;
-}
-
-.course-time {
-  font-size: 26rpx;
-  white-space: nowrap;
 }
 
 .course-action {
@@ -95,14 +85,26 @@
   width: 162rpx;
 }
 
-.time-pickers {
+.end-options {
   display: grid;
-  gap: 18rpx;
-  margin-top: 18rpx;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
+  margin-top: 10rpx;
 }
 
-.private-venue {
-  margin: 18rpx 0;
+.end-options .button {
+  width: 100%;
+  padding: 14rpx 6rpx;
+}
+
+.end-time, .end-price {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-price {
+  font-size: 24rpx;
+  font-weight: 500;
 }
 
 .course-capacity {

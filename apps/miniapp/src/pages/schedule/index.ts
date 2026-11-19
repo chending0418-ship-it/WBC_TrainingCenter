@@ -5,7 +5,7 @@ import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/
 
 type VisibleCourse = Course & { hours: string; action: string; unavailable: boolean };
 type StartOption = { label: string; options: PrivateSlot[] };
-type EndOption = PrivateSlot & { label: string };
+type EndOption = PrivateSlot & { endLabel: string };
 
 let courses: Course[] = [];
 let scheduleRequest = 0;
@@ -171,13 +171,13 @@ Page({
     const startIndex = Number(event.detail.value);
     const ends = this.data.starts[startIndex].options.map(slot => ({
       ...slot,
-      label: time(slot.endsAt) + ' · ' + slot.points + ' 积分'
+      endLabel: time(slot.endsAt)
     }));
     this.setData({ startIndex, ends, endIndex: -1 });
   },
 
-  changeEnd(event: WechatMiniprogram.PickerChange) {
-    if (!this.data.booking) this.setData({ endIndex: Number(event.detail.value) });
+  changeEnd(event: WechatMiniprogram.TouchEvent) {
+    if (!this.data.booking) this.setData({ endIndex: Number(event.currentTarget.dataset.index) });
   },
 
   bookGroup(event: WechatMiniprogram.TouchEvent) {

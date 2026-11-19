@@ -1,3 +1,13 @@
+<template name="bookingCard">
+  <view class="lesson-card">
+    <view class="card-head"><text class="card-title">{{item.title}}</text><text class="card-state">{{item.label}}</text></view>
+    <view class="card-time">{{item.hours}}</view>
+    <view class="card-note">{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.coachName}}教练 · {{item.venue}}</view>
+    <view class="card-footer">{{item.points}} 积分</view>
+    <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="card-note">已退回 {{item.refundPoints}} 积分</view>
+  </view>
+</template>
+
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">我的预约</text>
   <view wx:if="{{loading}}" class="message">正在查询预约…</view>
@@ -9,21 +19,10 @@
     <view class="section-title" role="heading" aria-level="2">待确认和即将开课</view>
     <view wx:if="{{upcoming.length}}" class="muted">如需取消，请在开课前至少 6 小时联系场馆管理员。</view>
     <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去排课页选择课程。</view>
-    <view wx:for="{{upcoming}}" wx:key="id" class="list-row">
-      <view class="row-line">
-        <text class="row-name">{{item.title}}</text><text class="accent">{{item.label}}</text>
-      </view>
-      <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}}</view>
-      <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
-    </view>
+    <block wx:for="{{upcoming}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
 
     <view class="section-title" role="heading" aria-level="2">历史预约</view>
     <view wx:if="{{!history.length}}" class="muted">暂无历史预约。</view>
-    <view wx:for="{{history}}" wx:key="id" class="list-row">
-      <view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.label}}</text></view>
-      <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}}</view>
-      <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
-      <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="muted">已退回 {{item.refundPoints}} 积分</view>
-    </view>
+    <block wx:for="{{history}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
   </block>
 </view>

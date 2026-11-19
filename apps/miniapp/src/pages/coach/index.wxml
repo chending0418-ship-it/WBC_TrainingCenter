@@ -21,13 +21,14 @@
     <view wx:if="{{!days.length}}" class="message">{{period === 'today' ? '今天没有授课安排。' : '本周没有授课安排。'}}</view>
     <view wx:for="{{days}}" wx:key="date" wx:for-item="day">
       <view wx:if="{{period === 'week'}}" class="section-title" role="heading" aria-level="2">{{day.label}}</view>
-      <view wx:for="{{day.lessons}}" wx:key="key" class="list-row">
-        <view class="row-line">
-          <text class="row-name">{{item.title}}</text>
-          <text class="muted lesson-type">{{item.type === 'GROUP' ? '团课' : '私教'}}</text>
+      <view wx:for="{{day.lessons}}" wx:key="key" class="lesson-card">
+        <view class="card-head">
+          <text class="card-title">{{item.title}}</text>
+          <text class="card-state">{{item.type === 'GROUP' ? '团课' : '私教'}}</text>
         </view>
-        <view>{{item.hours}} · {{item.venue}}</view>
-        <view class="muted">已预约 {{item.bookedCount}} 人</view>
+        <view class="card-time">{{item.hours}}</view>
+        <view class="card-note">{{item.venue}}</view>
+        <view class="card-footer">已预约 {{item.bookedCount}} 人</view>
         <view wx:if="{{item.names}}" class="details">{{item.names}}</view>
       </view>
     </view>
