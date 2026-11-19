@@ -41,9 +41,7 @@ Page({
       this.setData({
         ...context, date: this.data.date || context.today,
         privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)],
-        users: users.filter(user => user.childName).map(user => ({
-          id: user.id, label: user.childName + ' · ' + user.id
-        }))
+        users: users.flatMap(user => user.childName ? [{ id: user.id, label: user.childName }] : [])
       });
       await this.refresh();
     } catch (error) {

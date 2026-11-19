@@ -43,7 +43,7 @@ Page({
     try {
       const users = await staffApi<ManagedUser[]>('/users');
       if (current !== request) return;
-      this.setData({ users: users.map(user => ({ ...user, label: (user.childName || '未填写孩子资料') + ' · ' + user.id })) });
+      this.setData({ users: users.map(user => ({ ...user, label: user.childName || '未填写孩子资料' })) });
       await this.refreshAccount();
     } catch (error) {
       if (current === request) this.setData({ loading: false, error: errorMessage(error) });
