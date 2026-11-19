@@ -12,7 +12,7 @@ import { addDays, dateAt } from '../src/time.ts';
 
 const date = '2030-12-31';
 const now = () => new Date(dateAt(date, 480));
-const group: BookingSelection = { type: 'GROUP', classSessionId: date + '-strength' };
+const group = { type: 'GROUP', classSessionId: date + '-strength' } satisfies BookingSelection;
 function privateTraining(start: number, end: number, coachId = 'li', day = date): Extract<BookingSelection, { type: 'PRIVATE' }> {
   return { type: 'PRIVATE', coachId, startsAt: dateAt(day, start), endsAt: dateAt(day, end) };
 }
@@ -93,6 +93,39 @@ test('团课申请保留积分，管理员确认才扣分，重试不会重复�
   } finally {
     await restarted.close();
   }
+});
+
+test('另一个家长看到四人团课的实际占位，确认私教不影响团课余量', async context => {
+  const { app, db } = fixture(context);
+  db.prepare('UPDATE class_sessions SET capacity = 4 WHERE id = ?').run(group.classSessionId);
+  const applicant = await login(app);
+  const observer = await login(app, 'other-parent');
+  const admin = await adminSession(app);
+  async function checkSeats(occupied: number) {
+    const result = await app.inject({ url: '/api/schedule', headers: observer });
+    assert.equal(result.statusCode, 200);
+    const course = result.json<Schedule>().courses.find(row => row.id === group.classSessionId);
+    assert.equal(course?.capacity, 4);
+    assert.equal(course.bookedCount, occupied);
+  }
+  async function applyAndDecide(selection: BookingSelection, key: string, decision: 'approve' | 'reject', held: number) {
+    const result = await book(app, applicant, selection, key);
+    assert.equal(result.statusCode, 200);
+    const booking = result.json<Booking>();
+    assert.equal(booking.status, 'PENDING');
+    await checkSeats(held);
+    const url = '/api/admin/bookings/' + booking.id;
+    const response = decision === 'approve'
+      ? await app.inject({ method: 'POST', headers: admin, url: url + '/approve' })
+      : await app.inject({ method: 'DELETE', headers: admin, url });
+    assert.equal(response.statusCode, 204);
+  }
+  await applyAndDecide(privateTraining(1050, 1110), 'private', 'approve', 0);
+  await checkSeats(0);
+  await applyAndDecide(group, 'first-group', 'reject', 1);
+  await checkSeats(0);
+  await applyAndDecide(group, 'second-group', 'approve', 1);
+  await checkSeats(1);
 });
 
 test('多个请求争抢最后一个团课名额，仅一笔可以预留', async context => {

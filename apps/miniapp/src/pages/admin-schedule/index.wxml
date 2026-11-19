@@ -56,7 +56,7 @@
         <view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.status === 'CLOSED' ? '已停开' : '已发布'}}</text></view>
         <view>{{item.timeLabel}} · {{item.coachName}}教练</view>
         <view wx:if="{{item.courseTypeName}}" class="muted">{{item.courseTypeName}}</view>
-        <view class="muted">{{item.venue}} · {{item.bookedCount}}/{{item.capacity}} 人 · {{item.points}} 积分</view>
+        <view class="muted">{{item.venue}} · 剩余 {{item.capacity - item.bookedCount}} 位 · 已占 {{item.bookedCount}}/{{item.capacity}} · {{item.points}} 积分</view>
         <view wx:if="{{item.names}}" class="details">已预约 {{item.names}}</view>
         <view wx:if="{{item.editable}}" class="section-actions">
           <button class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>

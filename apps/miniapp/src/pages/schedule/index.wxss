@@ -104,3 +104,9 @@
 .private-venue {
   margin: 18rpx 0;
 }
+
+.course-capacity {
+  color: #66595c;
+  font-size: 26rpx;
+  font-variant-numeric: tabular-nums;
+}

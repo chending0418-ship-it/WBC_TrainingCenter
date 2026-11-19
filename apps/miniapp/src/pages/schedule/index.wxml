@@ -43,7 +43,7 @@
         <view class="course-action">
           <view>
             <view class="row-name">{{item.points}} 积分</view>
-            <view class="muted">{{item.bookedCount}}/{{item.capacity}} 人 · 剩余 {{item.capacity - item.bookedCount}} 位</view>
+            <view class="course-capacity"><text class="accent">剩余 {{item.capacity - item.bookedCount}} 位</text> · 已占 {{item.bookedCount}}/{{item.capacity}}</view>
           </view>
           <text wx:if="{{item.unavailable}}" class="course-status">{{item.action}}</text>
           <button wx:else class="button" data-id="{{item.id}}" bindtap="bookGroup" hover-class="press"
