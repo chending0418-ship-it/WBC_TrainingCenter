@@ -3,7 +3,7 @@
   <form bindsubmit="search">
     <label class="form-field">
       <text>搜索家长账户</text>
-      <input class="field" value="{{query}}" bindinput="changeQuery" maxlength="50" placeholder="孩子姓名、联系人、电话或账户 ID" disabled="{{loading}}" />
+      <input class="field" value="{{query}}" bindinput="changeQuery" maxlength="50" placeholder="孩子姓名、联系人或电话" disabled="{{loading}}" />
     </label>
     <button class="button row-action" form-type="submit" disabled="{{loading}}" hover-class="press">搜索</button>
   </form>
@@ -16,7 +16,6 @@
     <view wx:for="{{parents}}" wx:key="id" class="list-row">
       <view class="row-line"><text class="row-name">{{item.childName || '未填写孩子资料'}}</text><text class="accent">{{item.balance}} 积分</text></view>
       <view wx:if="{{item.child.birthMonth}}" class="muted">出生年月 {{item.child.birthMonth}} · {{item.child.gender === 'MALE' ? '男' : '女'}}</view>
-      <view class="muted">账户 {{item.id}}</view>
       <view wx:if="{{item.contact}}">{{item.contact.name}} · {{item.contact.phone}}</view>
       <view wx:else class="muted">未填写联系人。</view>
     </view>
