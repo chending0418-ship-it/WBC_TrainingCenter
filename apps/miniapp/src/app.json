@@ -17,7 +17,7 @@
     "pages/coach/index"
   ],
   "window": {
-    "navigationBarTitleText": "训练空间",
+    "navigationBarTitleText": "WBC 训练助手",
     "navigationBarBackgroundColor": "#F8F6F3",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#F8F6F3"

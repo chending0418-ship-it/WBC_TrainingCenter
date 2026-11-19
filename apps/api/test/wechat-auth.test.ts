@@ -32,7 +32,7 @@ async function select(app: FastifyInstance, token: string, role: RoleSession['ro
 test('wechat login uses server config, binds existing identities and issues role-scoped sessions', async context => {
   const db = openDatabase(':memory:');
   const used = new Set<string>();
-  const codes = new Map([['parent-one', 'parent_openid'], ['parent-two', 'parent_openid'], ['coach', 'coach_openid']]);
+  const codes = new Map([['parent-one', 'parent_openid'], ['parent-two', 'parent_openid'], ['coach', 'coach_openid'], ['admin-again', 'parent_openid']]);
   const config = wechatLoginConfig(appId, secret, async input => {
     assert.ok(input instanceof URL);
     assert.equal(input.origin + input.pathname, 'https://api.weixin.qq.com/sns/jscode2session');
@@ -111,7 +111,9 @@ test('wechat login uses server config, binds existing identities and issues role
 
   const restoredParent = await select(app, admin.token, 'PARENT');
   assert.equal((await app.inject({ url: '/api/admin/coaches', headers: headers(admin.token) })).statusCode, 401);
-  const restoredAdmin = await select(app, restoredParent.token, 'ADMIN');
+  await select(app, restoredParent.token, 'ADMIN', 403);
+  const freshLogin = await login(app, 'admin-again');
+  const restoredAdmin = await select(app, freshLogin.token, 'ADMIN');
   changeWechatRole(db, appId, first.accountId, 'revoke-admin', undefined, now.toISOString());
   assert.equal((await app.inject({ url: '/api/admin/coaches', headers: headers(restoredAdmin.token) })).statusCode, 401);
   await select(app, parent.token, 'ADMIN', 403);

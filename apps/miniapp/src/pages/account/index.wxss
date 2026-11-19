@@ -17,7 +17,3 @@
 .profile {
   margin-top: 24rpx;
 }
-
-.logout-button {
-  margin-top: 36rpx;
-}

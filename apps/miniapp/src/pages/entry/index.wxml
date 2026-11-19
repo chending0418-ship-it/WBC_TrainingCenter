@@ -1,11 +1,10 @@
 <view wx:if="{{visible}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{wechatMode && accountId ? '选择身份' : (mode === 'ADMIN' ? '管理员登录' : (mode === 'COACH' ? '教练登录' : '登录训练空间'))}}</text>
+  <text class="page-title" role="heading" aria-level="1">{{wechatMode && accountId ? '选择身份' : (mode === 'ADMIN' ? '管理员登录' : (mode === 'COACH' ? '教练登录' : 'WBC 训练助手'))}}</text>
   <block wx:if="{{wechatMode}}">
     <view wx:if="{{accountId}}" class="entry-actions">
       <button wx:for="{{allowedRoles}}" wx:key="role" class="button {{index ? 'quiet' : ''}}"
         data-role="{{item.role}}" bindtap="chooseWechatRole" disabled="{{busy}}" hover-class="press">{{item.label}}</button>
       <button class="button quiet" bindtap="copyAccountId" disabled="{{busy}}" hover-class="press">复制账号 ID</button>
-      <button class="button quiet" bindtap="signOut" disabled="{{busy}}" hover-class="press">退出登录</button>
     </view>
     <view wx:else class="entry-actions">
       <button class="button" bindtap="loginWechat" loading="{{busy}}" disabled="{{busy}}" hover-class="press">微信登录</button>

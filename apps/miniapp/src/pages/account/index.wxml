@@ -17,13 +17,10 @@
     <navigator class="picker profile" url="/pages/contact/index" hover-class="press">
       <text>联系人资料</text><text class="accent">查看与编辑</text>
     </navigator>
-    <navigator class="picker profile" url="/pages/agreements/index" hover-class="press">
-      <text>使用协议与隐私说明</text><text class="accent">查看</text>
-    </navigator>
   </block>
-  <button wx:if="{{switchable}}" class="button quiet row-action" bindtap="switchRole" hover-class="press">切换身份</button>
-  <button class="button quiet logout-button" bindtap="signOut" hover-class="press">退出家长登录</button>
-
+  <view class="utility-links">
+    <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
+  </view>
   <block wx:if="{{!loading && !error}}">
     <view class="section-title" role="heading" aria-level="2">积分流水</view>
     <view wx:if="{{!ledger.length}}" class="muted">暂无积分变动。</view>

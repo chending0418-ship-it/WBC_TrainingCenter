@@ -1,6 +1,7 @@
 import type { CoachLesson, CoachSchedule } from '../../../../../packages/shared/contracts.js';
+import { coachIdentity } from '../../lib/coach-avatar';
 import { errorMessage } from '../../lib/request';
-import { allowPage, canSwitchRole, roleRequest, signOut, switchRole } from '../../lib/session';
+import { allowPage, roleRequest } from '../../lib/session';
 import { dateLabel, localTimestamp, timeRange } from '../../lib/display';
 
 type Period = 'today' | 'week';
@@ -31,13 +32,13 @@ function groupLessons(lessons: CoachLesson[]): Day[] {
 
 Page({
   data: {
-    authorized: false, switchable: false,
-    coachName: '', period: 'today' as Period,
+    authorized: false,
+    identity: coachIdentity(''), hasProfile: false, uploading: false, period: 'today' as Period,
     rangeLabel: '', days: [] as Day[], loading: true, error: ''
   },
   onShow() {
     const authorized = allowPage('COACH');
-    this.setData({ authorized, switchable: authorized && canSwitchRole() });
+    this.setData({ authorized });
     if (authorized) void this.refresh();
   },
   async onPullDownRefresh() {
@@ -47,8 +48,32 @@ Page({
       wx.stopPullDownRefresh();
     }
   },
-  switchRole,
-  signOut,
+  avatarFailed() {
+    this.setData({ 'identity.avatarUrl': '' });
+  },
+  async setAvatar(event: { detail: { avatarUrl?: string } }) {
+    const src = event.detail.avatarUrl;
+    if (!src || this.data.uploading || !this.data.hasProfile) return;
+    this.setData({ uploading: true });
+    try {
+      const photo = await wx.compressImage({ src, compressedWidth: 384, quality: 80 });
+      const image = await new Promise<string>((resolve, reject) => wx.getFileSystemManager().readFile({
+        filePath: photo.tempFilePath, encoding: 'base64',
+        success: result => resolve(String(result.data)), fail: reject
+      }));
+      if (image.length > 520000) {
+        wx.showToast({ title: '图片过大，请选择较小的头像', icon: 'none' });
+        return;
+      }
+      await roleRequest('COACH', '/api/coach/me/avatar', 'PUT', { image });
+      await this.refresh();
+      wx.showToast({ title: '头像已保存', icon: 'none' });
+    } catch (error) {
+      wx.showToast({ title: errorMessage(error), icon: 'none' });
+    } finally {
+      this.setData({ uploading: false });
+    }
+  },
   changePeriod(event: WechatMiniprogram.TouchEvent) {
     const period = event.currentTarget.dataset.period as Period;
     if (period === this.data.period) return;
@@ -62,7 +87,7 @@ Page({
       const result = await roleRequest<CoachSchedule>('COACH', '/api/coach/me/schedule?period=' + this.data.period);
       if (current !== request) return;
       this.setData({
-        coachName: result.coachName, days: groupLessons(result.lessons),
+        identity: coachIdentity(result.coachName, result.avatarKey), hasProfile: true, days: groupLessons(result.lessons),
         rangeLabel: result.from === result.to ? dateLabel(result.from) : dateLabel(result.from) + ' – ' + dateLabel(result.to)
       });
     } catch (error) {

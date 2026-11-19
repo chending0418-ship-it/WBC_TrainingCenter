@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import type { CoachLesson, CoachSchedule } from '../../../packages/shared/contracts.js';
@@ -30,11 +32,38 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
     });
   }
 
+  app.put('/api/coach/me/avatar', { bodyLimit: 524288 }, async request => {
+    const coachId = (authorizeWechat ?? sessions.authorize)(request.headers.authorization).subject;
+    const { image } = object(request.body);
+    if (typeof image !== 'string' || !image) throw new ApiError(400, 'INVALID_IMAGE', '请选择头像图片');
+    let jpeg: Buffer;
+    try {
+      const photo = sharp(Buffer.from(image, 'base64'), { limitInputPixels: 32_000_000 });
+      const { format } = await photo.metadata();
+      if (!['jpeg', 'png', 'webp'].includes(format ?? '')) throw new Error('Unsupported image');
+      jpeg = await photo.rotate().resize(192, 192, { fit: 'cover' }).flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer();
+    } catch {
+      throw new ApiError(400, 'INVALID_IMAGE', '无法读取图片，请选择 JPG、PNG 或 WebP 照片');
+    }
+    const avatarKey = createHash('sha256').update(jpeg).digest('hex');
+    const updated = db.prepare('UPDATE coaches SET avatar_key = ?, avatar_jpeg = ? WHERE id = ? AND enabled = 1')
+      .run(avatarKey, jpeg, coachId);
+    if (!updated.changes) throw new ApiError(404, 'NOT_FOUND', '未找到当前教练');
+    return { avatarKey };
+  });
+
+  app.get('/api/coach-avatars/:key', async (request, reply) => {
+    const key = requiredText(object(request.params).key, 64);
+    const photo = db.prepare('SELECT avatar_jpeg FROM coaches WHERE avatar_key = ? AND enabled = 1 LIMIT 1').get(key);
+    if (!photo) throw new ApiError(404, 'NOT_FOUND', '未找到头像');
+    return reply.type('image/jpeg').header('Cache-Control', 'private, max-age=86400').send(Buffer.from(photo.avatar_jpeg as Uint8Array));
+  });
+
   app.get('/api/coach/me/schedule', async (request): Promise<CoachSchedule> => {
     const coachId = (authorizeWechat ?? sessions.authorize)(request.headers.authorization).subject;
     const period = object(request.query).period ?? 'today';
     if (period !== 'today' && period !== 'week') throw new ApiError(400, 'VALIDATION_ERROR', '请选择今日或本周');
-    const coach = db.prepare('SELECT name FROM coaches WHERE id = ? AND enabled = 1').get(coachId);
+    const coach = db.prepare('SELECT name, avatar_key FROM coaches WHERE id = ? AND enabled = 1').get(coachId);
     if (!coach) throw new ApiError(404, 'NOT_FOUND', '未找到当前教练');
 
     const today = venueDate(clock());
@@ -68,6 +97,6 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
         item.bookedCount++;
       }
     }
-    return { coachName: String(coach.name), from, to, lessons: [...lessons.values()] };
+    return { coachName: String(coach.name), avatarKey: coach.avatar_key as string | null, from, to, lessons: [...lessons.values()] };
   });
 }

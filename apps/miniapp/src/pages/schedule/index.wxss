@@ -210,3 +210,104 @@
   width: 100%;
   padding: 12rpx 4rpx;
 }
+
+.coach-strip {
+  width: 100%;
+  margin: 18rpx 0;
+}
+
+.coach-choices {
+  display: inline-flex;
+  gap: 14rpx;
+  padding: 6rpx 4rpx;
+}
+
+.coach-choices .coach-choice {
+  margin: 0;
+  display: flex;
+  flex: 0 0 120rpx;
+  flex-direction: column;
+  align-items: center;
+  width: 120rpx;
+  padding: 4rpx;
+  border: 0;
+  background: transparent;
+  color: #66595c;
+  line-height: 1.35;
+}
+
+.coach-choice::after {
+  border: none;
+}
+
+.coach-choice.active .coach-face {
+  box-shadow: 0 0 0 3rpx #fff, 0 0 0 6rpx #761f32;
+}
+
+.coach-name {
+  max-width: 100%;
+  margin-top: 12rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 24rpx;
+}
+
+.coach-choice.active .coach-name {
+  color: #761f32;
+  font-weight: 650;
+}
+
+.coach-strip + .section-title {
+  margin-top: 20rpx;
+}
+
+.quote-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  padding: 36rpx;
+  background: rgba(30, 23, 25, .45);
+}
+
+.quote-dialog {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 90%;
+  overflow: auto;
+  padding: 30rpx;
+  border-radius: 24rpx;
+  background: #fff;
+  text-align: left;
+}
+
+.quote-title {
+  margin: 18rpx 0 12rpx;
+  font-weight: 650;
+}
+
+.quote-details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8rpx 24rpx;
+  font-size: 28rpx;
+  overflow-wrap: anywhere;
+}
+
+.quote-details text:nth-child(odd) {
+  color: #66595c;
+}
+
+.quote-actions {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 14rpx;
+  margin-top: 26rpx;
+}
+
+.quote-actions .button {
+  width: 100%;
+  margin: 0;
+}

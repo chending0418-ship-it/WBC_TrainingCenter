@@ -1,4 +1,5 @@
 export interface Coach {
+  avatarKey?: string | null;
   id: string;
   name: string;
 }
@@ -179,6 +180,7 @@ export interface CoachLesson {
 }
 
 export interface CoachSchedule {
+  avatarKey: string | null;
   coachName: string;
   from: string;
   to: string;

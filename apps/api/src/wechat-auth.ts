@@ -64,6 +64,9 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
   function activate(authorization: string | undefined, role: SessionRole): RoleSession {
     return transaction(db, () => {
       const current = session(authorization);
+      if (current.activeRole && current.activeRole !== role && (current.activeRole !== 'ADMIN' || !current.isAdmin)) {
+        throw new ApiError(403, 'ROLE_SWITCH_FORBIDDEN', '只有当前管理员身份可以切换身份');
+      }
       if (!availableRoles(current).includes(role)) {
         throw new ApiError(403, 'ROLE_NOT_ASSIGNED', '当前微信账号未绑定此身份');
       }

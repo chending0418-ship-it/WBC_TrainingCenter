@@ -28,8 +28,8 @@ export function allowEntry(): boolean {
   return false;
 }
 
-export function allowPage(role: SessionRole, tabPage = false): boolean {
-  if (active?.role !== role) {
+export function allowPage(role: SessionRole | 'SIGNED_IN', tabPage = false): boolean {
+  if (!active || (role !== 'SIGNED_IN' && active.role !== role)) {
     if (tabPage) wx.hideTabBar({ fail: () => undefined });
     openCurrentHome();
     return false;
@@ -72,24 +72,10 @@ export async function selectWechatRole(role: SessionRole) {
   }
 }
 
-export function canSwitchRole(): boolean {
-  return (wechat?.roles.length ?? 0) > 1;
-}
-
 export function switchRole() {
-  if (!wechat) return;
+  if (active?.role !== 'ADMIN') return;
+  if (!wechat) void send(endpoint.ADMIN, 'DELETE', undefined, active.token).catch(() => undefined);
   active = undefined;
-  openCurrentHome();
-}
-
-export function signOut() {
-  const previous = active;
-  const identity = wechat;
-  active = undefined;
-  wechat = undefined;
-  // Local access ends immediately. The server also revokes the token if reachable.
-  if (identity) void send('/api/auth/session', 'DELETE', undefined, identity.token).catch(() => undefined);
-  else if (previous) void send(endpoint[previous.role], 'DELETE', undefined, previous.token).catch(() => undefined);
   openCurrentHome();
 }
 

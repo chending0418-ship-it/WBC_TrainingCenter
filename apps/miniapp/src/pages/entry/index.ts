@@ -1,7 +1,7 @@
 import type { SessionRole } from '../../../../../packages/shared/contracts.js';
 import { config } from '../../lib/config';
 import { errorMessage, send } from '../../lib/request';
-import { allowEntry, selectWechatRole, signIn, signInWechat, signOut, wechatIdentity } from '../../lib/session';
+import { allowEntry, selectWechatRole, signIn, signInWechat, wechatIdentity } from '../../lib/session';
 
 const roleLabels = { PARENT: '家长', COACH: '教练', ADMIN: '管理员' };
 
@@ -55,7 +55,6 @@ Page({
   copyAccountId() {
     if (this.data.accountId) wx.setClipboardData({ data: this.data.accountId });
   },
-  signOut,
   chooseRole(event: WechatMiniprogram.TouchEvent) {
     if (this.data.busy) return;
     const role = event.currentTarget.dataset.role as SessionRole;

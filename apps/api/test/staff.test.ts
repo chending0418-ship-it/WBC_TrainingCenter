@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { test } from 'node:test';
+import sharp from 'sharp';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { CoachSchedule, ManagedBooking, ManagedClass, Schedule, StaffAccount } from '../../../packages/shared/contracts.js';
@@ -214,7 +215,7 @@ test('教练仅能读取本人今日和本周日程，学员数据只包含姓�
 
   const day = (await app.inject({ url: url + '?coachId=wang', headers: li })).json<CoachSchedule>();
   assert.deepEqual(day, {
-    coachName: '李晨', from: today, to: today,
+    coachName: '李晨', avatarKey: null, from: today, to: today,
     lessons: [{
       id: group.classSessionId, type: 'GROUP', title: '力量基础', venue: '训练室 A',
       startsAt: dateAt(today, 600), endsAt: dateAt(today, 660), bookedCount: 1, childNames: ['陈同学']
@@ -570,4 +571,27 @@ test('家长联系人只能本人修改，管理员可以搜索，教练不可�
   assert.equal(results[0].child.birthMonth, '2016-08');
   assert.equal((await app.inject({ method: 'DELETE', url, headers: parent })).statusCode, 204);
   assert.deepEqual((await app.inject({ url: searchUrl, headers: admin })).json(), []);
+});
+
+test('教练可更换本人头像，家长课表获取圆形头像所需的缩略图', async context => {
+  const { app } = fixture(context);
+  const parent = await session(app, false);
+  const coach = (await app.inject({ method: 'POST', url: '/api/dev/coach-session', payload: { profile: 'coach-li' } })).json();
+  const headers = { authorization: 'Bearer ' + coach.token };
+  const url = '/api/coach/me/avatar';
+  const png = await sharp({ create: { width: 400, height: 200, channels: 3, background: '#761f32' } }).png().toBuffer();
+  const payload = { image: png.toString('base64'), coachId: 'wang' };
+  assert.equal((await app.inject({ method: 'PUT', url, headers: parent, payload })).statusCode, 401);
+  const saved = await app.inject({ method: 'PUT', url, headers, payload });
+  assert.equal(saved.statusCode, 200);
+  const { avatarKey } = saved.json();
+  assert.equal((await app.inject({ method: 'PUT', url, headers, payload: { image: 'invalid' } })).statusCode, 400);
+  const schedule = (await app.inject({ url: '/api/schedule', headers: parent })).json<Schedule>();
+  assert.equal(schedule.coaches.find(c => c.id === 'li')?.avatarKey, avatarKey);
+  assert.equal(schedule.coaches.find(c => c.id === 'wang')?.avatarKey, null);
+  assert.equal((await app.inject({ url: '/api/coach/me/schedule', headers })).json().avatarKey, avatarKey);
+  const photo = await app.inject({ url: '/api/coach-avatars/' + avatarKey });
+  assert.equal(photo.headers['content-type'], 'image/jpeg');
+  const thumbnail = await sharp(photo.rawPayload).metadata();
+  assert.deepEqual([thumbnail.width, thumbnail.height], [192, 192]);
 });

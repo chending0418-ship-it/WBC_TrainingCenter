@@ -70,7 +70,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
       ORDER BY s.starts_at
     `).all(user, dateAt(today), dateAt(addDays(lastDate, 1))) as unknown as ClassRow[];
-    const coaches = db.prepare('SELECT id, name FROM coaches WHERE enabled = 1 ORDER BY id').all() as unknown as Coach[];
+    const coaches = db.prepare('SELECT id, name, avatar_key AS avatarKey FROM coaches WHERE enabled = 1 ORDER BY id').all() as unknown as Coach[];
     return { today, lastDate, courses: rows.map(({ mine, ...course }) => ({ ...course, bookedByMe: mine === 1 })), coaches };
   }
 
