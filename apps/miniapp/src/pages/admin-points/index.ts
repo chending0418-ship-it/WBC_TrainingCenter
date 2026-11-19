@@ -20,6 +20,7 @@ Page({
     ...emptyForm,
     original: null as Entry | null,
     users: [] as (ManagedUser & { label: string })[],
+    targetUserId: '',
     userIndex: 0,
     busy: false,
     loading: true,
@@ -30,6 +31,12 @@ Page({
     action: operations.OFFLINE_CREDIT.action,
     bookings: [] as { id: string; label: string }[],
     ledger: [] as Entry[]
+  },
+  onLoad(options: Record<string, string | undefined>) {
+    if (options.userId) {
+      const source = options.mode === 'adjust' ? 'ADJUSTMENT' : 'OFFLINE_CREDIT';
+      this.setData({ targetUserId: options.userId, source, action: operations[source].action });
+    }
   },
   onShow() {
     const authorized = allowPage('ADMIN');
@@ -43,7 +50,13 @@ Page({
     try {
       const users = await staffApi<ManagedUser[]>('/users');
       if (current !== request) return;
-      this.setData({ users: users.map(user => ({ ...user, label: user.childName || '未填写孩子资料' })) });
+      const { targetUserId } = this.data;
+      const choices = targetUserId ? users.filter(user => user.id === targetUserId) : users;
+      if (targetUserId && !choices.length) {
+        this.setData({ users: [], loading: false, error: '找不到该家长账户，请返回家长资料重新选择。' });
+        return;
+      }
+      this.setData({ users: choices.map(user => ({ ...user, label: user.childName || '未填写孩子资料' })) });
       await this.refreshAccount();
     } catch (error) {
       if (current === request) this.setData({ loading: false, error: errorMessage(error) });
@@ -142,6 +155,10 @@ Page({
       await staffWrite('/accounts/' + user.id + '/ledger', { source, reason, reference, ...details });
       const next = source === 'REVERSAL' ? 'OFFLINE_CREDIT' : source;
       this.setData({ ...emptyForm, source: next, action: operations[next].action });
+      if (this.data.targetUserId && getCurrentPages().length > 1) {
+        wx.navigateBack({ success: () => wx.showToast({ title: operations[source].success, icon: 'success' }) });
+        return;
+      }
       await this.refreshAccount();
       wx.showToast({ title: operations[source].success, icon: 'success' });
     } catch (error) {
