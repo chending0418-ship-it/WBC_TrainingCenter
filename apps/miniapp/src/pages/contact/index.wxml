@@ -7,7 +7,7 @@
     <label class="form-field"><text>联系人姓名</text><input class="field" value="{{name}}" maxlength="40" bindinput="changeName" disabled="{{busy}}" /></label>
     <label class="form-field"><text>联系电话</text><input class="field" value="{{phone}}" maxlength="24" bindinput="changePhone" disabled="{{busy}}" /></label>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view class="section-actions">
+    <view class="section-actions form-actions">
       <button wx:if="{{saved}}" class="button quiet" bindtap="clear" disabled="{{busy}}" hover-class="press">删除联系人</button>
       <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">保存联系人</button>
     </view>

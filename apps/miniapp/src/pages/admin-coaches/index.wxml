@@ -8,7 +8,7 @@
     </picker>
     <view class="muted">新增后可到「排课管理 → 私教时段」设置开放时间。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view class="section-actions">
+    <view class="section-actions form-actions">
       <button class="button quiet" bindtap="close" disabled="{{busy}}" hover-class="press">返回</button>
       <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">保存教练</button>
     </view>
@@ -26,7 +26,7 @@
       <view class="card-note">私教课程 · {{item.privateTypeName}}</view>
       <view class="card-footer"><text class="accent">{{item.pointsPerSlot}} 积分</text> / 30 分钟</view>
       <navigator wx:if="{{item.enabled && !busy}}" class="button quiet row-action hours-link" url="/pages/admin-schedule/index?coachId={{item.id}}" hover-class="press">查看私教开放时间</navigator>
-      <view class="section-actions">
+      <view class="section-actions item-actions">
         <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑资料</button>
         <button class="button quiet" data-id="{{item.id}}" bindtap="toggle" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用' : '启用'}}</button>
       </view>

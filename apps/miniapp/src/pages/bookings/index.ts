@@ -1,4 +1,4 @@
-import { allowPage } from '../../lib/session';
+import { showParentTab } from '../../lib/session';
 import type { Booking } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { datetime, time } from '../../lib/display';
@@ -15,7 +15,7 @@ Page({
   },
 
   onShow() {
-    const authorized = allowPage('PARENT', true);
+    const authorized = showParentTab(this);
     this.setData({ authorized });
     if (authorized) void this.refresh();
   },

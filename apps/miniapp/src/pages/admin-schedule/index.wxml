@@ -35,7 +35,7 @@
       <label class="form-field"><text>所需积分</text><input class="field" type="number" value="{{editor.points}}" data-field="points" bindinput="changeClassField" maxlength="6" disabled="{{busy}}" /></label>
     </view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view class="section-actions">
+    <view class="section-actions form-actions">
       <button class="button quiet" bindtap="closeEditor" disabled="{{busy}}" hover-class="press">返回</button>
       <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">保存排课</button>
     </view>
@@ -68,7 +68,7 @@
           <text class="row-name">{{item.points}} 积分</text>
         </view>
         <view wx:if="{{item.names}}" class="details">已预约 {{item.names}}</view>
-        <view wx:if="{{item.editable}}" class="section-actions">
+        <view wx:if="{{item.editable}}" class="section-actions item-actions">
           <button class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>
           <button class="button quiet" data-id="{{item.id}}" bindtap="toggleClass" disabled="{{busy}}" hover-class="press">{{item.status === 'CLOSED' ? '恢复班次' : '停开班次'}}</button>
         </view>
@@ -82,7 +82,7 @@
         <view class="card-head"><text class="card-title">{{item.title}}</text><text class="card-state">{{item.enabled ? '已启用' : '已停用'}}</text></view>
         <view class="card-time">{{item.timetable}}</view>
         <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
-        <view class="section-actions">
+        <view class="section-actions item-actions">
           <button class="button quiet" data-id="{{item.id}}" bindtap="editTemplate" disabled="{{busy}}" hover-class="press">编辑模板</button>
           <button class="button quiet" data-id="{{item.id}}" bindtap="toggleTemplate" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用模板' : '启用模板'}}</button>
         </view>
@@ -134,7 +134,7 @@
           <label class="form-field"><text>开始</text><input class="field" value="{{blockStart}}" data-field="blockStart" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
           <label class="form-field"><text>结束</text><input class="field" value="{{blockEnd}}" data-field="blockEnd" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
           <label class="form-field"><text>停用原因</text><input class="field" value="{{blockReason}}" data-field="blockReason" maxlength="100" bindinput="changeBlock" disabled="{{busy}}" /></label>
-          <view class="section-actions">
+          <view class="section-actions form-actions">
             <button class="button quiet" bindtap="closeBlock" disabled="{{busy}}" hover-class="press">返回</button>
             <button class="button" form-type="submit" disabled="{{busy || !blockReason}}" hover-class="press">保存停用时段</button>
           </view>

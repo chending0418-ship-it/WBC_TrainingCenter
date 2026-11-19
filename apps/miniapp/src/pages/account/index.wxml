@@ -1,4 +1,4 @@
-<view wx:if="{{authorized}}" class="page-shell">
+<view wx:if="{{authorized}}" class="page-shell parent-tab-page">
   <text class="page-title" role="heading" aria-level="1">我的账户</text>
   <view wx:if="{{loading}}" class="message">正在查询账户…</view>
   <view wx:elif="{{error}}" class="message">

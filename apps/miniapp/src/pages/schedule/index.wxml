@@ -1,5 +1,5 @@
 <page-meta page-style="{{confirmation ? 'overflow: hidden' : ''}}" />
-<view wx:if="{{authorized}}" class="page-shell">
+<view wx:if="{{authorized}}" class="page-shell parent-tab-page">
   <text class="page-title" role="heading" aria-level="1">课程表</text>
 
   <view wx:if="{{loading}}" class="message">正在加载排课…</view>
@@ -10,24 +10,24 @@
 
   <block wx:else>
     <view class="modes">
-      <button class="button {{mode === 'GROUP' ? '' : 'quiet'}}" data-mode="GROUP"
+      <button class="mode-tab {{mode === 'GROUP' ? 'active' : ''}}" data-mode="GROUP"
         bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'GROUP'}}">团课</button>
-      <button class="button {{mode === 'PRIVATE' ? '' : 'quiet'}}" data-mode="PRIVATE"
+      <button class="mode-tab {{mode === 'PRIVATE' ? 'active' : ''}}" data-mode="PRIVATE"
         bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'PRIVATE'}}">私教</button>
     </view>
 
     <view class="week">
-      <button class="button quiet week-step" data-step="-1" disabled="{{!hasPrevious || booking}}"
-        bindtap="changeWeek" hover-class="press">上一周</button>
       <text class="week-label">{{weekLabel}}</text>
-      <button class="button quiet week-step" data-step="1" disabled="{{!hasNext || booking}}"
-        bindtap="changeWeek" hover-class="press">下一周</button>
+      <button class="week-step previous" data-step="-1" disabled="{{!hasPrevious || booking}}"
+        bindtap="changeWeek" hover-class="press" aria-label="上一周"><view class="chevron"></view></button>
+      <button class="week-step" data-step="1" disabled="{{!hasNext || booking}}"
+        bindtap="changeWeek" hover-class="press" aria-label="下一周"><view class="chevron"></view></button>
     </view>
     <view wx:if="{{mode === 'GROUP'}}" class="dates">
       <button wx:for="{{dates}}" wx:key="date" class="button day {{date === item.date ? 'selected' : ''}}"
         data-date="{{item.date}}" bindtap="changeDate" hover-class="press"
         aria-label="{{item.date}} 周{{item.weekday}}{{item.hasGroup ? '，有团课' : ''}}" aria-pressed="{{date === item.date}}">
-        <text class="weekday">{{item.date === today ? '今' : item.weekday}}</text>
+        <text class="weekday">{{item.date === today ? '今天' : '周' + item.weekday}}</text>
         <text class="day-number">{{item.day}}</text>
         <view wx:if="{{item.hasGroup}}" class="course-dot" aria-hidden="true"></view>
       </button>

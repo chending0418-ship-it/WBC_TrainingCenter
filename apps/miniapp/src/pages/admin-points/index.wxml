@@ -49,7 +49,7 @@
         <input class="field" maxlength="100" placeholder="例如 DEMO-001" value="{{reference}}" data-field="reference" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-      <view class="section-actions">
+      <view class="section-actions form-actions">
         <button wx:if="{{source === 'REVERSAL'}}" class="button quiet" bindtap="closeReversal" disabled="{{busy}}" hover-class="press">返回</button>
         <button class="button" form-type="submit" loading="{{busy}}" disabled="{{busy}}" hover-class="press">{{action}}</button>
       </view>

@@ -305,3 +305,30 @@ button.button[disabled] {
 .utility-links > navigator, .utility-links > text {
   padding: 12rpx 0;
 }
+
+.page-shell.parent-tab-page {
+  padding-bottom: calc(46px + 64rpx + env(safe-area-inset-bottom));
+}
+
+.message button.button, button.button.row-action {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+button.button.row-action.save-profile {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.section-actions.form-actions {
+  justify-content: flex-end;
+}
+
+.section-actions.form-actions .button, .section-actions.item-actions .button {
+  flex: 0 1 auto;
+  width: auto;
+  margin: 0;
+}
