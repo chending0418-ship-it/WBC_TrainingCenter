@@ -47,7 +47,7 @@
       <button class="button {{mode === 'templates' ? '' : 'quiet'}}" data-mode="templates" bindtap="changeMode" aria-pressed="{{mode === 'templates'}}" hover-class="press">周期模板</button>
       <button class="button {{mode === 'hours' ? '' : 'quiet'}}" data-mode="hours" bindtap="changeMode" aria-pressed="{{mode === 'hours'}}" hover-class="press">私教时段</button>
     </view>
-    <picker wx:if="{{date && mode !== 'templates'}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
+    <picker wx:if="{{date && mode === 'classes'}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">排课日期</text><text class="picker-value">{{date}} · {{dayLabel}}</text></view>
     </picker>
     <view wx:if="{{loading}}" class="message">正在加载排课…</view>
@@ -89,41 +89,58 @@
       </view>
     </block>
     <block wx:elif="{{coaches.length}}">
-      <picker class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="changeHoursCoach" disabled="{{busy}}">
+      <picker class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="changeHoursCoach" disabled="{{busy || editingWeekday >= 0}}">
         <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text></view>
       </picker>
-      <view class="section-title" role="heading" aria-level="2">每{{dayLabel}}开放</view>
-      <view class="muted">用 24 小时制填写，例如 14:00 和 16:30。</view>
-      <view wx:if="{{!windows.length}}" class="muted">这一天没有固定开放时间。</view>
-      <view wx:for="{{windows}}" wx:key="key" class="lesson-card">
-        <view class="card-fields">
-          <label><text class="muted">开始</text><input class="field" value="{{item.start}}" data-index="{{index}}" data-side="start" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" /></label>
-          <label><text class="muted">结束</text><input class="field" value="{{item.end}}" data-index="{{index}}" data-side="end" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" /></label>
+      <view class="section-title" role="heading" aria-level="2">每周固定开放时间</view>
+      <view class="lesson-card weekly-hours">
+        <view wx:for="{{weeklyHours}}" wx:key="weekday" wx:for-item="day" class="weekday-row">
+          <view class="weekday-summary">
+            <text class="row-name">{{day.label}}</text>
+            <text class="{{day.windows.length ? 'weekday-times' : 'card-note'}}">{{day.summary || '未开放'}}</text>
+            <button wx:if="{{editingWeekday < 0 && !blocking}}" class="button quiet edit-day" data-weekday="{{day.weekday}}"
+              bindtap="editWeekday" aria-label="编辑{{day.label}}开放时间" disabled="{{busy}}" hover-class="press">编辑</button>
+          </view>
+          <block wx:if="{{editingWeekday === day.weekday}}">
+            <view wx:for="{{windows}}" wx:key="key" class="window-editor">
+              <view class="card-fields">
+                <label><text class="muted">开始</text><input class="field" value="{{item.start}}" data-index="{{index}}" data-side="start" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" /></label>
+                <label><text class="muted">结束</text><input class="field" value="{{item.end}}" data-index="{{index}}" data-side="end" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" /></label>
+              </view>
+              <button class="button quiet row-action" data-index="{{index}}" bindtap="removeWindow" disabled="{{busy}}" hover-class="press">移除时段</button>
+            </view>
+            <button class="button quiet row-action" bindtap="addWindow" disabled="{{busy || windows.length >= 12}}" hover-class="press">添加时段</button>
+            <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+            <view class="section-actions">
+              <button class="button quiet" bindtap="closeHours" disabled="{{busy}}" hover-class="press">取消</button>
+              <button class="button" bindtap="saveHours" disabled="{{busy}}" hover-class="press">保存{{day.label}}</button>
+            </view>
+          </block>
         </view>
-        <button class="button quiet row-action" data-index="{{index}}" bindtap="removeWindow" disabled="{{busy}}" hover-class="press">移除时段</button>
       </view>
-      <view class="section-actions">
-        <button class="button quiet" bindtap="addWindow" disabled="{{busy || windows.length >= 12}}" hover-class="press">添加时段</button>
-        <button class="button" bindtap="saveHours" disabled="{{busy}}" hover-class="press">保存开放时段</button>
-      </view>
-      <view class="section-title" role="heading" aria-level="2">{{date}} 停用时段</view>
-      <view wx:if="{{!exceptions.length}}" class="muted">当天没有停用记录。</view>
-      <view wx:for="{{exceptions}}" wx:key="id" class="lesson-card">
-        <view class="card-time">{{item.label}}</view>
-        <view class="muted">{{item.reason}}</view>
-        <button class="button quiet row-action" data-id="{{item.id}}" bindtap="removeBlock" disabled="{{busy}}" hover-class="press">解除停用</button>
-      </view>
-      <button wx:if="{{!blocking}}" class="button quiet row-action" bindtap="startBlock" disabled="{{busy}}" hover-class="press">新增停用时段</button>
-      <form wx:else class="lesson-card" bindsubmit="saveBlock">
-        <label class="form-field"><text>开始</text><input class="field" value="{{blockStart}}" data-field="blockStart" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
-        <label class="form-field"><text>结束</text><input class="field" value="{{blockEnd}}" data-field="blockEnd" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
-        <label class="form-field"><text>停用原因</text><input class="field" value="{{blockReason}}" data-field="blockReason" maxlength="100" bindinput="changeBlock" disabled="{{busy}}" /></label>
-        <view class="section-actions">
-          <button class="button quiet" bindtap="closeBlock" disabled="{{busy}}" hover-class="press">返回</button>
-          <button class="button" form-type="submit" disabled="{{busy || !blockReason}}" hover-class="press">保存停用时段</button>
+      <block wx:if="{{editingWeekday < 0}}">
+        <view class="section-title" role="heading" aria-level="2">指定日期停用</view>
+        <picker mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy || editingWeekday >= 0}}">
+          <view class="picker"><text class="picker-label">日期</text><text class="picker-value">{{date}} · {{dayLabel}}</text></view>
+        </picker>
+        <view wx:if="{{!exceptions.length}}" class="muted">当天没有停用记录。</view>
+        <view wx:for="{{exceptions}}" wx:key="id" class="lesson-card">
+          <view class="card-time">{{item.label}}</view>
+          <view class="muted">{{item.reason}}</view>
+          <button class="button quiet row-action" data-id="{{item.id}}" bindtap="removeBlock" disabled="{{busy}}" hover-class="press">解除停用</button>
         </view>
-      </form>
-      <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+        <button wx:if="{{!blocking}}" class="button quiet row-action" bindtap="startBlock" disabled="{{busy}}" hover-class="press">新增停用时段</button>
+        <form wx:else class="lesson-card" bindsubmit="saveBlock">
+          <label class="form-field"><text>开始</text><input class="field" value="{{blockStart}}" data-field="blockStart" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
+          <label class="form-field"><text>结束</text><input class="field" value="{{blockEnd}}" data-field="blockEnd" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
+          <label class="form-field"><text>停用原因</text><input class="field" value="{{blockReason}}" data-field="blockReason" maxlength="100" bindinput="changeBlock" disabled="{{busy}}" /></label>
+          <view class="section-actions">
+            <button class="button quiet" bindtap="closeBlock" disabled="{{busy}}" hover-class="press">返回</button>
+            <button class="button" form-type="submit" disabled="{{busy || !blockReason}}" hover-class="press">保存停用时段</button>
+          </view>
+        </form>
+      </block>
+      <view wx:if="{{saveError && editingWeekday < 0}}" class="form-error">{{saveError}}</view>
     </block>
     <view wx:else class="message">请先在「教练管理」添加或启用教练，再设置私教时段。</view>
   </block>

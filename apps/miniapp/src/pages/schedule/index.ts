@@ -1,34 +1,29 @@
 import { allowPage } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
+import { addDays, availableRanges, mondayOfWeek } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
 
 type VisibleCourse = Course & { hours: string; action: string; unavailable: boolean };
-type StartOption = { label: string; options: PrivateSlot[] };
-type EndOption = PrivateSlot & { endLabel: string };
+type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof availableRanges> };
 
 let courses: Course[] = [];
 let scheduleRequest = 0;
 let slotsRequest = 0;
 
-function addDays(date: string, days: number): string {
-  const timestamp = Date.parse(date + 'T00:00:00Z') + days * 86_400_000;
-  return new Date(timestamp).toISOString().slice(0, 10);
-}
-
-function dateChoices(first: string, selected: string, last: string) {
+function dateChoices(first: string, selected: string, last: string, calendarWeek: boolean) {
   const dayIndex = Math.round((Date.parse(selected) - Date.parse(first)) / 86_400_000);
   const week = Math.floor(dayIndex / 7);
-  const start = addDays(first, week * 7);
-  const dates = Array.from({ length: 7 }, (_, index) => addDays(start, index)).filter(date => date <= last);
+  const start = calendarWeek ? mondayOfWeek(selected) : addDays(first, week * 7);
+  const dates = Array.from({ length: 7 }, (_, index) => addDays(start, index)).filter(date => date >= first && date <= last);
   return {
     dates: dates.map(date => ({
       date,
       day: date.slice(8, 10),
       weekday: ['日', '一', '二', '三', '四', '五', '六'][new Date(date + 'T00:00:00Z').getUTCDay()]
     })),
-    weekLabel: dateLabel(start) + ' – ' + dateLabel(dates[dates.length - 1]),
-    hasPrevious: week > 0,
+    weekLabel: dateLabel(dates[0]) + ' – ' + dateLabel(dates[dates.length - 1]),
+    hasPrevious: start > first,
     hasNext: addDays(start, 7) <= last
   };
 }
@@ -64,10 +59,9 @@ Page({
     courses: [] as VisibleCourse[],
     coaches: [] as Coach[],
     coachIndex: 0,
-    starts: [] as StartOption[],
-    ends: [] as EndOption[],
-    startIndex: -1,
-    endIndex: -1,
+    privateDays: [] as PrivateDay[],
+    selectedRange: '',
+    selectedStart: '',
     slotLoading: false,
     slotError: '',
     booking: false
@@ -115,15 +109,17 @@ Page({
       else if (course.bookedCount >= course.capacity) action = '已满员';
       return { ...course, hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
     });
-    this.setData({ date, courses: visible, ...dateChoices(this.data.today, date, this.data.lastDate) });
+    this.setData({ date, courses: visible, ...dateChoices(this.data.today, date, this.data.lastDate, this.data.mode === 'PRIVATE') });
     if (this.data.mode === 'PRIVATE') void this.refreshSlots();
   },
 
   changeWeek(event: WechatMiniprogram.TouchEvent) {
     const step = Number(event.currentTarget.dataset.step);
-    const offset = Math.floor((Date.parse(this.data.date) - Date.parse(this.data.today)) / 604_800_000) * 7;
-    const next = addDays(this.data.today, offset + step * 7);
-    if (!this.data.booking && next >= this.data.today && next <= this.data.lastDate) this.selectDate(next);
+    const { dates, today, lastDate } = this.data;
+    if (this.data.booking || !dates.length) return;
+    const next = step > 0 ? addDays(dates[dates.length - 1].date, 1) : addDays(dates[0].date, -7);
+    if (step < 0 && dates[0].date === today) return;
+    if (next <= lastDate) this.selectDate(next < today ? today : next);
   },
 
   changeDate(event: WechatMiniprogram.TouchEvent) {
@@ -134,7 +130,7 @@ Page({
     const mode = event.currentTarget.dataset.mode as BookingSelection['type'];
     if (this.data.booking || this.data.mode === mode) return;
     this.setData({ mode });
-    if (mode === 'PRIVATE') void this.refreshSlots();
+    this.selectDate(this.data.date);
   },
 
   changeCoach(event: WechatMiniprogram.PickerChange) {
@@ -146,19 +142,14 @@ Page({
   async refreshSlots() {
     const request = ++slotsRequest;
     const coach = this.data.coaches[this.data.coachIndex];
-    this.setData({ starts: [], ends: [], startIndex: -1, endIndex: -1, slotError: '', slotLoading: !!coach });
+    this.setData({ privateDays: [], selectedRange: '', selectedStart: '', slotError: '', slotLoading: !!coach });
     if (!coach) return;
     try {
-      const slots = await api<PrivateSlot[]>('/api/coaches/' + coach.id + '/slots?date=' + this.data.date);
-      if (request !== slotsRequest) return;
-      const byStart = new Map<string, PrivateSlot[]>();
-      for (const slot of slots) {
-        const options = byStart.get(slot.startsAt) ?? [];
-        options.push(slot);
-        byStart.set(slot.startsAt, options);
-      }
-      const starts = Array.from(byStart, ([start, options]) => ({ label: time(start), options }));
-      this.setData({ starts });
+      const days = await Promise.all(this.data.dates.map(async day => {
+        const slots = await api<PrivateSlot[]>('/api/coaches/' + coach.id + '/slots?date=' + day.date);
+        return { date: day.date, label: dateLabel(day.date) + ' · 周' + day.weekday, ranges: availableRanges(slots) };
+      }));
+      if (request === slotsRequest) this.setData({ privateDays: days });
     } catch (error) {
       if (request === slotsRequest) this.setData({ slotError: errorMessage(error) });
     } finally {
@@ -166,28 +157,25 @@ Page({
     }
   },
 
-  changeStart(event: WechatMiniprogram.PickerChange) {
+  toggleRange(event: WechatMiniprogram.TouchEvent) {
     if (this.data.booking) return;
-    const startIndex = Number(event.detail.value);
-    const ends = this.data.starts[startIndex].options.map(slot => ({
-      ...slot,
-      endLabel: time(slot.endsAt)
-    }));
-    this.setData({ startIndex, ends, endIndex: -1 });
+    const startsAt = String(event.currentTarget.dataset.range);
+    this.setData({ selectedRange: this.data.selectedRange === startsAt ? '' : startsAt, selectedStart: '' });
   },
 
-  changeEnd(event: WechatMiniprogram.TouchEvent) {
-    if (!this.data.booking) this.setData({ endIndex: Number(event.currentTarget.dataset.index) });
+  chooseStart(event: WechatMiniprogram.TouchEvent) {
+    if (!this.data.booking) this.setData({ selectedStart: String(event.currentTarget.dataset.start) });
   },
 
   bookGroup(event: WechatMiniprogram.TouchEvent) {
     void this.book({ type: 'GROUP', classSessionId: String(event.currentTarget.dataset.id) });
   },
 
-  bookPrivate() {
+  bookPrivate(event: WechatMiniprogram.TouchEvent) {
     const coach = this.data.coaches[this.data.coachIndex];
-    const slot = this.data.ends[this.data.endIndex];
-    if (!coach || !slot) return;
+    const { day, range, start, end } = event.currentTarget.dataset;
+    const slot = this.data.privateDays[Number(day)]?.ranges[Number(range)]?.starts[Number(start)]?.options[Number(end)];
+    if (!coach || !slot || slot.startsAt !== this.data.selectedStart) return;
     void this.book({ type: 'PRIVATE', coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt });
   },
 

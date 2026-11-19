@@ -22,7 +22,7 @@
       <button class="button quiet week-step" data-step="1" disabled="{{!hasNext || booking}}"
         bindtap="changeWeek" hover-class="press">下一周</button>
     </view>
-    <view class="dates">
+    <view wx:if="{{mode === 'GROUP'}}" class="dates">
       <button wx:for="{{dates}}" wx:key="date" class="button day {{date === item.date ? 'selected' : ''}}"
         data-date="{{item.date}}" bindtap="changeDate" hover-class="press"
         aria-label="{{item.date}} 周{{item.weekday}}" aria-pressed="{{date === item.date}}">
@@ -51,40 +51,48 @@
     </block>
 
     <block wx:else>
-      <view class="section-title" role="heading" aria-level="2">选择私教时段</view>
-      <view class="lesson-card">
-        <picker wx:if="{{coaches.length}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}"
-          bindchange="changeCoach" disabled="{{booking}}">
-          <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text></view>
-        </picker>
-        <view wx:if="{{slotLoading}}" class="message">正在查询可约时段…</view>
-        <view wx:elif="{{slotError}}" class="message">
-          <view>{{slotError}}</view>
-          <button class="button quiet" bindtap="refreshSlots" hover-class="press">重新查询</button>
-        </view>
-        <view wx:elif="{{!starts.length}}" class="message">这天没有可约时段，可以更换教练或日期。</view>
-        <block wx:else>
-          <picker class="filter-row" range="{{starts}}" range-key="label" value="{{startIndex < 0 ? 0 : startIndex}}"
-            bindchange="changeStart" disabled="{{booking}}">
-            <view class="picker"><text class="picker-label">开始时间</text><text class="picker-value">{{startIndex < 0 ? '选择时间' : starts[startIndex].label}}</text></view>
-          </picker>
-          <block wx:if="{{startIndex >= 0}}">
-            <view class="card-note">结束时间与所需积分</view>
-            <view class="end-options">
-              <button wx:for="{{ends}}" wx:key="endsAt" class="button {{endIndex === index ? '' : 'quiet'}}"
-                data-index="{{index}}" bindtap="changeEnd" aria-pressed="{{endIndex === index}}" disabled="{{booking}}" hover-class="press">
-                <text class="end-time">{{item.endLabel}} 结束</text>
-                <text class="end-price">{{item.points}} 积分</text>
-              </button>
-            </view>
-          </block>
-          <view class="card-footer">
-            <view class="card-note">一对一 · 训练室 B</view>
-            <button class="button row-action" bindtap="bookPrivate" hover-class="press" loading="{{booking}}"
-              disabled="{{endIndex < 0 || booking}}">预约私教</button>
-          </view>
-        </block>
+      <picker wx:if="{{coaches.length}}" class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}"
+        bindchange="changeCoach" disabled="{{booking}}">
+        <view class="picker"><text class="picker-label">私教教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text></view>
+      </picker>
+      <view wx:if="{{slotLoading}}" class="message">正在查询可约时段…</view>
+      <view wx:elif="{{slotError}}" class="message">
+        <view>{{slotError}}</view>
+        <button class="button quiet" bindtap="refreshSlots" hover-class="press">重新查询</button>
       </view>
+      <view wx:elif="{{!coaches.length}}" class="message">暂无开放私教预约的教练。</view>
+      <block wx:else>
+        <view class="section-title" role="heading" aria-level="2">可约时段</view>
+        <view wx:for="{{privateDays}}" wx:key="date" wx:for-item="day" wx:for-index="di" class="availability-day">
+          <view class="row-name">{{day.label}}</view>
+          <text wx:if="{{!day.ranges.length}}" class="card-note">暂无可约时段</text>
+          <view wx:for="{{day.ranges}}" wx:key="startsAt" wx:for-item="range" wx:for-index="ri" class="time-range">
+            <button class="button quiet range-toggle" data-range="{{range.startsAt}}" bindtap="toggleRange"
+              aria-expanded="{{selectedRange === range.startsAt}}" disabled="{{booking}}" hover-class="press">
+              <text>{{range.label}}</text><text class="range-action">{{selectedRange === range.startsAt ? '收起' : '选时段'}}</text>
+            </button>
+            <view wx:if="{{selectedRange === range.startsAt}}" class="range-detail">
+              <view class="card-note">选择开始时间</view>
+              <view class="start-options">
+                <button wx:for="{{range.starts}}" wx:key="startsAt" wx:for-item="start" class="button {{selectedStart === start.startsAt ? '' : 'quiet'}}"
+                  data-start="{{start.startsAt}}" bindtap="chooseStart" disabled="{{booking}}" aria-pressed="{{selectedStart === start.startsAt}}" hover-class="press">{{start.label}}</button>
+              </view>
+              <block wx:for="{{range.starts}}" wx:key="startsAt" wx:for-item="start" wx:for-index="si">
+                <block wx:if="{{selectedStart === start.startsAt}}">
+                  <view class="card-note">选择时长，核对预约</view>
+                  <view class="end-options">
+                    <button wx:for="{{start.options}}" wx:key="endsAt" wx:for-item="option" wx:for-index="ei" class="button quiet"
+                      data-day="{{di}}" data-range="{{ri}}" data-start="{{si}}" data-end="{{ei}}" bindtap="bookPrivate" disabled="{{booking}}" hover-class="press">
+                      <text class="end-time">{{option.minutes}} 分钟 · {{option.points}} 积分</text>
+                      <text class="end-price">{{option.endLabel}} 结束</text>
+                    </button>
+                  </view>
+                </block>
+              </block>
+            </view>
+          </view>
+        </view>
+      </block>
     </block>
   </block>
 </view>

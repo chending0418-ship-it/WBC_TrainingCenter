@@ -1,11 +1,13 @@
 import { allowPage } from '../../lib/session';
 import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
+import { addDays, mondayOfWeek } from '../../lib/private-availability';
 import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
 type ClassRow = ManagedClass & { timeLabel: string; names: string; editable: boolean };
 type TemplateRow = ManagedTemplate & { timetable: string };
+type WeeklyHours = { weekday: number; label: string; windows: CoachHours['windows']; summary: string };
 type TypeOption = { id: string | null; label: string; maxStudents: number };
 const untyped: TypeOption = { id: null, label: '未指定类型', maxStudents: 500 };
 
@@ -26,9 +28,17 @@ Page({
     templates: [] as TemplateRow[],
     typeOptions: [untyped] as TypeOption[],
     editor: null as Editor | null, days: weekdays.map((label, index) => ({ label, index, active: false })),
+    weeklyHours: [] as WeeklyHours[], editingWeekday: -1,
     windows: [] as { key: number; start: string; end: string }[],
     exceptions: [] as (CoachHours['exceptions'][number] & { label: string })[],
     blocking: false, blockStart: '', blockEnd: '', blockReason: ''
+  },
+  initialCoachId: '',
+  onLoad(options: Record<string, string | undefined>) {
+    if (options.coachId) {
+      this.initialCoachId = options.coachId;
+      this.setData({ mode: 'hours' });
+    }
   },
   onShow() {
     const authorized = allowPage('ADMIN');
@@ -43,7 +53,13 @@ Page({
         staffContext(), staffApi<CourseType[]>('/course-types')
       ]);
       const options = types.map(type => ({ ...type, label: type.name + ' · 1 对 ' + type.maxStudents }));
-      this.setData({ today, lastDate, coaches, date: this.data.date || today, typeOptions: [untyped, ...options] });
+      const coachIndex = this.initialCoachId ? coaches.findIndex(coach => coach.id === this.initialCoachId) : this.data.coachIndex;
+      if (coachIndex < 0) {
+        this.setData({ loading: false, loadError: '该教练已停用或不存在，请返回教练管理重新选择。' });
+        return;
+      }
+      this.initialCoachId = '';
+      this.setData({ today, lastDate, coaches, coachIndex, date: this.data.date || today, typeOptions: [untyped, ...options] });
       await this.refresh();
     } catch (error) {
       this.setData({ loading: false, loadError: errorMessage(error) });
@@ -72,12 +88,19 @@ Page({
       } else {
         const coach = coaches[coachIndex];
         if (!coach) return;
-        const hours = await staffApi<CoachHours>('/coaches/' + coach.id + '/hours?date=' + date);
+        const monday = mondayOfWeek(date);
+        const week = await Promise.all(Array.from({ length: 7 }, async (_, index) => {
+          const day = addDays(monday, index);
+          return staffApi<CoachHours>('/coaches/' + coach.id + '/hours?date=' + day);
+        }));
         if (current !== request) return;
+        const hours = week[(dayOfWeek(date) + 6) % 7];
         this.setData({
-          windows: hours.windows.map((window, key) => ({
-            key, start: minuteString(window.start), end: minuteString(window.end)
-          })),
+          weeklyHours: week.map(({ windows }, index) => {
+            const weekday = (index + 1) % 7;
+            return { weekday, label: weekdays[weekday], windows,
+              summary: windows.map(w => minuteString(w.start) + '–' + minuteString(w.end)).join('、') };
+          }),
           exceptions: hours.exceptions.map(window => ({ ...window, label: minuteString(window.start) + '–' + minuteString(window.end) }))
         });
       }
@@ -89,15 +112,15 @@ Page({
   },
   changeMode(event: WechatMiniprogram.TouchEvent) {
     if (this.data.busy) return;
-    this.setData({ mode: String(event.currentTarget.dataset.mode), saveError: '', blocking: false });
+    this.setData({ mode: String(event.currentTarget.dataset.mode), saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
   changeDate(event: WechatMiniprogram.PickerChange) {
-    this.setData({ date: String(event.detail.value), saveError: '', blocking: false });
+    this.setData({ date: String(event.detail.value), saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
   changeHoursCoach(event: WechatMiniprogram.PickerChange) {
-    this.setData({ coachIndex: Number(event.detail.value), saveError: '', blocking: false });
+    this.setData({ coachIndex: Number(event.detail.value), saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
   newClass() {
@@ -237,6 +260,16 @@ Page({
       this.setData({ busy: false });
     }
   },
+  editWeekday(event: WechatMiniprogram.TouchEvent) {
+    if (this.data.busy || this.data.editingWeekday >= 0) return;
+    const day = this.data.weeklyHours.find(row => row.weekday === Number(event.currentTarget.dataset.weekday));
+    if (!day) return;
+    this.setData({ editingWeekday: day.weekday, saveError: '',
+      windows: day.windows.map((w, key) => ({ key, start: minuteString(w.start), end: minuteString(w.end) })) });
+  },
+  closeHours() {
+    if (!this.data.busy) this.setData({ editingWeekday: -1, windows: [], saveError: '' });
+  },
   changeWindow(event: WechatMiniprogram.Input) {
     const { index, side } = event.currentTarget.dataset;
     this.setData({ ['windows[' + index + '].' + side]: event.detail.value, saveError: '' });
@@ -253,14 +286,15 @@ Page({
     this.setData({ windows: this.data.windows.filter((_, position) => position !== index) });
   },
   async saveHours() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.editingWeekday < 0) return;
     const coach = this.data.coaches[this.data.coachIndex];
     this.setData({ busy: true, saveError: '' });
     try {
       const windows = this.data.windows.map(window => ({
         start: parseMinutes(window.start.trim()), end: window.end.trim() === '24:00' ? 1440 : parseMinutes(window.end.trim())
       }));
-      await staffApi('/coaches/' + coach.id + '/hours', 'PUT', { weekday: dayOfWeek(this.data.date), windows });
+      await staffApi('/coaches/' + coach.id + '/hours', 'PUT', { weekday: this.data.editingWeekday, windows });
+      this.setData({ editingWeekday: -1, windows: [] });
       await this.refresh();
       wx.showToast({ title: '开放时段已保存', icon: 'none' });
     } catch (error) {
