@@ -52,7 +52,7 @@
     <view wx:if="{{!bookings.length}}" class="message">{{pendingOnly ? '没有待确认的申请。' : '这天还没有预约。'}}</view>
     <view wx:for="{{bookings}}" wx:key="id" class="list-row">
       <view class="row-line"><text class="row-name">{{item.childName}} · {{item.title}}</text><text class="muted">{{item.statusLabel}}</text></view>
-      <view>{{item.hours}} · {{item.coachName}}教练</view>
+      <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}} · {{item.coachName}}教练</view>
       <view class="muted">{{item.venue}} · {{item.points}} 积分</view>
       <view class="muted">{{item.staffCreated ? '管理员代约' : '家长预约'}}{{item.staffCancelled ? ' · 管理员取消' : ''}}</view>
       <view wx:if="{{item.status === 'PENDING'}}" class="section-actions">

@@ -16,7 +16,7 @@ if (args.length && (args.length !== 1 || args[0] !== '--production')) {
 execFileSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', project], { stdio: 'inherit' });
 const files = readdirSync(source, { recursive: true });
 const scripts = files.filter(name => name.endsWith('.ts')).map(name => name.replace(/\.ts$/, '.js'));
-const assets = files.filter(name => /\.(json|wxml|wxss)$/.test(name));
+const assets = files.filter(name => /\.(json|wxml|wxss|svg)$/.test(name));
 for (const name of assets) {
   const destination = join(output, name);
   mkdirSync(dirname(destination), { recursive: true });

@@ -1,42 +1,28 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">管理端</text>
-  <view class="list-row">
-    <view class="row-name">今日训练</view>
-    <view wx:if="{{overview}}" class="muted">{{overview.todayClasses}} 个团课班次 · {{overview.todayAppointments}} 笔已确认预约</view>
-    <view wx:else class="muted">{{error ? '暂无统计数据' : '正在加载统计…'}}</view>
+  <view class="overview">
+    <view class="overview-today">
+      <text class="overview-label">今日训练</text>
+      <view wx:if="{{overview}}" class="today-counts"><view>{{overview.todayClasses}} 个团课班次</view><view>{{overview.todayAppointments}} 笔已确认预约</view></view>
+      <text wx:else class="today-counts">{{error ? '暂无统计数据' : '正在加载统计…'}}</text>
+    </view>
+    <navigator class="pending" url="/pages/admin-bookings/index?pending=1" hover-class="press">
+      <view class="overview-label">待确认预约<text class="arrow" aria-hidden="true"></text></view>
+      <text class="pending-number">{{overview ? overview.pending : '—'}}</text>
+    </navigator>
   </view>
-  <navigator class="action-link" url="/pages/admin-bookings/index?pending=1" hover-class="press">
-    <view class="row-line"><text class="row-name">待确认预约</text><text class="accent">{{overview ? overview.pending + ' 笔' : '—'}}</text></view>
-    <view class="muted">查看并处理家长的预约申请</view>
-  </navigator>
   <view wx:if="{{error}}" class="message">
     <view>统计更新失败。{{error}}</view>
     <button class="button quiet" bindtap="refresh" hover-class="press">重试</button>
   </view>
-  <navigator class="action-link" url="/pages/admin-schedule/index" hover-class="press">
-    <view class="row-name">排课管理</view>
-    <view class="muted">安排团课、周期模板和私教开放时间</view>
-  </navigator>
-  <navigator class="action-link" url="/pages/admin-coaches/index" hover-class="press">
-    <view class="row-name">教练管理</view>
-    <view class="muted">新增、编辑、启用或停用教练</view>
-  </navigator>
-  <navigator class="action-link" url="/pages/admin-course-types/index" hover-class="press">
-    <view class="row-name">课程类型</view>
-    <view class="muted">设置人数上限和取消退还比例</view>
-  </navigator>
-  <navigator class="action-link" url="/pages/admin-bookings/index" hover-class="press">
-    <view class="row-name">预约管理</view>
-    <view class="muted">按日期查看、代约和取消</view>
-  </navigator>
-  <navigator class="action-link" url="/pages/admin-parents/index" hover-class="press">
-    <view class="row-name">家长资料</view>
-    <view class="muted">按孩子姓名、联系人或电话搜索账户</view>
-  </navigator>
-  <navigator class="action-link" url="/pages/admin-points/index" hover-class="press">
-    <view class="row-name">积分管理</view>
-    <view class="muted">线下入账、人工调整和冲正</view>
-  </navigator>
-  <button wx:if="{{switchable}}" class="button quiet row-action" bindtap="switchRole" hover-class="press">切换身份</button>
-  <button class="button quiet row-action" bindtap="signOut" hover-class="press">退出管理员登录</button>
+  <view class="shortcuts">
+    <navigator wx:for="{{shortcuts}}" wx:key="page" class="shortcut" url="/pages/{{item.page}}/index" hover-class="press">
+      <image class="shortcut-icon" src="/pages/admin/icons/{{item.icon}}.svg" mode="aspectFit" aria-hidden="true"/>
+      <text class="shortcut-label">{{item.label}}</text>
+    </navigator>
+  </view>
+  <view class="section-actions">
+    <button wx:if="{{switchable}}" class="button quiet" bindtap="switchRole" hover-class="press">切换身份</button>
+    <button class="button quiet" bindtap="signOut" hover-class="press">退出管理员登录</button>
+  </view>
 </view>

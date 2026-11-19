@@ -13,7 +13,7 @@
       <view class="row-line">
         <text class="row-name">{{item.title}}</text><text class="accent">{{item.label}}</text>
       </view>
-      <view>{{item.hours}}</view>
+      <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}}</view>
       <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
     </view>
 
@@ -21,7 +21,7 @@
     <view wx:if="{{!history.length}}" class="muted">暂无历史预约。</view>
     <view wx:for="{{history}}" wx:key="id" class="list-row">
       <view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.label}}</text></view>
-      <view>{{item.hours}}</view>
+      <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}}</view>
       <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
       <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="muted">已退回 {{item.refundPoints}} 积分</view>
     </view>

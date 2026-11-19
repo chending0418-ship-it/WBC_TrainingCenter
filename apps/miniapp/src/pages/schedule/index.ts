@@ -79,6 +79,14 @@ Page({
     if (authorized) void this.refresh();
   },
 
+  async onPullDownRefresh() {
+    try {
+      if (this.data.authorized && !this.data.booking) await this.refresh();
+    } finally {
+      wx.stopPullDownRefresh();
+    }
+  },
+
   async refresh() {
     const request = ++scheduleRequest;
     this.setData({ loading: true, error: '' });
