@@ -4,10 +4,10 @@ import { api, errorMessage, RequestError } from '../../lib/client';
 import { addDays, availableRanges, mondayOfWeek } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
 
-type VisibleCourse = Course & { hours: string; action: string; unavailable: boolean };
+type VisibleCourse = Course & { hours: string; coachLabel: string; action: string; unavailable: boolean };
 type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof availableRanges> };
 
-let courses: Course[] = [];
+const coursesByDate = new Map<string, Course[]>();
 let scheduleRequest = 0;
 let slotsRequest = 0;
 
@@ -19,6 +19,7 @@ function dateChoices(first: string, selected: string, last: string, calendarWeek
   return {
     dates: dates.map(date => ({
       date,
+      hasGroup: coursesByDate.has(date),
       day: date.slice(8, 10),
       weekday: ['日', '一', '二', '三', '四', '五', '六'][new Date(date + 'T00:00:00Z').getUTCDay()]
     })),
@@ -87,7 +88,13 @@ Page({
     try {
       const schedule = await api<Schedule>('/api/schedule');
       if (request !== scheduleRequest) return;
-      courses = schedule.courses;
+      coursesByDate.clear();
+      for (const course of schedule.courses) {
+        const day = localTimestamp(course.startsAt).slice(0, 10);
+        const daily = coursesByDate.get(day);
+        if (daily) daily.push(course);
+        else coursesByDate.set(day, [course]);
+      }
       const date = this.data.date >= schedule.today && this.data.date <= schedule.lastDate ? this.data.date : schedule.today;
       const coachId = this.data.coaches[this.data.coachIndex]?.id;
       const coachIndex = Math.max(0, schedule.coaches.findIndex(coach => coach.id === coachId));
@@ -102,12 +109,13 @@ Page({
 
   selectDate(date: string) {
     const now = new Date().toISOString();
-    const visible = courses.filter(course => localTimestamp(course.startsAt).slice(0, 10) === date).map(course => {
+    const visible = (coursesByDate.get(date) || []).map(course => {
       let action = '预约';
       if (course.bookedByMe) action = '已提交';
       else if (course.startsAt <= now) action = '已开课';
       else if (course.bookedCount >= course.capacity) action = '已满员';
-      return { ...course, hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
+      const coachLabel = course.coachName.endsWith('教练') ? course.coachName : course.coachName + '教练';
+      return { ...course, coachLabel, hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
     });
     this.setData({ date, courses: visible, ...dateChoices(this.data.today, date, this.data.lastDate, this.data.mode === 'PRIVATE') });
     if (this.data.mode === 'PRIVATE') void this.refreshSlots();

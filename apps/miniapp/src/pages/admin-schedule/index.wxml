@@ -97,23 +97,23 @@
         <view wx:for="{{weeklyHours}}" wx:key="weekday" wx:for-item="day" class="weekday-row">
           <view class="weekday-summary">
             <text class="row-name">{{day.label}}</text>
-            <text class="{{day.windows.length ? 'weekday-times' : 'card-note'}}">{{day.summary || '未开放'}}</text>
+            <text wx:if="{{editingWeekday !== day.weekday}}" class="{{day.windows.length ? 'weekday-times' : 'card-note'}}">{{day.summary || '未开放'}}</text>
             <button wx:if="{{editingWeekday < 0 && !blocking}}" class="button quiet edit-day" data-weekday="{{day.weekday}}"
               bindtap="editWeekday" aria-label="编辑{{day.label}}开放时间" disabled="{{busy}}" hover-class="press">编辑</button>
           </view>
           <block wx:if="{{editingWeekday === day.weekday}}">
             <view wx:for="{{windows}}" wx:key="key" class="window-editor">
-              <view class="card-fields">
-                <label><text class="muted">开始</text><input class="field" value="{{item.start}}" data-index="{{index}}" data-side="start" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" /></label>
-                <label><text class="muted">结束</text><input class="field" value="{{item.end}}" data-index="{{index}}" data-side="end" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" /></label>
-              </view>
-              <button class="button quiet row-action" data-index="{{index}}" bindtap="removeWindow" disabled="{{busy}}" hover-class="press">移除时段</button>
+              <input class="field" value="{{item.start}}" data-index="{{index}}" data-side="start" aria-label="开始时间" placeholder="开始时间" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" />
+              <text class="card-note">至</text>
+              <input class="field" value="{{item.end}}" data-index="{{index}}" data-side="end" aria-label="结束时间" placeholder="结束时间" maxlength="5" bindinput="changeWindow" disabled="{{busy}}" />
+              <button class="button quiet hours-link" data-index="{{index}}" bindtap="removeWindow" aria-label="移除第{{index + 1}}个时段" disabled="{{busy}}" hover-class="press">移除</button>
             </view>
-            <button class="button quiet row-action" bindtap="addWindow" disabled="{{busy || windows.length >= 12}}" hover-class="press">添加时段</button>
+            <view wx:if="{{!windows.length}}" class="card-note">当天未设开放时段</view>
             <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-            <view class="section-actions">
-              <button class="button quiet" bindtap="closeHours" disabled="{{busy}}" hover-class="press">取消</button>
-              <button class="button" bindtap="saveHours" disabled="{{busy}}" hover-class="press">保存{{day.label}}</button>
+            <view class="hours-actions">
+              <button class="button quiet hours-link add-window" bindtap="addWindow" disabled="{{busy || windows.length >= 12}}" hover-class="press">＋ 添加时段</button>
+              <button class="button quiet hours-link" bindtap="closeHours" disabled="{{busy}}" hover-class="press">取消</button>
+              <button class="button save-hours" bindtap="saveHours" aria-label="保存{{day.label}}开放时间" disabled="{{busy}}" hover-class="press">保存</button>
             </view>
           </block>
         </view>

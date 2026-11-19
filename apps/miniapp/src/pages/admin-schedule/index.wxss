@@ -1,21 +1,23 @@
-.weekly-hours {
-  padding-top: 0;
-  padding-bottom: 0;
+.lesson-card.weekly-hours {
+  padding: 0 22rpx;
 }
 
 .weekday-row {
-  padding: 14rpx 0;
+  padding: 4rpx 0;
 }
 
-.weekday-row + .weekday-row, .window-editor + .window-editor {
+.weekday-row + .weekday-row {
   border-top: 1rpx solid #e6dfdc;
 }
 
-.weekday-summary {
+.weekday-summary, .hours-actions {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  min-height: 76rpx;
+  gap: 14rpx;
+}
+
+.weekday-summary {
+  min-height: 64rpx;
 }
 
 .weekday-summary .row-name {
@@ -28,15 +30,51 @@
   font-size: 28rpx;
 }
 
-.button.edit-day {
+.weekly-hours .button {
   flex-shrink: 0;
   width: auto;
-  min-height: 76rpx;
-  margin-left: auto;
-  padding: 12rpx 16rpx;
+  min-height: 60rpx;
+  margin: 0;
+  padding: 8rpx 14rpx;
   font-size: 26rpx;
 }
 
+.weekly-hours .edit-day, .weekly-hours .hours-link {
+  border: 0;
+  background: transparent;
+}
+
+.weekly-hours .edit-day {
+  margin-left: auto;
+}
+
 .window-editor {
-  padding: 16rpx 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+
+.window-editor .field {
+  width: 100%;
+  min-height: 64rpx;
+  height: 64rpx;
+  padding: 0 14rpx;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.hours-actions {
+  padding: 8rpx 0;
+}
+
+.hours-actions .add-window {
+  margin-right: auto;
+  padding-left: 0;
+}
+
+.hours-actions .save-hours {
+  padding-right: 26rpx;
+  padding-left: 26rpx;
 }
