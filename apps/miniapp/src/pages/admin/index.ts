@@ -2,21 +2,26 @@ import { errorMessage } from '../../lib/request';
 import { allowPage, canSwitchRole, signOut, switchRole } from '../../lib/session';
 import { staffApi } from '../../lib/staff';
 
+type Overview = { pending: number; todayClasses: number; todayAppointments: number };
+
 Page({
-  data: { authorized: false, switchable: false, loading: true, error: '', pending: 0, todayClasses: 0, todayAppointments: 0 },
+  data: { authorized: false, switchable: false, error: '', overview: null as Overview | null },
+  overviewRequest: 0,
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized, switchable: authorized && canSwitchRole() });
     if (authorized) void this.refresh();
   },
+  onUnload() {
+    this.overviewRequest++;
+  },
   async refresh() {
-    this.setData({ loading: true, error: '' });
+    const request = ++this.overviewRequest;
     try {
-      this.setData(await staffApi<{ pending: number; todayClasses: number; todayAppointments: number }>('/overview'));
+      const overview = await staffApi<Overview>('/overview');
+      if (request === this.overviewRequest) this.setData({ overview, error: '' });
     } catch (error) {
-      this.setData({ error: errorMessage(error) });
-    } finally {
-      this.setData({ loading: false });
+      if (request === this.overviewRequest) this.setData({ error: errorMessage(error) });
     }
   },
   switchRole,
