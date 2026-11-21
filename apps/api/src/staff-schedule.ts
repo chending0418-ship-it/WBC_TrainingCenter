@@ -38,7 +38,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     `).get(coachId, endsAt, startsAt, exclude, coachId, endsAt, startsAt, coachId, endsAt, startsAt);
   }
 
-  function list(date: string): ManagedClass[] {
+  function list(firstDate: string, days = 1): ManagedClass[] {
     const rows = db.prepare(`
       SELECT s.id, s.coach_id AS coachId, c.name AS coachName, s.title, s.venue,
         s.starts_at AS startsAt, s.ends_at AS endsAt, s.points, s.capacity, s.status,
@@ -49,13 +49,14 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       LEFT JOIN course_types t ON t.id = s.course_type_id
       WHERE s.starts_at >= ? AND s.starts_at < ?
       ORDER BY s.starts_at, s.title
-    `).all(dateAt(date), dateAt(addDays(date, 1))) as unknown as StoredOccurrence[];
+    `).all(dateAt(firstDate), dateAt(addDays(firstDate, days))) as unknown as StoredOccurrence[];
     const attendees = db.prepare(`
       SELECT b.user_id AS userId, c.name AS childName FROM bookings b
       JOIN children c ON c.guardian_id = b.user_id WHERE b.class_id = ? AND b.status = 'CONFIRMED'
       ORDER BY b.created_at
     `);
     return rows.map(row => {
+      const date = venueDate(row.startsAt);
       const startMinute = minuteOfDay(row.startsAt, date);
       return { ...row, date, startMinute, duration: minuteOfDay(row.endsAt, date) - startMinute, bookable: !!row.bookable,
         attendees: attendees.all(row.id) as ManagedClass['attendees'] };

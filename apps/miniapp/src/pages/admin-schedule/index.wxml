@@ -1,5 +1,9 @@
-<view wx:if="{{authorized}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.template ? '编辑周期模板' : (editor.id ? '编辑班次' : '新增团课')) : '排课管理'}}</text>
+<import src="../../calendar/week.wxml" />
+<view wx:if="{{authorized}}" class="page-shell calendar-page">
+  <view class="calendar-heading">
+    <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.template ? '编辑周期模板' : (editor.id ? '编辑班次' : '新增团课')) : '排课管理'}}</text>
+    <button wx:if="{{!editor && mode === 'classes' && !loading && !loadError}}" class="new-class" bindtap="newClass" disabled="{{busy || !coaches.length}}" hover-class="press">＋ 新增团课</button>
+  </view>
   <form wx:if="{{editor}}" bindsubmit="saveClass">
     <view class="lesson-card">
       <label class="form-field"><text>课程名称</text><input class="field" value="{{editor.title}}" data-field="title" bindinput="changeClassField" maxlength="50" placeholder="输入课程名称" disabled="{{busy}}" /></label>
@@ -42,35 +46,39 @@
   </form>
 
   <block wx:else>
-    <view class="section-actions">
-      <button class="button {{mode === 'classes' ? '' : 'quiet'}}" data-mode="classes" bindtap="changeMode" aria-pressed="{{mode === 'classes'}}" hover-class="press">团课</button>
-      <button class="button {{mode === 'templates' ? '' : 'quiet'}}" data-mode="templates" bindtap="changeMode" aria-pressed="{{mode === 'templates'}}" hover-class="press">周期模板</button>
-      <button class="button {{mode === 'hours' ? '' : 'quiet'}}" data-mode="hours" bindtap="changeMode" aria-pressed="{{mode === 'hours'}}" hover-class="press">私教时段</button>
+    <view class="calendar-tabs">
+      <button class="calendar-tab {{mode === 'classes' ? 'active' : ''}}" data-mode="classes" bindtap="changeMode" aria-pressed="{{mode === 'classes'}}" hover-class="press">团课</button>
+      <button class="calendar-tab {{mode === 'templates' ? 'active' : ''}}" data-mode="templates" bindtap="changeMode" aria-pressed="{{mode === 'templates'}}" hover-class="press">周期模板</button>
+      <button class="calendar-tab {{mode === 'hours' ? 'active' : ''}}" data-mode="hours" bindtap="changeMode" aria-pressed="{{mode === 'hours'}}" hover-class="press">私教时段</button>
     </view>
-    <picker wx:if="{{date && mode === 'classes'}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">排课日期</text><text class="picker-value">{{date}} · {{dayLabel}}</text></view>
-    </picker>
     <view wx:if="{{loading}}" class="message">正在加载排课…</view>
     <view wx:elif="{{loadError}}" class="message">
       <view>{{loadError}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
     </view>
     <block wx:elif="{{mode === 'classes'}}">
-      <button class="button row-action" bindtap="newClass" disabled="{{busy || !coaches.length}}" hover-class="press">新增团课</button>
+      <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, lastDate, date, canPick: true, showDays: true, busy}}" />
+      <view class="agenda-heading"><text class="agenda-title" role="heading" aria-level="2">班次安排</text><text class="agenda-count">{{groups.length}} 天有课 · 共 {{total}} 节</text></view>
       <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-      <view wx:if="{{!classes.length}}" class="message">这天还没有团课。</view>
-      <view wx:for="{{classes}}" wx:key="id" class="lesson-card">
-        <view class="card-head"><text class="card-title">{{item.title}}</text><text class="card-state">{{item.status === 'CLOSED' ? '已停开' : '已发布'}}</text></view>
-        <view class="card-time">{{item.timeLabel}}</view>
-        <view class="card-note">{{item.coachName}}教练 · {{item.venue}}</view>
-        <view wx:if="{{item.courseTypeName}}" class="card-note">{{item.courseTypeName}}</view>
-        <view class="card-footer card-head">
-          <view><text class="accent">剩余 {{item.capacity - item.bookedCount}} 位</text><view class="card-note">已占 {{item.bookedCount}}/{{item.capacity}}</view></view>
-          <text class="row-name">{{item.points}} 积分</text>
-        </view>
-        <view wx:if="{{item.names}}" class="details">已预约 {{item.names}}</view>
-        <view wx:if="{{item.editable}}" class="section-actions item-actions">
-          <button class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>
-          <button class="button quiet" data-id="{{item.id}}" bindtap="toggleClass" disabled="{{busy}}" hover-class="press">{{item.status === 'CLOSED' ? '恢复班次' : '停开班次'}}</button>
+      <view wx:if="{{!total}}" class="message">本周暂无团课，可在右上角新增。</view>
+      <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" id="agenda-{{day.date}}" class="agenda-day">
+        <view class="agenda-stamp {{day.date === today ? 'stamp-today' : ''}}"><text class="stamp-number">{{day.day}}</text><text class="stamp-weekday">{{day.weekday}}</text></view>
+        <view>
+          <view wx:for="{{day.lessons}}" wx:key="id" class="agenda-card {{item.status === 'CLOSED' ? 'agenda-closed' : ''}}">
+            <view class="agenda-line"><text class="agenda-time">{{item.timeLabel}}</text><text class="agenda-state">{{item.status === 'CLOSED' ? '已停开' : '已发布'}}</text></view>
+            <text class="agenda-name">{{item.title}}</text>
+            <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
+            <view class="agenda-bottom">
+              <text class="agenda-facts">已占 {{item.bookedCount}}/{{item.capacity}} 位 · {{item.points}} 积分</text>
+              <button class="manage-toggle" data-id="{{item.id}}" bindtap="toggleDetails" aria-expanded="{{expandedId === item.id}}" disabled="{{busy}}" hover-class="press">{{expandedId === item.id ? '收起' : '详情'}}</button>
+            </view>
+            <view wx:if="{{expandedId === item.id}}" class="agenda-details">
+              <view class="agenda-note">{{item.names ? '已预约：' + item.names : '暂无预约'}} · 余 {{item.capacity - item.bookedCount}} 位</view>
+              <view wx:if="{{item.editable}}" class="section-actions item-actions">
+                <button class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>
+                <button class="button quiet" data-id="{{item.id}}" bindtap="toggleClass" disabled="{{busy}}" hover-class="press">{{item.status === 'CLOSED' ? '恢复班次' : '停开班次'}}</button>
+              </view>
+            </view>
+          </view>
         </view>
       </view>
     </block>

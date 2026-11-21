@@ -274,6 +274,10 @@ test('上海日期滚动后补齐第 30 天，已开课或停开的班次无法�
   assert.equal(schedule.lastDate, '2031-01-30');
   assert.equal(schedule.courses.length, 60);
   assert.ok(schedule.courses.some(course => course.id === '2031-01-30-strength'));
+  const week = (await app.inject({ url: '/api/schedule?view=week', headers: resumed })).json<Schedule>();
+  assert.ok(week.courses.some(course => course.id === date + '-stability'));
+  assert.ok(!week.courses.some(course => course.id === group.classSessionId));
+  assert.equal(week.lastDate, schedule.lastDate);
 });
 
 test('待确认的申请到开课时释放预留积分，之后不能确认或扣分', async context => {
