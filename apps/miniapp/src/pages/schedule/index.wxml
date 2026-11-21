@@ -1,5 +1,6 @@
+<import src="../../calendar/week.wxml" />
 <page-meta page-style="{{confirmation ? 'overflow: hidden' : ''}}" />
-<view wx:if="{{authorized}}" class="page-shell parent-tab-page">
+<view wx:if="{{authorized}}" class="page-shell parent-tab-page calendar-page">
   <text class="page-title" role="heading" aria-level="1">课程表</text>
 
   <view wx:if="{{loading}}" class="message">正在加载排课…</view>
@@ -9,48 +10,34 @@
   </view>
 
   <block wx:else>
-    <view class="modes">
-      <button class="mode-tab {{mode === 'GROUP' ? 'active' : ''}}" data-mode="GROUP"
+    <view class="calendar-tabs">
+      <button class="calendar-tab {{mode === 'GROUP' ? 'active' : ''}}" data-mode="GROUP"
         bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'GROUP'}}">团课</button>
-      <button class="mode-tab {{mode === 'PRIVATE' ? 'active' : ''}}" data-mode="PRIVATE"
+      <button class="calendar-tab {{mode === 'PRIVATE' ? 'active' : ''}}" data-mode="PRIVATE"
         bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'PRIVATE'}}">私教</button>
     </view>
 
-    <view class="week">
-      <text class="week-label">{{weekLabel}}</text>
-      <button class="week-step previous" data-step="-1" disabled="{{!hasPrevious || booking}}"
-        bindtap="changeWeek" hover-class="press" aria-label="上一周"><view class="chevron"></view></button>
-      <button class="week-step" data-step="1" disabled="{{!hasNext || booking}}"
-        bindtap="changeWeek" hover-class="press" aria-label="下一周"><view class="chevron"></view></button>
-    </view>
-    <view wx:if="{{mode === 'GROUP'}}" class="dates">
-      <button wx:for="{{dates}}" wx:key="date" class="button day {{date === item.date ? 'selected' : ''}}"
-        data-date="{{item.date}}" bindtap="changeDate" hover-class="press"
-        aria-label="{{item.date}} 周{{item.weekday}}{{item.hasGroup ? '，有团课' : ''}}" aria-pressed="{{date === item.date}}">
-        <text class="weekday">{{item.date === today ? '今天' : '周' + item.weekday}}</text>
-        <text class="day-number">{{item.day}}</text>
-        <view wx:if="{{item.hasGroup}}" class="course-dot" aria-hidden="true"></view>
-      </button>
-    </view>
+    <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, showDays: mode === 'GROUP', busy: booking}}" />
 
     <block wx:if="{{mode === 'GROUP'}}">
-      <view wx:if="{{!courses.length}}" class="message">这天没有团课，可以选择其他日期。</view>
-      <view wx:for="{{courses}}" wx:key="id" class="lesson-card group-course">
-        <view class="course-heading">
-          <text class="card-title">{{item.title}}</text>
-          <text class="card-time">{{item.hours}}</text>
+      <view class="agenda-heading">
+        <text class="agenda-title" role="heading" aria-level="2">团课安排</text>
+        <text class="agenda-count">{{groups.length}} 天有课 · 共 {{total}} 节</text>
+      </view>
+      <view wx:if="{{!total}}" class="message">本周暂无团课，可切换周次查看。</view>
+      <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" id="agenda-{{day.date}}" class="agenda-day">
+        <view class="agenda-stamp {{day.date === today ? 'stamp-today' : ''}}">
+          <text class="stamp-number">{{day.day}}</text><text class="stamp-weekday">{{day.weekday}}</text>
         </view>
-        <view class="card-note">{{item.coachLabel}} · {{item.venue}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
-        <view class="course-action">
-          <view class="course-facts">
-            <text class="course-points">{{item.points}} 积分</text>
-            <text class="accent">剩余 {{item.capacity - item.bookedCount}} 位</text>
-            <text>已占 {{item.bookedCount}}/{{item.capacity}}</text>
-          </view>
-          <view class="booking-control">
-            <text wx:if="{{item.unavailable}}" class="course-status">{{item.action}}</text>
-            <button wx:else class="button book-button" data-id="{{item.id}}" bindtap="bookGroup" hover-class="press"
-              disabled="{{booking}}" aria-label="{{item.title}} 预约">预约</button>
+        <view>
+          <view wx:for="{{day.lessons}}" wx:key="id" class="agenda-card">
+            <view class="agenda-line"><text class="agenda-time">{{item.hours}}</text><text wx:if="{{item.unavailable}}" class="agenda-state">{{item.action}}</text></view>
+            <text class="agenda-name">{{item.title}}</text>
+            <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
+            <view class="agenda-bottom">
+              <text class="agenda-facts">{{item.points}} 积分 · 余 {{item.capacity - item.bookedCount}}/{{item.capacity}} 位</text>
+              <button wx:if="{{!item.unavailable}}" class="reserve" data-id="{{item.id}}" bindtap="bookGroup" disabled="{{booking}}" hover-class="press" aria-label="预约{{item.title}}">预约</button>
+            </view>
           </view>
         </view>
       </view>

@@ -2,8 +2,10 @@ import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
 import { showParentTab } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
-import { addDays, availableRanges, mondayOfWeek } from '../../lib/private-availability';
+import { availableRanges } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
+
+import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
 type VisibleCourse = Course & { hours: string; coachLabel: string; action: string; unavailable: boolean };
 type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof availableRanges> };
@@ -11,24 +13,6 @@ type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof avail
 const coursesByDate = new Map<string, Course[]>();
 let scheduleRequest = 0;
 let slotsRequest = 0;
-
-function dateChoices(first: string, selected: string, last: string, calendarWeek: boolean) {
-  const dayIndex = Math.round((Date.parse(selected) - Date.parse(first)) / 86_400_000);
-  const week = Math.floor(dayIndex / 7);
-  const start = calendarWeek ? mondayOfWeek(selected) : addDays(first, week * 7);
-  const dates = Array.from({ length: 7 }, (_, index) => addDays(start, index)).filter(date => date >= first && date <= last);
-  return {
-    dates: dates.map(date => ({
-      date,
-      hasGroup: coursesByDate.has(date),
-      day: date.slice(8, 10),
-      weekday: ['日', '一', '二', '三', '四', '五', '六'][new Date(date + 'T00:00:00Z').getUTCDay()]
-    })),
-    weekLabel: dateLabel(dates[0]) + ' – ' + dateLabel(dates[dates.length - 1]),
-    hasPrevious: start > first,
-    hasNext: addDays(start, 7) <= last
-  };
-}
 
 type Confirmation = {
   selection: BookingSelection; revision: string; title: string; when: string; coach: string;
@@ -42,13 +26,14 @@ Page({
     today: '',
     lastDate: '',
     date: '',
-    dates: [] as ReturnType<typeof dateChoices>['dates'],
+    dates: [] as ReturnType<typeof weekAgenda>['dates'],
     weekLabel: '',
     hasPrevious: false,
     hasNext: false,
     loading: true,
     error: '',
-    courses: [] as VisibleCourse[],
+    groups: [] as ReturnType<typeof weekAgenda<VisibleCourse>>['groups'],
+    total: 0,
     coaches: [] as (Coach & ReturnType<typeof coachIdentity>)[],
     coachIndex: 0,
     privateDays: [] as PrivateDay[],
@@ -85,7 +70,7 @@ Page({
     const request = ++scheduleRequest;
     this.setData({ loading: true, error: '' });
     try {
-      const schedule = await api<Schedule>('/api/schedule');
+      const schedule = await api<Schedule>('/api/schedule?view=week');
       if (request !== scheduleRequest) return;
       coursesByDate.clear();
       for (const course of schedule.courses) {
@@ -108,28 +93,28 @@ Page({
 
   selectDate(date: string) {
     const now = new Date().toISOString();
-    const visible = (coursesByDate.get(date) || []).map(course => {
+    const week = weekAgenda(date, this.data.today, this.data.lastDate, coursesByDate);
+    const groups = week.groups.map(day => ({ ...day, lessons: day.lessons.map(course => {
       let action = '预约';
       if (course.bookedByMe) action = '已提交';
       else if (course.startsAt <= now) action = '已开课';
       else if (course.bookedCount >= course.capacity) action = '已满员';
       return { ...course, coachLabel: coachLabel(course.coachName), hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
-    });
-    this.setData({ date, courses: visible, ...dateChoices(this.data.today, date, this.data.lastDate, this.data.mode === 'PRIVATE') });
+    }) }));
+    this.setData({ date, ...week, groups });
     if (this.data.mode === 'PRIVATE') void this.refreshSlots();
   },
 
   changeWeek(event: WechatMiniprogram.TouchEvent) {
-    const step = Number(event.currentTarget.dataset.step);
-    const { dates, today, lastDate } = this.data;
-    if (this.data.booking || !dates.length) return;
-    const next = step > 0 ? addDays(dates[dates.length - 1].date, 1) : addDays(dates[0].date, -7);
-    if (step < 0 && dates[0].date === today) return;
-    if (next <= lastDate) this.selectDate(next < today ? today : next);
+    const { date, today, lastDate, booking } = this.data;
+    if (booking || !date) return;
+    const next = adjacentWeek(date, Number(event.currentTarget.dataset.step), today, lastDate);
+    if (next) this.selectDate(next);
   },
 
-  changeDate(event: WechatMiniprogram.TouchEvent) {
-    if (!this.data.booking) this.selectDate(String(event.currentTarget.dataset.date));
+  jumpDay(event: WechatMiniprogram.TouchEvent) {
+    const day = this.data.dates.find(item => item.date === event.currentTarget.dataset.date);
+    if (day && !day.outside && !this.data.booking) goToAgendaDay(day.date, day.count);
   },
 
   changeMode(event: WechatMiniprogram.TouchEvent) {
@@ -156,9 +141,9 @@ Page({
     this.setData({ privateDays: [], selectedRange: '', selectedStart: '', slotError: '', slotLoading: !!coach });
     if (!coach) return;
     try {
-      const days = await Promise.all(this.data.dates.map(async day => {
+      const days = await Promise.all(this.data.dates.filter(day => day.date >= this.data.today && !day.outside).map(async day => {
         const slots = await api<PrivateSlot[]>('/api/coaches/' + coach.id + '/slots?date=' + day.date);
-        return { date: day.date, label: dateLabel(day.date) + ' · 周' + day.weekday, ranges: availableRanges(slots) };
+        return { date: day.date, label: dateLabel(day.date) + ' · ' + day.weekday, ranges: availableRanges(slots) };
       }));
       if (request === slotsRequest) this.setData({ privateDays: days });
     } catch (error) {
