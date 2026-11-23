@@ -1,4 +1,4 @@
-import { addDays, box, buttons, coach, details, field, filter, href, hours, html, link, monthDay,
+import { addDays, box, buttons, coach, confirmAction, details, field, filter, href, hours, html, link, monthDay,
   select, submit, table, title, weekday, weekdays } from './ui.js';
 
 function assignedCoaches(row) {
@@ -8,8 +8,8 @@ function assignedCoaches(row) {
 export function classTable(classes, editDate) {
   return table(['时段', '团课', '教练', '训练场地', '已占 / 容量'], classes.map(row => {
     const label = coach(row.coachName);
-    const editable = editDate && !row.bookedCount && Date.parse(row.startsAt) > Date.now();
-    const cell = editable ? html`${label} ${link('编辑教练', 'classCoaches', { date: editDate, id: row.id })}` : label;
+    const editable = editDate && Date.parse(row.startsAt) > Date.now();
+    const cell = editable ? html`${label} ${link(row.bookedCount ? '调整容量' : '编辑班次', 'classCoaches', { date: editDate, id: row.id })}` : label;
     return [hours(row), row.title + (row.bookable ? '' : '（已停开）'), cell, row.venue, row.bookedCount + ' / ' + row.capacity];
   }), '当天暂无团课');
 }
@@ -21,13 +21,13 @@ function coachChoices(choices, selected) {
     ${!choices.length ? '暂无可选教练' : ''}</div></fieldset>`;
 }
 
-function coachSelection(form, initial, inactive = []) {
+function coachSelection(form, initial) {
   let ordered = initial;
   const inputs = [...form.querySelectorAll('[name=coachIds]')];
   return () => {
     const checked = inputs.filter(input => input.checked).map(input => input.value);
     ordered = [...ordered.filter(id => checked.includes(id)), ...checked.filter(id => !ordered.includes(id))];
-    const message = !ordered.length ? '请至少选择一位教练。' : ordered.some(id => inactive.includes(id)) ? '请移除已停用教练。' : '';
+    const message = ordered.length ? '' : '请至少选择一位教练。';
     inputs[0]?.setCustomValidity(message);
     return ordered;
   };
@@ -68,7 +68,7 @@ export async function schedule(ctx) {
         <small>${coach(row.coachName)} · ${row.bookedCount} / ${row.capacity} 人${row.bookable ? '' : ' · 已停开'}</small></article>`) : html`<span class="dash">—</span>`}</a></div>`;
   });
   const duration = first.slice(0, 7) === days[6].slice(0, 7) ? Number(days[6].slice(8)) + '日' : monthDay(days[6]);
-  const root = ctx.show(html`${title('排课管理', buttons(link('周期模板', 'classTemplates', { date }, 'wb outline'), link('＋ 新增团课', 'newClass', { date }, 'wb')))}
+  const root = ctx.show(html`${title('排课管理', buttons(link('私教时段', 'privateHours', { date, coach: selectedCoach }, 'wb outline'), link('周期模板', 'classTemplates', { date }, 'wb outline'), link('＋ 新增团课', 'newClass', { date }, 'wb')))}
     <div class="tool-row"><b class="week-range">${monthDay(first)} — ${duration}</b>${buttons(
       link('上一周', 'schedule', { date: addDays(date, -7), coach: selectedCoach }, 'wb outline'),
       link('本周', 'schedule', { date: context.today, coach: selectedCoach }, 'wb outline'),
@@ -83,69 +83,6 @@ function minuteTime(minute) {
   if (!Number.isFinite(minute)) return '—';
   return String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
 }
-export async function newClass(ctx) {
-  const [context, types] = await Promise.all([ctx.api('/context'), ctx.api('/course-types')]);
-  const inputDate = ctx.query.get('date');
-  const date = validDate(inputDate) && inputDate >= context.today && inputDate <= context.lastDate ? inputDate : context.today;
-  const initial = context.coaches.slice(0, 1).map(c => c.id);
-  const formMarkup = html`<form class="form-pad form-grid" id="class-form">
-    ${field('课程名称', 'title', '', { maxLength: 50 })}
-    ${select('课程类型', 'courseTypeId', [['', '无课程类型'], ...types.map(t => [t.id, t.name])], '')}
-    ${coachChoices(context.coaches, initial)}
-    ${field('训练场地', 'venue', '', { maxLength: 50 })}
-    ${field('开课日期', 'date', date, { type: 'date', min: context.today, max: context.lastDate })}
-    ${field('开始时间', 'start', '14:00', { type: 'time' })}
-    ${field('时长（分钟）', 'duration', '60', { type: 'number', min: 1, max: 720 })}
-    ${capacityInput('')}
-    ${field('所需积分', 'points', '', { type: 'number', min: 1, max: 100000 })}
-    ${select('重复', 'repeat', [['once', '仅本次'], ['weekly', '每周同一天']], ctx.query.get('repeat') === 'weekly' ? 'weekly' : 'once')}
-    </form>`;
-  const root = ctx.show(html`${title('新增团课', link('返回周课表', 'schedule', { date }))}
-    <div class="split create">${box('课程与时段', formMarkup)}
-    ${box('发布前核对', html`<div id="summary"></div><div class="decision"><p>发布后，家长可以在公开课表查看。</p>
-    ${buttons(link('取消', 'schedule', { date }, 'wb outline'), submit('发布团课', 'class-form'))}</div>`)}</div>`);
-  if (!root) return;
-  const form = root.querySelector('form');
-  const preview = root.querySelector('#summary');
-  const readCoaches = coachSelection(form, initial);
-  root.querySelector('[type=submit]').disabled = !context.coaches.length;
-  function draft() {
-    const data = Object.fromEntries(new FormData(form));
-    const [hour, minute] = data.start.split(':').map(Number);
-    const startMinute = hour * 60 + minute;
-    const coachIds = readCoaches();
-    return {
-      date: data.date, title: data.title.trim(), venue: data.venue.trim(), coachIds, coachId: coachIds[0],
-      courseTypeId: data.courseTypeId || null, startMinute, duration: Number(data.duration), capacity: Number(data.capacity),
-      points: Number(data.points), weekdays: data.repeat === 'weekly' && data.date ? [weekday(data.date)] : [], startMinutes: [startMinute]
-    };
-  }
-  function update() {
-    const data = draft();
-    const selectedType = types.find(type => type.id === data.courseTypeId);
-    updateCapacity(form, selectedType, data.coachIds.length);
-    form.elements.start.setCustomValidity(data.startMinute + data.duration > 1440 ? '课程须在同一天结束。' : '');
-    preview.innerHTML = details([
-      ['日期', data.date ? monthDay(data.date) + ' · ' + weekdays[weekday(data.date)] : '—'],
-      ['时段', Number.isFinite(data.startMinute) && data.duration ? minuteTime(data.startMinute) + '–' + minuteTime(data.startMinute + data.duration) : '—'],
-      ['教练', data.coachIds.map(id => coach(context.coaches.find(c => c.id === id).name)).join('、') || '—'],
-      ['容量 / 积分', (data.capacity || '—') + ' 人 · ' + (data.points || '—') + ' 积分']
-    ]).value;
-  }
-  form.oninput = form.onchange = update;
-  update();
-  form.onsubmit = event => {
-    event.preventDefault();
-    const plan = draft();
-    ctx.perform(async () => {
-      const result = await ctx.write('/classes', 'POST', plan, true);
-      if (!ctx.active()) return;
-      ctx.notice('已发布 ' + result.count + ' 节团课');
-      ctx.navigate('schedule', { date: plan.date });
-    });
-  };
-}
-
 export async function classTemplates(ctx) {
   const rows = await ctx.api('/class-templates');
   const date = ctx.query.get('date');
@@ -153,64 +90,155 @@ export async function classTemplates(ctx) {
     link('＋ 新增周期团课', 'newClass', { date, repeat: 'weekly' }, 'wb')))}
     ${box('周期团课', table(['团课', '每周开课', '教练', '状态', '操作'], rows.map(row => [
       row.title, row.weekdays.map(day => weekdays[day]).join('、') + ' · ' + row.startMinutes.map(minuteTime).join('、'),
-      coach(row.coachName), row.enabled ? '已启用' : '已暂停', link('编辑教练', 'classCoaches', { date, template: row.id })
+      coach(row.coachName), row.enabled ? '已启用' : '已暂停', link('编辑模板', 'classCoaches', { date, template: row.id })
     ]), '暂无周期模板'))}`);
 }
 
+function rowSettings(row) {
+  return {
+    title: row.title, venue: row.venue, date: row.date, duration: row.duration, capacity: row.capacity, points: row.points,
+    courseTypeId: row.courseTypeId ?? null, coachIds: assignedCoaches(row), coachId: row.coachId,
+    startMinute: row.startMinute, startMinutes: row.startMinutes ?? [row.startMinute], weekdays: row.weekdays ?? [],
+    ...(row.status ? { status: row.status } : { enabled: row.enabled })
+  };
+}
+
+function recurringFields(days, times) {
+  return html`<div data-recurring><fieldset class="coach-field"><legend>每周开课日</legend>
+    <div class="coach-options">${[1, 2, 3, 4, 5, 6, 0].map(day => html`<label><input type="checkbox" name="weekday" value="${day}"
+      ${days.includes(day) ? 'checked' : ''}>${weekdays[day]}</label>`)}</div></fieldset>
+    ${field('同日其他开课时间（选填）', 'extraTimes', times.slice(1).map(minuteTime).join('，'),
+      { required: false, placeholder: '例如 15:30，17:00' })}</div>`;
+}
+
+export async function newClass(ctx) {
+  const [context, types] = await Promise.all([ctx.api('/context'), ctx.api('/course-types')]);
+  return classEditor(ctx, context, types, context.coaches);
+}
+
 export async function classCoaches(ctx) {
-  const date = ctx.query.get('date');
-  const template = ctx.query.get('template');
-  const id = template || ctx.query.get('id');
-  const back = template ? 'classTemplates' : 'schedule';
-  const path = template ? '/class-templates' : '/classes?date=' + encodeURIComponent(date);
-  const [rows, coaches, types] = await Promise.all([ctx.api(path), ctx.api('/coaches'), ctx.api('/course-types')]);
+  const templateId = ctx.query.get('template');
+  const id = templateId || ctx.query.get('id');
+  const path = templateId ? '/class-templates' : '/classes?date=' + encodeURIComponent(ctx.query.get('date'));
+  const [context, types, coaches, rows] = await Promise.all([ctx.api('/context'), ctx.api('/course-types'), ctx.api('/coaches'), ctx.api(path)]);
   const row = rows.find(item => item.id === id);
   if (!row) throw Error('未找到这项排课，请返回排课管理。');
-  const initial = assignedCoaches(row);
-  const choices = coaches.filter(c => c.enabled || initial.includes(c.id));
-  const form = html`<form id="coach-form" class="form-pad">${coachChoices(choices, initial)}${capacityInput(row.capacity)}</form>`;
-  const root = ctx.show(html`${title('编辑教练', link(template ? '返回周期模板' : '返回周课表', back, { date }))}
-    <div class="split create">${box(row.title, form)}
-    ${box(template ? '周期团课' : '本次团课', html`${details([
-      ['训练场地', row.venue], ['开课', template ? row.weekdays.map(day => weekdays[day]).join('、') : row.date],
-      ['时段', template ? row.startMinutes.map(minuteTime).join('、') : hours(row)]
-    ])}<div class="decision">${template ? html`<p>变更应用到未单独调整且尚无预约的后续班次。</p>` : ''}
-      ${buttons(link('取消', back, { date }, 'wb outline'), submit('保存教练', 'coach-form'))}</div>`)}
-    </div>`);
+  return classEditor(ctx, context, types, coaches.filter(c => c.enabled || assignedCoaches(row).includes(c.id)), row, path);
+}
+
+function classEditor(ctx, context, types, choices, row, path) {
+  const selectedDate = ctx.query.get('date');
+  const date = row?.date ?? (validDate(selectedDate) && selectedDate >= context.today && selectedDate <= context.lastDate ? selectedDate : context.today);
+  const existing = row ? rowSettings(row) : null;
+  const template = Boolean(row?.weekdays);
+  const repeating = template || ctx.query.get('repeat') === 'weekly';
+  const booked = Boolean(row?.bookedCount);
+  const initial = existing?.coachIds ?? choices.slice(0, 1).map(c => c.id);
+  const back = template ? 'classTemplates' : 'schedule';
+  const returnDate = selectedDate || context.today;
+  const heading = template ? '编辑周期模板' : booked ? '调整班次容量' : row ? '编辑团课班次' : '新增团课';
+  const action = row ? '保存修改' : '发布团课';
+  const days = existing?.weekdays ?? [weekday(date)];
+  const classFields = booked ? details([['团课', row.title], ['教练', coach(row.coachName)], ['已占名额', row.bookedCount]]) :
+    html`${field('课程名称', 'title', row?.title, { maxLength: 50 })}
+      ${select('课程类型', 'courseTypeId', [['', '无课程类型'], ...types.map(t => [t.id, t.name])], row?.courseTypeId ?? '')}
+      ${coachChoices(choices, initial)}
+      ${field('训练场地', 'venue', row?.venue, { maxLength: 50 })}
+      ${field(template ? '起始日期' : '开课日期', 'date', date, { type: 'date', min: template ? undefined : context.today, max: context.lastDate })}
+      ${field('开始时间', 'start', minuteTime(row?.startMinute ?? 840), { type: 'time' })}
+      ${field('时长（分钟）', 'duration', row?.duration ?? 60, { type: 'number', min: 1, max: 720 })}
+      ${field('所需积分', 'points', row?.points, { type: 'number', min: 1, max: 100000 })}
+      ${!row ? select('重复', 'repeat', [['once', '仅本次'], ['weekly', '每周重复']], repeating ? 'weekly' : 'once') : ''}
+      ${!row || template ? recurringFields(days, existing?.startMinutes ?? []) : ''}
+      ${row ? select('状态', 'status', template ? [['on', '已启用'], ['off', '已停用']] : [['PUBLISHED', '已发布'], ['CLOSED', '已停开']],
+        template ? (row.enabled ? 'on' : 'off') : row.status) : ''}`;
+  const root = ctx.show(html`${title(heading, link(template ? '返回周期模板' : '返回周课表', back, { date: returnDate }))}
+    <div class="split create">${box('课程与时段', html`<form class="form-pad form-grid" id="class-form">${classFields}${capacityInput(row?.capacity ?? '')}</form>`)}
+    ${box(row ? '保存前核对' : '发布前核对', html`<div id="summary"></div><div class="decision">
+      ${template ? html`<p>模板变更应用到尚无预约且未单独调整的后续班次。</p>` : ''}
+      ${buttons(link('取消', back, { date: returnDate }, 'wb outline'), submit(action, 'class-form'))}</div>`)}</div>`);
   if (!root) return;
-  const element = root.querySelector('form');
-  const active = template ? row.enabled : row.status === 'PUBLISHED';
-  const selected = coachSelection(element, initial, active ? choices.filter(c => !c.enabled).map(c => c.id) : []);
-  const courseType = types.find(type => type.id === row.courseTypeId);
-  element.onchange = () => updateCapacity(element, courseType, selected().length);
-  element.onchange();
+  const form = root.querySelector('form');
+  const readCoaches = coachSelection(form, initial);
+  const preview = root.querySelector('#summary');
+  const fields = form.elements;
   root.querySelector('[type=submit]').disabled = !choices.length;
-  element.onsubmit = event => {
+  function draft() {
+    const capacity = Number(fields.capacity.value);
+    if (booked) return { ...existing, capacity };
+    const data = new FormData(form);
+    const weekly = template || data.get('repeat') === 'weekly';
+    const [hour, minute] = fields.start.value.split(':').map(Number);
+    const startMinute = hour * 60 + minute;
+    const extraTimes = weekly ? fields.extraTimes.value.trim().split(/[\s,，、]+/).filter(Boolean) : [];
+    const startMinutes = [startMinute, ...extraTimes.map(value => {
+      if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) return NaN;
+      const [h, m] = value.split(':').map(Number);
+      return h * 60 + m;
+    })];
+    const duration = Number(fields.duration.value);
+    const coachIds = readCoaches();
+    const enabled = !row || (template ? fields.status.value === 'on' : fields.status.value === 'PUBLISHED');
+    const inactive = enabled && choices.some(c => c.enabled === false && coachIds.includes(c.id));
+    if (inactive) form.querySelector('[name=coachIds]').setCustomValidity('请移除或更换已停用的教练。');
+    const group = form.querySelector('[data-recurring]');
+    if (group) {
+      group.hidden = !weekly;
+      fields.extraTimes.disabled = !weekly;
+      fields.extraTimes.setCustomValidity(startMinutes.some(t => !Number.isFinite(t) || t + duration > 1440) || startMinutes.length > 6 ?
+        '每天最多安排 6 个时段，请用 HH:MM 填写并在当天结束。' : '');
+      group.querySelector('[name=weekday]').setCustomValidity(weekly && !data.has('weekday') ? '请选择每周开课日。' : '');
+    }
+    fields.start.setCustomValidity(startMinute + duration > 1440 ? '课程须在同一天结束。' : '');
+    return { title: fields.title.value.trim(), venue: fields.venue.value.trim(), date: fields.date.value, duration, capacity,
+      points: Number(fields.points.value), courseTypeId: fields.courseTypeId.value || null, coachIds, coachId: coachIds[0],
+      startMinute, startMinutes, weekdays: weekly ? data.getAll('weekday').map(Number).sort() : [],
+      ...(row ? (template ? { enabled } : { status: fields.status.value }) : {}) };
+  }
+  let weekdaysChanged = false;
+  function update(event) {
+    if (event?.target.name === 'weekday') weekdaysChanged = true;
+    if (!row && !weekdaysChanged && event?.target.name === 'date' && fields.date.value) {
+      const day = weekday(fields.date.value);
+      for (const box of form.querySelectorAll('[name=weekday]')) box.checked = Number(box.value) === day;
+    }
+    const value = draft();
+    const type = types.find(t => t.id === value.courseTypeId);
+    updateCapacity(form, type, value.coachIds.length);
+    if (booked) fields.capacity.min = row.bookedCount;
+    preview.innerHTML = details([
+      ['日期', value.date ? monthDay(value.date) + ' · ' + weekdays[weekday(value.date)] : '—'],
+      ...(value.weekdays.length ? [['每周', value.weekdays.map(d => weekdays[d]).join('、')]] : []),
+      ['时段', value.startMinutes.map(t => minuteTime(t) + '–' + minuteTime(t + value.duration)).join('、')],
+      ['教练', value.coachIds.map(id => coach(choices.find(c => c.id === id).name)).join('、') || '—'],
+      ['容量 / 积分', (value.capacity || '—') + ' 人 · ' + (value.points || '—') + ' 积分']
+    ]).value;
+  }
+  form.oninput = form.onchange = update;
+  update();
+  form.onsubmit = event => {
     event.preventDefault();
-    const coachIds = selected();
-    const capacity = Number(element.elements.capacity.value);
+    const value = draft();
     ctx.perform(async () => {
-      if (capacity !== row.capacity || JSON.stringify(coachIds) !== JSON.stringify(initial)) {
-        const latest = (await ctx.api(path, true)).find(item => item.id === id);
+      if (!row) {
+        const result = await ctx.write('/classes', 'POST', value, true);
+        if (ctx.active()) { ctx.notice('已发布 ' + result.count + ' 节团课'); ctx.navigate('schedule', { date: value.date }); }
+        return;
+      }
+      if (JSON.stringify(value) !== JSON.stringify(existing)) {
+        if ((template && row.enabled && !value.enabled) || (!template && row.status === 'PUBLISHED' && value.status === 'CLOSED')) {
+          if (!await confirmAction(template ? '停用模板' : '停开班次', template ? '将移除后续尚无预约且未单独调整的班次。' : row.title + ' · ' + hours(row))) return;
+        }
+        const latest = (await ctx.api(path, true)).find(item => item.id === row.id);
         if (!ctx.active()) return;
-        if (!latest || latest.capacity !== row.capacity || latest.courseTypeId !== row.courseTypeId || JSON.stringify(assignedCoaches(latest)) !== JSON.stringify(initial)) {
-          ctx.notice('排课已更新，请核对后重新选择教练。');
+        if (!latest || JSON.stringify(rowSettings(latest)) !== JSON.stringify(existing)) {
+          ctx.notice('排课已被修改，请核对最新内容。');
           ctx.refresh();
           return;
         }
-        const { title, venue, date, startMinute, duration, points, courseTypeId } = latest;
-        const draft = { title, venue, date, startMinute, duration, points, capacity, courseTypeId, coachIds, coachId: coachIds[0] };
-        const encoded = encodeURIComponent(id);
-        if (template) {
-          await ctx.write('/class-templates/' + encoded, 'PUT', { ...draft, weekdays: latest.weekdays,
-            startMinutes: latest.startMinutes, enabled: latest.enabled }, true);
-        } else {
-          await ctx.write('/class-sessions/' + encoded, 'PUT', { ...draft, status: latest.status });
-        }
+        await ctx.write((template ? '/class-templates/' : '/class-sessions/') + encodeURIComponent(row.id), 'PUT', value, template);
       }
-      if (!ctx.active()) return;
-      ctx.notice('已保存教练');
-      ctx.navigate(back, { date });
+      if (ctx.active()) { ctx.notice('排课已保存'); ctx.navigate(back, { date: template ? returnDate : value.date }); }
     });
   };
 }

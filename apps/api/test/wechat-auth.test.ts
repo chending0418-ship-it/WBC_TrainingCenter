@@ -185,8 +185,14 @@ test('不同微信管理员和 Web 后台共享已保存的教练、课型和排
       points: 20, coachIds: [coachId], courseTypeId, requestKey: 'shared-class' } });
   assert.equal(added.statusCode, 200);
 
+  const pricing = { name: '共享教练', enabled: true, pointsPerSlot: 42, points90: 53, points120: 69 };
+  const edited = await app.inject({ method: 'PUT', url: base + '/coaches/' + coachId, headers: web, payload: pricing });
+  assert.equal(edited.statusCode, 204);
   for (const identity of [...staff, web]) {
     const path = identity === web ? base : '/api/admin';
+    const coaches = await app.inject({ url: path + '/coaches', headers: identity });
+    const [shared] = coaches.json();
+    assert.deepEqual([shared.id, shared.pointsPerSlot, shared.points90, shared.points120], [coachId, 42, 53, 69]);
     const types = await app.inject({ url: path + '/course-types', headers: identity });
     assert.deepEqual(types.json(), [type.json()]);
     const classes = await app.inject({ url: path + '/classes?date=' + date, headers: identity });
