@@ -249,6 +249,69 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 11;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 12) return;
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS notification_outbox (
+        id INTEGER PRIMARY KEY,
+        event_key TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PARENT')),
+        user_id TEXT NOT NULL REFERENCES users(id),
+        app_id TEXT NOT NULL,
+        open_id TEXT NOT NULL,
+        payload TEXT NOT NULL CHECK (json_valid(payload)),
+        created_at INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SENDING', 'SENT', 'SKIPPED', 'FAILED', 'UNKNOWN')),
+        attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+        next_attempt_at INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        superseded_at INTEGER,
+        UNIQUE (event_key, user_id),
+        CHECK ((role = 'ADMIN' AND kind IN ('REGISTRATION_SUBMITTED', 'BOOKING_SUBMITTED'))
+            OR (role = 'PARENT' AND kind IN ('REGISTRATION_APPROVED', 'REGISTRATION_RETURNED',
+                'BOOKING_CONFIRMED', 'BOOKING_REJECTED', 'BOOKING_CANCELLED')))
+      ) STRICT;
+      CREATE INDEX IF NOT EXISTS notifications_due ON notification_outbox(status, next_attempt_at, id);
+      CREATE INDEX IF NOT EXISTS wechat_admin_recipients ON wechat_accounts(app_id) WHERE is_admin = 1;
+      CREATE TABLE IF NOT EXISTS wechat_subscription_grants (
+        id INTEGER PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        app_id TEXT NOT NULL,
+        open_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('ADMIN', 'PARENT')),
+        template_id TEXT NOT NULL,
+        request_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        after_delivery_id INTEGER NOT NULL DEFAULT 0 CHECK (after_delivery_id >= 0),
+        invalidated_at INTEGER,
+        claimed_delivery INTEGER UNIQUE REFERENCES notification_outbox(id),
+        UNIQUE (user_id, request_key, template_id)
+      ) STRICT;
+      CREATE INDEX IF NOT EXISTS available_subscription_grants
+        ON wechat_subscription_grants(user_id, app_id, open_id, role, template_id, created_at, id)
+        WHERE claimed_delivery IS NULL AND invalidated_at IS NULL;
+      CREATE TRIGGER IF NOT EXISTS invalidate_changed_wechat_subscriptions
+      AFTER UPDATE OF app_id, open_id, is_admin ON wechat_accounts
+      WHEN OLD.app_id <> NEW.app_id OR OLD.open_id <> NEW.open_id OR (OLD.is_admin = 1 AND NEW.is_admin = 0)
+      BEGIN
+        DELETE FROM wechat_sessions WHERE user_id = OLD.user_id AND (OLD.app_id <> NEW.app_id OR OLD.open_id <> NEW.open_id);
+        UPDATE wechat_subscription_grants SET invalidated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+          WHERE user_id = OLD.user_id AND app_id = OLD.app_id AND open_id = OLD.open_id AND invalidated_at IS NULL
+            AND (OLD.app_id <> NEW.app_id OR OLD.open_id <> NEW.open_id OR role = 'ADMIN');
+        UPDATE notification_outbox SET status = 'SKIPPED', last_error = 'RECIPIENT_CHANGED'
+          WHERE user_id = OLD.user_id AND app_id = OLD.app_id AND open_id = OLD.open_id AND status = 'PENDING'
+            AND (OLD.app_id <> NEW.app_id OR OLD.open_id <> NEW.open_id OR role = 'ADMIN');
+      END;
+      CREATE TRIGGER IF NOT EXISTS invalidate_deleted_wechat_subscriptions AFTER DELETE ON wechat_accounts BEGIN
+        UPDATE wechat_subscription_grants SET invalidated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+          WHERE user_id = OLD.user_id AND app_id = OLD.app_id AND open_id = OLD.open_id AND invalidated_at IS NULL;
+        UPDATE notification_outbox SET status = 'SKIPPED', last_error = 'RECIPIENT_CHANGED'
+          WHERE user_id = OLD.user_id AND app_id = OLD.app_id AND open_id = OLD.open_id AND status = 'PENDING';
+      END;
+      PRAGMA user_version = 12;
+    `);
+  });
   return db;
 }
 

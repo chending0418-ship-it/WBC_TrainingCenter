@@ -7,6 +7,10 @@ import { mockProfiles, seedDemo } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
 import { readContact, saveContact } from './parent-contact.ts';
 import { readRegistration, submitRegistration } from './registration.ts';
+import { registerSubscriptions } from './subscription-api.ts';
+import type { MessageState, Templates } from './subscription-config.ts';
+import { notificationWorker, startNotificationWorker } from './subscription-worker.ts';
+import type { MessageClient } from './wechat-message-client.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
@@ -16,7 +20,8 @@ import { wechatAuth } from './wechat-auth.ts';
 import type { WechatLoginConfig } from './wechat-login.ts';
 
 export function createApp(db: DatabaseSync, clock = () => new Date(),
-  { demo = true, wechat, webAdminPassword }: { demo?: boolean; wechat?: WechatLoginConfig; webAdminPassword?: string } = {}
+  { demo = true, wechat, webAdminPassword, subscriptions }: { demo?: boolean; wechat?: WechatLoginConfig; webAdminPassword?: string;
+    subscriptions?: { templates: Templates; state: MessageState; client?: MessageClient } } = {}
 ) {
   const app = Fastify({
     logger: false, bodyLimit: 4096, trustProxy: '127.0.0.1',
@@ -41,7 +46,15 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
       seededDate = today;
     }
   });
-  app.addHook('onClose', async () => db.close());
+  let stopNotifications: (() => Promise<void>) | undefined;
+  if (auth && wechat) {
+    registerSubscriptions(app, db, clock, wechat.appId, subscriptions?.templates ?? {}, auth.authorize);
+    if (subscriptions?.client) {
+      const worker = notificationWorker(db, wechat.appId, subscriptions.templates, subscriptions.state, subscriptions.client, () => clock().getTime());
+      app.addHook('onReady', async () => { stopNotifications = startNotificationWorker(worker); });
+    }
+  }
+  app.addHook('onClose', async () => { await stopNotifications?.(); db.close(); });
 
   function user(request: FastifyRequest): string {
     const authorization = request.headers.authorization;

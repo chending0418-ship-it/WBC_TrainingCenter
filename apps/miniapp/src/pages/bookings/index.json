@@ -1,1 +1,7 @@
-{ "enablePullDownRefresh": true, "backgroundTextStyle": "dark" }
+{
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "subscription-reminder": "/components/subscription-reminder/index"
+  }
+}

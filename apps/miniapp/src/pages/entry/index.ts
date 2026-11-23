@@ -1,7 +1,8 @@
 import type { SessionRole } from '../../../../../packages/shared/contracts.js';
 import { config } from '../../lib/config';
 import { errorMessage } from '../../lib/request';
-import { allowEntry, selectWechatRole, signIn, signInWechat, wechatIdentity } from '../../lib/session';
+import { allowEntry, noticePage, selectWechatRole, signIn, signInWechat, wechatIdentity } from '../../lib/session';
+import type { NoticePage } from '../../lib/session';
 
 import { publicRead, publicReadVersion, demoCoachProfilesPath } from '../../lib/public-read';
 
@@ -13,15 +14,19 @@ Page({
     wechatMode: config.mode === 'wechat',
     demoRoles: false,
     accountId: '',
+    noticeRoleLabel: '',
     allowedRoles: [] as { role: SessionRole; label: string }[],
     mode: '' as '' | 'COACH' | 'ADMIN',
     password: '', error: '', busy: false, loadingCoaches: false,
     coaches: [] as { profile: string; name: string }[]
   },
   courseId: '',
+  notice: undefined as NoticePage | undefined,
   onLoad(options) {
     this.courseId = options.course?.slice(0, 100) ?? '';
-    if (options.login !== '1' || wechatIdentity()) return;
+    this.notice = noticePage(options.notice);
+    if (this.notice) this.setData({ noticeRoleLabel: this.notice.startsWith('admin-') ? '管理员' : '家长' });
+    if ((!this.notice && options.login !== '1') || wechatIdentity()) return;
     if (this.data.wechatMode) void this.loginWechat();
     else this.setData({ demoRoles: true });
   },
@@ -33,7 +38,7 @@ Page({
     if (!this.data.busy) wx.navigateTo({ url: '/pages/public-schedule/index' });
   },
   onShow() {
-    this.setData({ visible: allowEntry(this.courseId) });
+    this.setData({ visible: allowEntry(this.courseId, this.notice) });
     this.showWechatIdentity();
   },
   showWechatIdentity() {
@@ -60,7 +65,7 @@ Page({
     const role = event.currentTarget.dataset.role as SessionRole;
     this.setData({ busy: true, error: '' });
     try {
-      await selectWechatRole(role, this.courseId);
+      await selectWechatRole(role, this.courseId, this.notice);
       this.setData({ visible: false });
     } catch (error) {
       this.showWechatIdentity();

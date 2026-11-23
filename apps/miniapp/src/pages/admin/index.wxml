@@ -24,6 +24,7 @@
       <text class="shortcut-label">{{item.label}}</text>
     </navigator>
   </view>
+  <subscription-reminder topic="admin" />
   <view class="utility-links">
     <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
     <text aria-role="button" bindtap="switchRole" hover-class="press">切换身份</text>

@@ -4,8 +4,8 @@ import { localTimestamp } from '../../lib/display';
 import { groupReminder, lastCourse, registrationView, returnToSchedule, saveReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
 import { invalidatePublicRead, publicRead, publicSchedulePath } from '../../lib/public-read';
-import { allowPage, invalidateRead, readVersion } from '../../lib/session';
-import { confirmAction } from '../../lib/staff';
+import { allowPage, invalidateRead, readVersion, wechatIdentity } from '../../lib/session';
+import { requestOnSubmit } from '../../lib/subscription-request';
 
 const registrationPath = '/api/me/registration';
 type Draft = { child: Child | null; contact: ParentContact | null };
@@ -16,7 +16,7 @@ const genders = [{ label: '男', value: 'MALE' }, { label: '女', value: 'FEMALE
 Page({
   data: {
     authorized: false, loaded: false, loading: true, saving: false, editing: false,
-    registration: null as ReturnType<typeof registrationView> | null,
+    confirmEdit: false, registration: null as ReturnType<typeof registrationView> | null,
     reminder: null as CourseReminder | null,
     name: '', birthMonth: '', maxMonth: localTimestamp(Date.now()).slice(0, 7),
     genderIndex: -1, genders, contactName: '', phone: '', error: '', saveError: ''
@@ -94,6 +94,7 @@ Page({
   },
   changeMonth(event: WechatMiniprogram.PickerChange) { this.setData({ birthMonth: String(event.detail.value) }); },
   changeGender(event: WechatMiniprogram.PickerChange) { this.setData({ genderIndex: Number(event.detail.value) }); },
+  cancelEdit() { this.setData({ confirmEdit: false }); },
   async save() {
     if (this.data.saving) return;
     const { birthMonth, genderIndex, registration } = this.data;
@@ -101,12 +102,17 @@ Page({
     const gender = genders[genderIndex]?.value;
     if (!name || !birthMonth || !gender) return this.setData({ saveError: '请填写姓名或昵称、出生年月和性别' });
     if (!!contactName !== !!phone && registration?.status !== 'APPROVED') return this.setData({ saveError: '请同时填写联系人姓名和电话，或同时留空' });
-    this.setData({ saving: true, saveError: '' });
+    const revised = registration?.status === 'APPROVED' && (registration.child.name !== name ||
+      registration.child.birthMonth !== birthMonth || registration.child.gender !== gender);
+    if (revised && !this.data.confirmEdit) {
+      this.setData({ confirmEdit: true });
+      return;
+    }
+    this.setData({ saving: true, confirmEdit: false, saveError: '' });
     try {
-      if (registration?.status === 'APPROVED' && (registration.child.name !== name ||
-          registration.child.birthMonth !== birthMonth || registration.child.gender !== gender)) {
-        if (!await confirmAction('保存队员资料', '修改后将重新提交给场馆审核。', '确认提交')) return;
-      }
+      const identity = wechatIdentity();
+      if (registration?.status !== 'APPROVED' || revised) await requestOnSubmit(this);
+      if (identity !== wechatIdentity()) return;
       const contact = contactName ? { name: contactName, phone } : null;
       const row = await api<Registration>('/api/me/registration', 'PUT', {
         child: { name, birthMonth, gender }, revision: registration?.revision,

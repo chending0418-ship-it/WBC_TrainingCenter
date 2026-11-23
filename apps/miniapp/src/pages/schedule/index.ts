@@ -1,9 +1,10 @@
 import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
-import { hasFreshRead, invalidateRead, readVersion, showParentTab } from '../../lib/session';
+import { hasFreshRead, invalidateRead, readVersion, showParentTab, wechatIdentity } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { availableRanges } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
+import { requestOnSubmit } from '../../lib/subscription-request';
 
 import { saveReminder, takeCourseReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
@@ -258,11 +259,16 @@ Page({
     this.dismissRegistration();
     wx.navigateTo({ url: '/pages/child/index' });
   },
-  submitQuote() {
+  async submitQuote() {
     const quote = this.data.confirmation;
     if (!quote || this.data.booking) return;
+    const identity = wechatIdentity();
+    this.setData({ booking: true });
+    await requestOnSubmit(this);
+    this.setData({ booking: false });
     this.dismissQuote();
-    void this.book(quote.selection, quote.revision);
+    if (identity !== wechatIdentity()) return;
+    await this.book(quote.selection, quote.revision);
   },
   async book(selection: BookingSelection, revision?: string) {
     if (this.data.booking) return;

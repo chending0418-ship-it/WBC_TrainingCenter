@@ -1,1 +1,7 @@
-{ "navigationBarTitleText": "队员注册", "enablePullDownRefresh": true }
+{
+  "navigationBarTitleText": "队员注册",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "subscription-reminder": "/components/subscription-reminder/index"
+  }
+}

@@ -1,0 +1,5 @@
+.reminder { margin: 16px 0; }
+.reminder .link { display: inline-block; width: auto; margin: 0; padding: 4px 0; border: 0; border-radius: 0; background: transparent; color: #761f32; font-size: 14px; font-weight: 600; line-height: 1.55; }
+.link::after { border: 0; }
+.note { display: block; color: #66595c; font-size: 13px; line-height: 1.55; }
+.pressed { opacity: .75; }

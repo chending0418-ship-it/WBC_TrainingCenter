@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, PublicSchedule, Quote, Schedule } from '../../../packages/shared/contracts.js';
 import { audit, maxPrivateMinutes, privateVenue, slotMinutes, transaction } from './database.ts';
+import { notifyBooking } from './notification-events.ts';
 import { addDays, covers, dateAt, venueDate, weekday } from './time.ts';
 
 export class ApiError extends Error {
@@ -289,6 +290,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
         charge.run(user, id, -details.points, '预约 · ' + details.title, createdAt, staffActor);
         audit(db, staffActor, 'BOOKING_CREATED', id, createdAt);
       }
+      notifyBooking(db, id, pending ? 'BOOKING_SUBMITTED' : 'BOOKING_CONFIRMED', createdAt);
       return { ...details, id, type: selection.type, status: pending ? 'PENDING' : 'CONFIRMED' };
     });
   }
@@ -304,6 +306,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       charge.run(row.user_id, id, -Number(row.points), '预约 · ' + row.title, now, operator);
       db.prepare('UPDATE bookings SET approval_pending = 0 WHERE id = ?').run(id);
       audit(db, operator, 'BOOKING_APPROVED', id, now);
+      notifyBooking(db, id, 'BOOKING_CONFIRMED', now);
     });
   }
 
@@ -329,6 +332,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
         `).run(booking.user_id, id, refundPoints, '取消预约退积分 · ' + booking.title, now, operator);
       }
       audit(db, operator, booking.approval_pending ? 'BOOKING_REJECTED' : 'BOOKING_CANCELLED', id, now);
+      notifyBooking(db, id, booking.approval_pending ? 'BOOKING_REJECTED' : 'BOOKING_CANCELLED', now);
     });
   }
 

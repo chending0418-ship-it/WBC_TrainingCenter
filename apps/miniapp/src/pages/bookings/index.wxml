@@ -21,6 +21,7 @@
     <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去排课页选择课程。</view>
     <block wx:for="{{upcoming}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
 
+    <subscription-reminder topic="booking" />
     <view class="section-title" role="heading" aria-level="2">历史预约</view>
     <view wx:if="{{!history.length}}" class="muted">暂无历史预约。</view>
     <block wx:for="{{history}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>

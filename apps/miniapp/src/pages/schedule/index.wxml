@@ -86,6 +86,7 @@
       <view class="quote-actions"><button class="button quiet" bindtap="dismissRegistration">继续看课</button><button class="button" bindtap="openRegistration">{{registrationPrompt.newPlayer ? '注册队员' : '查看申请'}}</button></view>
     </view>
   </view>
+  <subscription-reminder id="resultReminder" topic="booking" manual="{{false}}" />
   <view wx:if="{{confirmation}}" class="quote-overlay">
     <view class="quote-dialog" aria-role="dialog" aria-label="提交预约申请">
       <view class="card-title">提交预约申请</view>
@@ -98,8 +99,8 @@
         <text>按时取消</text><text>{{confirmation.refundPoints ? '退回 ' + confirmation.refundPoints + ' 积分' : '不退积分'}}</text>
       </view>
       <view class="quote-actions">
-        <button class="button quiet" bindtap="dismissQuote" hover-class="press">取消</button>
-        <button class="button" bindtap="submitQuote" hover-class="press">提交申请</button>
+        <button class="button quiet" bindtap="dismissQuote" disabled="{{booking}}" hover-class="press">取消</button>
+        <button class="button" bindtap="submitQuote" disabled="{{booking}}" loading="{{booking}}" hover-class="press">提交申请</button>
       </view>
     </view>
   </view>
