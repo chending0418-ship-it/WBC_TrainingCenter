@@ -5,6 +5,7 @@ import { ApiError } from './booking.ts';
 import { audit, transaction } from './database.ts';
 import { object, requiredText } from './input.ts';
 import { contactInput, readContact, saveContact } from './parent-contact.ts';
+import { notifyRegistration } from './notification-events.ts';
 import { venueDate } from './time.ts';
 
 const fields = `
@@ -66,7 +67,9 @@ export function submitRegistration(db: DatabaseSync, user: string, input: unknow
         reviewed_at=NULL, reviewed_revision=NULL, reason=NULL, contact_name=excluded.contact_name, contact_phone=excluded.contact_phone
     `).run(user, when, randomUUID(), contact?.name ?? null, contact?.phone ?? null);
     audit(db, user, 'REGISTRATION_SUBMITTED', user, when);
-    return readRegistration(db, user)!;
+    const submitted = readRegistration(db, user)!;
+    notifyRegistration(db, submitted, when, current?.status === 'PENDING' ? current.revision : undefined);
+    return submitted;
   });
 }
 
@@ -86,6 +89,8 @@ export function reviewRegistration(db: DatabaseSync, user: string, input: unknow
     `).run(status, reason, now.toISOString(), randomUUID(), user, revision);
     if (!result.changes) throw new ApiError(409, 'REGISTRATION_CHANGED', '申请已更新，请刷新后核对');
     audit(db, actor, 'REGISTRATION_' + status, user, now.toISOString());
-    return readRegistration(db, user)!;
+    const reviewed = readRegistration(db, user)!;
+    notifyRegistration(db, reviewed, now.toISOString(), revision);
+    return reviewed;
   });
 }

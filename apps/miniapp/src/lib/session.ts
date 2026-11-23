@@ -18,6 +18,16 @@ const endpoint = {
 };
 
 const entry = '/pages/entry/index';
+const noticePages = {
+  'admin-bookings': { role: 'ADMIN', read: '/api/admin/bookings?pending=1' },
+  'admin-registrations': { role: 'ADMIN', read: '/api/admin/registrations?view=pending' },
+  bookings: { role: 'PARENT', read: '/api/me/bookings' },
+  child: { role: 'PARENT', read: '/api/me/registration' }
+} as const;
+export type NoticePage = keyof typeof noticePages;
+export function noticePage(value?: string): NoticePage | undefined {
+  return value && Object.prototype.hasOwnProperty.call(noticePages, value) ? value as NoticePage : undefined;
+}
 let demoProfile = '';
 export function parentAccountId() {
   return wechat?.accountId ?? demoProfile;
@@ -25,16 +35,24 @@ export function parentAccountId() {
 let active: RoleSession | undefined;
 let wechat: WechatLogin | undefined;
 
-function openCurrentHome(courseId?: string) {
+function openCurrentHome(courseId?: string, notice?: NoticePage) {
+  if (notice && active?.role === noticePages[notice].role) {
+    if (notice === 'bookings') {
+      reads.get(active)?.invalidate(key => parentReadAffected('/api/bookings', key));
+    } else invalidateRead(noticePages[notice].read);
+    wx.reLaunch({ url: '/pages/' + notice + '/index' });
+    return;
+  }
   const url = courseId && active?.role === 'PARENT'
     ? '/pages/child/index?course=' + encodeURIComponent(courseId)
     : active ? home[active.role] : entry;
   wx.reLaunch({ url });
 }
 
-export function allowEntry(courseId?: string): boolean {
+export function allowEntry(courseId?: string, notice?: NoticePage): boolean {
   if (!active) return true;
-  openCurrentHome(courseId);
+  if (notice && wechat && active.role !== noticePages[notice].role) return true;
+  openCurrentHome(courseId, notice);
   return false;
 }
 
@@ -76,13 +94,14 @@ export async function signInWechat(): Promise<WechatLogin> {
   return wechat;
 }
 
-export async function selectWechatRole(role: SessionRole, courseId?: string) {
+export async function selectWechatRole(role: SessionRole, courseId?: string, notice?: NoticePage) {
   if (!wechat) throw new RequestError('NOT_AUTHORIZED', '请先使用微信登录', 401);
   try {
+    if (notice && active && active.role !== role && active.role !== 'ADMIN') await signInWechat();
     const session = await send<RoleSession>('/api/auth/role', 'POST', { role }, wechat.token);
     wechat = { ...wechat, token: session.token };
     active = session;
-    openCurrentHome(courseId);
+    openCurrentHome(courseId, notice);
   } catch (error) {
     if (error instanceof RequestError && (error.status === 401 || error.status === 403)) wechat = undefined;
     throw error;

@@ -1,0 +1,5 @@
+<view wx:if="{{manual && (ids.length || loadFailed)}}" class="reminder">
+  <button size="mini" class="link" bindtap="tap" disabled="{{busy}}" hover-class="pressed">{{loadFailed && !ids.length ? '重新加载提醒设置' : label}}</button>
+  <text class="note" aria-live="polite">{{message || (loadFailed && !ids.length ? '暂时无法读取订阅选项。' : '每次订阅可接收一次同类提醒，可再次订阅。')}}</text>
+  <button wx:if="{{showSettings}}" size="mini" class="link" bindtap="settings" hover-class="pressed">订阅设置</button>
+</view>

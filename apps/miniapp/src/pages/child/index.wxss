@@ -1,4 +1,5 @@
 @import "../../registration/review.wxss";
+@import "../../registration/dialog.wxss";
 
 .enrollment .form-field text, .enrollment .form-field input { display: block; }
 .enrollment .form-field input { width: 100%; }
