@@ -72,7 +72,7 @@ export async function bookings(ctx) {
   const list = selectableTable(['队员', '课程', '开课时间'], rows, selected, row => [row.title, datetime(row.startsAt)], '暂无预约申请');
   const info = selected ? html`${details([
     ['课程', selected.title], ['开课时间', datetime(selected.startsAt) + '–' + time(selected.endsAt)],
-    ['教练 / 场地', coach(selected.coachName) + ' · ' + selected.venue],
+    ['教练 / 训练场地', coach(selected.coachName) + ' · ' + selected.venue],
     ['队员资格', stamp(regLabels[family?.registrationStatus || 'UNREGISTERED'])],
     [selected.canApprove ? '本次预留' : '课程积分', selected.points + ' 积分'], ['预约状态', stamp(bookingLabels[selected.status])]
   ])}${selected.canApprove ? decision('确认后扣除已预留的 ' + selected.points + ' 积分。', '拒绝申请', '确认预约') : ''}` : empty('暂无申请详情');

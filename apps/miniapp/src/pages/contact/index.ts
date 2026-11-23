@@ -52,7 +52,7 @@ Page({
   },
   clear() {
     if (this.data.busy || !this.data.saved) return;
-    wx.showModal({ title: '删除联系人？', content: '场馆将无法通过此号码与你联系。', confirmColor: '#761F32',
+    wx.showModal({ title: '删除联系人？', content: '俱乐部将无法通过此号码与你联系。', confirmColor: '#761F32',
       success: result => { if (result.confirm) void this.removeContact(); } });
   },
   async removeContact() {

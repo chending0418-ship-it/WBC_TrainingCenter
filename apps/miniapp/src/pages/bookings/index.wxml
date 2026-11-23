@@ -17,7 +17,7 @@
   </view>
   <block wx:if="{{loaded}}">
     <view class="section-title" role="heading" aria-level="2">待确认和即将开课</view>
-    <view wx:if="{{upcoming.length}}" class="muted">如需取消，请在开课前至少 6 小时联系场馆管理员。</view>
+    <view wx:if="{{upcoming.length}}" class="muted">如需取消，请在开课前至少 6 小时联系俱乐部管理员。</view>
     <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去排课页选择课程。</view>
     <block wx:for="{{upcoming}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
 

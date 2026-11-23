@@ -251,7 +251,7 @@ Page({
       const startMinutes = editor.time.trim().split(/[、,，\s]+/).filter(Boolean).map(parseMinutes);
       if (!editor.title.trim() || !editor.venue.trim() || !coachId || !startMinutes.length ||
           (editor.repeat ? !days.length : startMinutes.length !== 1)) {
-        throw new Error('请填写课程、场地、教练和有效时段。周期排课需要选择星期。');
+        throw new Error('请填写课程、训练场地、教练和有效时段。周期排课需要选择星期。');
       }
       const draft: ClassDraft = {
         courseTypeId: this.data.typeOptions[editor.typeIndex].id,
