@@ -20,7 +20,7 @@ Page({
     ...emptyForm,
     original: null as Entry | null,
     reversalReason: '', reversalError: '',
-    users: [] as (ManagedUser & { label: string })[],
+    users: [] as { id: string; label: string }[],
     targetUserId: '',
     userIndex: 0,
     busy: false,
@@ -46,18 +46,13 @@ Page({
     if (authorized && firstShow) void this.load();
   },
   async load() {
+    if (this.data.targetUserId) return this.refreshAccount();
     const current = ++request;
     this.setData({ loading: true, error: '' });
     try {
       const users = await staffApi<ManagedUser[]>('/users');
       if (current !== request) return;
-      const { targetUserId } = this.data;
-      const choices = targetUserId ? users.filter(user => user.id === targetUserId) : users;
-      if (targetUserId && !choices.length) {
-        this.setData({ users: [], loading: false, error: '找不到该家长账户，请返回家长资料重新选择。' });
-        return;
-      }
-      this.setData({ users: choices.map(user => ({ ...user, label: user.childName || '未填写孩子资料' })) });
+      this.setData({ users: users.map(user => ({ id: user.id, label: user.childName || '未填写孩子资料' })) });
       await this.refreshAccount();
     } catch (error) {
       if (current === request) this.setData({ loading: false, error: errorMessage(error) });
@@ -65,11 +60,11 @@ Page({
   },
   async refreshAccount() {
     const current = ++request;
-    const user = this.data.users[this.data.userIndex];
-    if (!user) return this.setData({ loading: false });
+    const id = this.data.targetUserId || this.data.users[this.data.userIndex]?.id;
+    if (!id) return this.setData({ loading: false });
     this.setData({ loading: true, error: '' });
     try {
-      const path = '/accounts/' + user.id;
+      const path = '/accounts/' + encodeURIComponent(id);
       const [account, bookings] = await Promise.all([
         staffApi<StaffAccount>(path), staffApi<Booking[]>(path + '/bookings')
       ]);
@@ -84,7 +79,9 @@ Page({
         bookingLabel: entry.bookingId ? labels.get(entry.bookingId) ?? '' : '',
         canReverse: (entry.source === 'OFFLINE_CREDIT' || entry.source === 'ADJUSTMENT') && entry.reversalId === null
       }));
-      this.setData({ balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
+      this.setData({
+        ...(this.data.targetUserId ? { users: [{ id, label: account.childName || '未填写孩子资料' }] } : {}),
+        balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
         bookings: [{ id: '', label: '无关联预约' }, ...choices], ledger });
     } catch (error) {
       if (current === request) this.setData({ error: errorMessage(error) });
@@ -96,6 +93,7 @@ Page({
     return (value > 0 ? '+' : '') + value;
   },
   changeUser(event: WechatMiniprogram.PickerChange) {
+    if (this.data.userIndex === Number(event.detail.value)) return;
     this.setData({ ...emptyForm, userIndex: Number(event.detail.value), source: 'OFFLINE_CREDIT', action: operations.OFFLINE_CREDIT.action });
     void this.refreshAccount();
   },

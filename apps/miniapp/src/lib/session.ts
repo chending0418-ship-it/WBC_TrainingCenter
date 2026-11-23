@@ -1,4 +1,7 @@
 import type { RoleSession, SessionRole, WechatLogin } from '../../../../packages/shared/contracts.js';
+import { demoCoachProfilesPath, invalidatePublicRead, publicSchedulePath } from './public-read';
+import { ReadCache } from './read-cache';
+import { staffReadAffected } from './staff-read-dependencies';
 import { RequestError, send } from './request';
 import type { Method } from './request';
 
@@ -45,7 +48,9 @@ export function allowPage(role: SessionRole | 'SIGNED_IN'): boolean {
 
 export function showParentTab(page: Pick<WechatMiniprogram.Page.TrivialInstance, 'route' | 'getTabBar'>) {
   const authorized = allowPage('PARENT');
-  page.getTabBar()?.setData({ activePath: authorized ? page.route : '' });
+  const tab = page.getTabBar();
+  const activePath = authorized ? page.route : '';
+  if (tab && (tab.data as { activePath?: string }).activePath !== activePath) tab.setData({ activePath });
   return authorized;
 }
 
@@ -91,14 +96,64 @@ export function switchRole() {
   openCurrentHome();
 }
 
+const reads = new WeakMap<RoleSession, ReadCache>();
+
+export function readVersion(path: string): number {
+  return active ? reads.get(active)?.version(path) ?? 0 : 0;
+}
+
+export function hasFreshRead(path: string): boolean {
+  return readVersion(path) !== 0;
+}
+
+export function invalidateRead(path: string) {
+  if (active) reads.get(active)?.invalidate(key => key === path);
+}
+
+function parentReadAffected(write: string, read: string, data?: object) {
+  if (write === '/api/me/contact') return read === write || read === '/api/me/registration';
+  if (write === '/api/me/registration' || write === '/api/me/child')
+    return ['/api/me/registration', '/api/me/child', '/api/me/contact'].includes(read);
+  if (write === '/api/bookings' || write.startsWith('/api/me/bookings/')) {
+    if (read === '/api/me/bookings' || read === '/api/me/account') return true;
+    if (data && 'type' in data && data.type === 'GROUP') return read.startsWith('/api/schedule');
+    if (data && 'coachId' in data) return read.startsWith('/api/coaches/' + data.coachId + '/slots?');
+    return read.startsWith('/api/schedule') || read.startsWith('/api/coaches/');
+  }
+  return false;
+}
+
 export async function roleRequest<T>(role: SessionRole, path: string, method: Method = 'GET', data?: object): Promise<T> {
   const session = active;
   if (session?.role !== role) throw new RequestError('NOT_AUTHORIZED', '请使用对应身份登录', 401);
-  try {
+  let cache = reads.get(session);
+  if (!cache) {
+    cache = new ReadCache();
+    reads.set(session, cache);
+  }
+  const perform = async () => {
+    if (session !== active) throw new RequestError('NOT_AUTHORIZED', '登录身份已切换', 401);
     const result = await send<T>(path, method, data, session.token);
     if (session !== active) throw new RequestError('NOT_AUTHORIZED', '登录身份已切换', 401);
     return result;
+  };
+  const invalidateAffected = () => {
+    cache.invalidate(key => role === 'PARENT' ? parentReadAffected(path, key, data) : staffReadAffected(path, key));
+    if (role === 'ADMIN') {
+      const coachChanged = /^\/api\/admin\/coaches(?:\/[^/]+)?$/.test(path);
+      if (coachChanged) invalidatePublicRead(demoCoachProfilesPath);
+      if (coachChanged || /^\/api\/admin\/(classes|class-sessions|class-templates)(?:\/|$)/.test(path))
+        invalidatePublicRead(publicSchedulePath);
+    }
+  };
+  const mutation = method !== 'GET' && !path.endsWith('/quote');
+  try {
+    const result = method === 'GET' && !data ? await cache.read(path, perform) : await perform();
+    if (session !== active) throw new RequestError('NOT_AUTHORIZED', '登录身份已切换', 401);
+    if (mutation) invalidateAffected();
+    return result;
   } catch (error) {
+    if (mutation && (!(error instanceof RequestError) || error.status !== 400)) invalidateAffected();
     if (error instanceof RequestError && error.status === 401 && session === active) {
       active = undefined;
       wechat = undefined;

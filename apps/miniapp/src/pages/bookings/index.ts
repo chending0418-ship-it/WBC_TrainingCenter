@@ -1,29 +1,46 @@
-import { showParentTab } from '../../lib/session';
+import { invalidateRead, readVersion, showParentTab } from '../../lib/session';
 import type { Booking } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { datetime, time } from '../../lib/display';
 
 type Row = Booking & { hours: string; label: string };
 
+const path = '/api/me/bookings';
+
 Page({
   data: {
     authorized: false,
     upcoming: [] as Row[],
     history: [] as Row[],
-    loading: true,
+    loaded: false, loading: true,
     error: ''
   },
 
+  renderedVersion: 0,
+  nextStart: Infinity,
+  sequence: 0,
+  onUnload() { this.sequence++; },
   onShow() {
     const authorized = showParentTab(this);
-    this.setData({ authorized });
-    if (authorized) void this.refresh();
+    if (authorized !== this.data.authorized) this.setData({ authorized });
+    if (!authorized) return;
+    if (this.renderedVersion && this.renderedVersion === readVersion(path) && Date.now() < this.nextStart) return;
+    void this.refresh();
+  },
+  async onPullDownRefresh() {
+    try {
+      if (!this.data.authorized) return;
+      invalidateRead(path);
+      await this.refresh();
+    } finally { wx.stopPullDownRefresh(); }
   },
 
   async refresh() {
-    this.setData({ loading: true, error: '' });
+    const request = ++this.sequence;
+    if (this.data.error) this.setData({ error: '', loading: !this.data.loaded });
     try {
-      const bookings = await api<Booking[]>('/api/me/bookings');
+      const bookings = await api<Booking[]>(path);
+      if (request !== this.sequence) return;
       const now = new Date().toISOString();
       const upcoming: Row[] = [];
       const history: Row[] = [];
@@ -38,11 +55,13 @@ Page({
         if (isUpcoming) upcoming.unshift(row);
         else history.push(row);
       }
-      this.setData({ upcoming, history });
+      this.renderedVersion = readVersion(path);
+      this.nextStart = upcoming.length ? Date.parse(upcoming[0].startsAt) : Infinity;
+      this.setData({ upcoming, history, loaded: true });
     } catch (error) {
-      this.setData({ error: errorMessage(error) });
+      if (request === this.sequence) this.setData({ error: errorMessage(error) });
     } finally {
-      this.setData({ loading: false });
+      if (request === this.sequence && this.data.loading) this.setData({ loading: false });
     }
   }
 });

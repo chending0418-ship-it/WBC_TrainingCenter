@@ -4,19 +4,25 @@ import { allowPage } from '../../lib/session';
 
 Page({
   data: { authorized: false, loading: true, busy: false, saved: false, name: '', phone: '', error: '', saveError: '' },
+  loaded: false,
+  fetching: false,
   onShow() {
     const authorized = allowPage('PARENT');
-    this.setData({ authorized });
-    if (authorized) void this.load();
+    if (authorized !== this.data.authorized) this.setData({ authorized });
+    if (authorized && !this.loaded) void this.load();
   },
   async load() {
+    if (this.fetching) return;
+    this.fetching = true;
     this.setData({ loading: true, error: '' });
     try {
       const { contact } = await api<{ contact: ParentContact | null }>('/api/me/contact');
+      this.loaded = true;
       this.setData({ saved: !!contact, name: contact?.name ?? '', phone: contact?.phone ?? '' });
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {
+      this.fetching = false;
       this.setData({ loading: false });
     }
   },

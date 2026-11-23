@@ -4,13 +4,13 @@ import type { FastifyRequest } from 'fastify';
 import { ApiError, bookingService } from './booking.ts';
 import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
-import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
+import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
 import { readContact, saveContact } from './parent-contact.ts';
 import { readRegistration, submitRegistration } from './registration.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
-import { venueDate } from './time.ts';
+import { addDays, venueDate } from './time.ts';
 import { registerWebAdmin, webAdminUrl } from './web-admin.ts';
 import { wechatAuth } from './wechat-auth.ts';
 import type { WechatLoginConfig } from './wechat-login.ts';
@@ -86,11 +86,21 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
   app.get('/api/schedule', async request => service.schedule(user(request), object(request.query).view === 'week'));
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
-    return service.listSlots(requiredText(object(request.params).id), dateInput(object(request.query).date));
+    const query = object(request.query);
+    const start = dateInput(query.date);
+    const coach = requiredText(object(request.params).id);
+    const days = query.days === undefined ? 1 : integer(Number(requiredText(query.days, 1)), 1, 7, '请选择 1 至 7 天的时段');
+    return Array.from({ length: days }, (_, offset) => service.listSlots(coach, addDays(start, offset))).flat();
   });
   app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
   app.put('/api/me/child', async request => submitRegistration(db, user(request), request.body, clock(), true).child);
-  app.get('/api/me/registration', async request => ({ registration: readRegistration(db, user(request)) }));
+  app.get('/api/me/registration', async request => {
+    const profile = user(request);
+    const registration = readRegistration(db, profile);
+    return registration ? { registration } : { registration: null, draft: {
+      child: service.child(profile), contact: readContact(db, profile)
+    } };
+  });
   app.put('/api/me/registration', async request => submitRegistration(db, user(request), request.body, clock()));
   app.get('/api/me/contact', async request => ({ contact: readContact(db, user(request)) }));
   app.put('/api/me/contact', async request => saveContact(db, user(request), request.body));

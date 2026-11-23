@@ -167,6 +167,7 @@ export interface CoachHours {
 export type StaffLedgerSource = 'OFFLINE_CREDIT' | 'ADJUSTMENT' | 'REVERSAL';
 
 export interface StaffAccount extends Account {
+  childName: string | null;
   ledger: (Account['ledger'][number] & {
     source: 'SEED' | 'BOOKING' | 'BOOKING_REFUND' | StaffLedgerSource;
     operator: string | null;

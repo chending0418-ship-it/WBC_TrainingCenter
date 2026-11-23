@@ -1,4 +1,4 @@
-import { allowPage } from '../../lib/session';
+import { allowPage, readVersion, hasFreshRead } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, CourseType, ManagedBooking, ManagedClass, PrivateSlot } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { cancellationRefundText, datetime, time, timeRange } from '../../lib/display';
@@ -35,25 +35,26 @@ Page({
   async load() {
     this.setData({ loading: true, loadError: '' });
     try {
-      const [context, types] = await Promise.all([
-        staffContext(), staffApi<CourseType[]>('/course-types')
-      ]);
-      this.setData({
-        ...context, date: this.data.date || context.today,
-        privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)]
-      });
+      const context = await staffContext();
+      this.setData({ ...context, date: this.data.date || context.today });
       await this.refresh();
     } catch (error) {
       this.setData({ loading: false, loadError: errorMessage(error) });
     }
   },
+  listVersion: 0,
+  listPath() {
+    return this.data.pendingOnly ? '/bookings?pending=1' : '/bookings?date=' + this.data.date;
+  },
   async refresh() {
     const request = ++bookingRequest;
     if (!this.data.date) return;
-    this.setData({ loading: true, loadError: '' });
+    const path = this.listPath();
+    this.setData({ loading: !hasFreshRead('/api/admin' + path), loadError: '' });
     try {
-      const bookings = await staffApi<ManagedBooking[]>(this.data.pendingOnly ? '/bookings?pending=1' : '/bookings?date=' + this.data.date);
+      const bookings = await staffApi<ManagedBooking[]>(path);
       if (request === bookingRequest) {
+        this.listVersion = readVersion('/api/admin' + path);
         this.setData({ bookings: bookings.map(row => ({ ...row,
           hours: this.data.pendingOnly ? datetime(row.startsAt) + '–' + time(row.endsAt) : timeRange(row.startsAt, row.endsAt),
           statusLabel: row.status === 'PENDING' && !row.canApprove ? '已过期' : statusLabels[row.status] })) });
@@ -65,11 +66,13 @@ Page({
     }
   },
   changeView(event: WechatMiniprogram.TouchEvent) {
-    if (this.data.busy) return;
-    this.setData({ pendingOnly: event.currentTarget.dataset.view === 'pending', saveError: '' });
+    const pendingOnly = event.currentTarget.dataset.view === 'pending';
+    if (this.data.busy || pendingOnly === this.data.pendingOnly) return;
+    this.setData({ pendingOnly, saveError: '' });
     void this.refresh();
   },
   changeDate(event: WechatMiniprogram.PickerChange) {
+    if (this.data.date === String(event.detail.value)) return;
     this.setData({ date: String(event.detail.value), saveError: '' });
     if (this.data.adding) void this.refreshChoices();
     else void this.refresh();
@@ -83,11 +86,12 @@ Page({
   closeForm() {
     if (this.data.busy) return;
     this.setData({ adding: false, saveError: '' });
-    void this.refresh();
+    if (!this.listVersion || this.listVersion !== readVersion('/api/admin' + this.listPath())) void this.refresh();
   },
   changeType(event: WechatMiniprogram.TouchEvent) {
-    if (this.data.busy) return;
-    this.setData({ type: event.currentTarget.dataset.type as BookingSelection['type'], saveError: '' });
+    const type = event.currentTarget.dataset.type as BookingSelection['type'];
+    if (this.data.busy || type === this.data.type) return;
+    this.setData({ type, saveError: '' });
     void this.refreshChoices();
   },
   chooseFamily() {
@@ -98,6 +102,7 @@ Page({
     });
   },
   changeCoach(event: WechatMiniprogram.PickerChange) {
+    if (this.data.coachIndex === Number(event.detail.value)) return;
     this.setData({ coachIndex: Number(event.detail.value), saveError: '' });
     void this.refreshChoices();
   },
@@ -123,9 +128,14 @@ Page({
       } else {
         const coach = coaches[coachIndex];
         if (!coach) return;
-        const rows = await staffApi<PrivateSlot[]>('/coaches/' + coach.id + '/slots?date=' + date);
+        const [rows, types] = await Promise.all([
+          staffApi<PrivateSlot[]>('/coaches/' + coach.id + '/slots?date=' + date),
+          staffApi<CourseType[]>('/course-types')
+        ]);
         if (request !== choicesRequest) return;
-        this.setData({ slots: rows.map(row => ({
+        const selected = this.data.privateTypes[this.data.privateTypeIndex]?.id;
+        const privateTypes = [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)];
+        this.setData({ privateTypes, privateTypeIndex: Math.max(0, privateTypes.findIndex(type => type.id === selected)), slots: rows.map(row => ({
           ...row, label: timeRange(row.startsAt, row.endsAt) + ' · ' + row.points + ' 积分'
         })) });
       }

@@ -1,5 +1,5 @@
 import { errorMessage } from '../../lib/request';
-import { allowPage, switchRole } from '../../lib/session';
+import { allowPage, readVersion, switchRole } from '../../lib/session';
 import { staffApi } from '../../lib/staff';
 
 type Overview = { pendingRegistrations: number; pending: number; todayClasses: number; todayAppointments: number };
@@ -17,10 +17,11 @@ Page({
     ]
   },
   overviewRequest: 0,
+  overviewVersion: 0,
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    if (authorized) void this.refresh();
+    if (authorized && (!this.overviewVersion || this.overviewVersion !== readVersion('/api/admin/overview'))) void this.refresh();
   },
   onUnload() {
     this.overviewRequest++;
@@ -29,7 +30,10 @@ Page({
     const request = ++this.overviewRequest;
     try {
       const overview = await staffApi<Overview>('/overview');
-      if (request === this.overviewRequest) this.setData({ overview, error: '' });
+      if (request === this.overviewRequest) {
+        this.overviewVersion = readVersion('/api/admin/overview');
+        this.setData({ overview, error: '' });
+      }
     } catch (error) {
       if (request === this.overviewRequest) this.setData({ error: errorMessage(error) });
     }

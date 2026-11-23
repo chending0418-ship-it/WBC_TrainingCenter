@@ -1,9 +1,9 @@
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 import { coachLabel } from '../../lib/coach-avatar';
-import { allowPage } from '../../lib/session';
+import { allowPage, hasFreshRead } from '../../lib/session';
 import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
-import { addDays, mondayOfWeek } from '../../lib/private-availability';
+import { mondayOfWeek } from '../../lib/private-availability';
 import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
@@ -69,14 +69,19 @@ Page({
       this.setData({ loading: false, loadError: errorMessage(error) });
     }
   },
+  shownPath: '',
   async refresh() {
     const current = ++request;
     const { date, mode, coaches, coachIndex } = this.data;
     if (!date) return;
-    this.setData({ loading: true, loadError: '', dayLabel: weekdays[dayOfWeek(date)] });
+    const coach = coaches[coachIndex];
+    const monday = mondayOfWeek(date);
+    const path = mode === 'classes' ? '/classes?date=' + monday + '&view=week'
+      : mode === 'templates' ? '/class-templates' : coach ? '/coaches/' + coach.id + '/hours?date=' + monday + '&view=week' : '';
+    this.setData({ loading: Boolean(path && path !== this.shownPath && !hasFreshRead('/api/admin' + path)), loadError: '', dayLabel: weekdays[dayOfWeek(date)] });
     try {
       if (mode === 'classes') {
-        const classes = await staffApi<ManagedClass[]>('/classes?date=' + mondayOfWeek(date) + '&view=week');
+        const classes = await staffApi<ManagedClass[]>(path);
         const now = new Date().toISOString();
         if (current !== request) return;
         const byDate = new Map<string, ClassRow[]>();
@@ -89,19 +94,17 @@ Page({
         }
         this.setData(weekAgenda(date, this.data.today, this.data.lastDate, byDate));
       } else if (mode === 'templates') {
-        const templates = await staffApi<ManagedTemplate[]>('/class-templates');
+        const templates = await staffApi<ManagedTemplate[]>(path);
         if (current === request) this.setData({ templates: templates.map(template => ({
           ...template, timetable: template.weekdays.map(day => weekdays[day]).join('、') + ' · ' +
             template.startMinutes.map(minuteString).join('、')
         })) });
       } else {
-        const coach = coaches[coachIndex];
-        if (!coach) return;
-        const monday = mondayOfWeek(date);
-        const week = await Promise.all(Array.from({ length: 7 }, async (_, index) => {
-          const day = addDays(monday, index);
-          return staffApi<CoachHours>('/coaches/' + coach.id + '/hours?date=' + day);
-        }));
+        if (!coach) {
+          this.setData({ weeklyHours: [], exceptions: [] });
+          return;
+        }
+        const week = await staffApi<CoachHours[]>(path);
         if (current !== request) return;
         const hours = week[(dayOfWeek(date) + 6) % 7];
         this.setData({
@@ -113,6 +116,7 @@ Page({
           exceptions: hours.exceptions.map(window => ({ ...window, label: minuteString(window.start) + '–' + minuteString(window.end) }))
         });
       }
+      if (current === request) this.shownPath = path;
     } catch (error) {
       if (current === request) this.setData({ loadError: errorMessage(error) });
     } finally {
@@ -120,8 +124,9 @@ Page({
     }
   },
   changeMode(event: WechatMiniprogram.TouchEvent) {
-    if (this.data.busy) return;
-    this.setData({ mode: String(event.currentTarget.dataset.mode), saveError: '', blocking: false, editingWeekday: -1 });
+    const mode = String(event.currentTarget.dataset.mode);
+    if (this.data.busy || this.data.mode === mode) return;
+    this.setData({ mode, saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
   changeWeek(event: WechatMiniprogram.TouchEvent) {
@@ -146,10 +151,12 @@ Page({
     return this.data.groups.flatMap(day => day.lessons).find(item => item.id === id);
   },
   changeDate(event: WechatMiniprogram.PickerChange) {
+    if (this.data.date === String(event.detail.value)) return;
     this.setData({ date: String(event.detail.value), expandedId: '', saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
   changeHoursCoach(event: WechatMiniprogram.PickerChange) {
+    if (this.data.coachIndex === Number(event.detail.value)) return;
     this.setData({ coachIndex: Number(event.detail.value), saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },

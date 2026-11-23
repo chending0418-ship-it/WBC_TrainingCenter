@@ -2,7 +2,7 @@ import type { Registration } from '../../../../../packages/shared/contracts.js';
 import { dateLabel, localTimestamp, time } from '../../lib/display';
 import { errorMessage, RequestError } from '../../lib/request';
 import { registrationView } from '../../lib/registration';
-import { allowPage } from '../../lib/session';
+import { allowPage, readVersion, invalidateRead } from '../../lib/session';
 import { staffApi } from '../../lib/staff';
 
 type ReviewRow = ReturnType<typeof registrationView> & { at: string };
@@ -26,21 +26,33 @@ Page({
     selected: null as ReviewRow | null, returning: false, reason: ''
   },
   requestNumber: 0,
+  pendingVersion: 0,
+  processedVersion: 0,
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    if (authorized) void this.refresh();
+    if (authorized && (!this.pendingVersion || this.pendingVersion !== readVersion('/api/admin/registrations?view=pending') ||
+        (this.data.processed && this.processedVersion !== readVersion('/api/admin/registrations?view=processed')))) void this.refresh();
   },
   onUnload() { this.requestNumber++; },
-  async onPullDownRefresh() { try { await this.refresh(); } finally { wx.stopPullDownRefresh(); } },
+  async onPullDownRefresh() {
+    try {
+      if (!this.data.authorized || this.data.busy) return;
+      invalidateRead('/api/admin/registrations?view=pending');
+      if (this.data.processed) invalidateRead('/api/admin/registrations?view=processed');
+      await this.refresh();
+    } finally { wx.stopPullDownRefresh(); }
+  },
   async refresh() {
     const request = ++this.requestNumber;
-    this.setData({ loading: true, error: '' });
+    this.setData({ loading: !this.pendingVersion || this.data.loading, error: '' });
     try {
       const { processed, selected } = this.data;
       const pending = staffApi<Registration[]>('/registrations?view=pending');
       const [rows, queue] = await Promise.all([processed ? staffApi<Registration[]>('/registrations?view=processed') : pending, pending]);
       if (request !== this.requestNumber) return;
+      this.pendingVersion = readVersion('/api/admin/registrations?view=pending');
+      if (processed) this.processedVersion = readVersion('/api/admin/registrations?view=processed');
       const groups = groupByDate(rows, processed);
       const current = selected ? groups.flatMap(day => day.rows).find(row => row.userId === selected.userId) ?? null : null;
       this.setData({ groups, pendingCount: queue.length, selected: current,
@@ -49,7 +61,11 @@ Page({
     finally { if (request === this.requestNumber) this.setData({ loading: false }); }
   },
   tab(event: WechatMiniprogram.TouchEvent) {
-    this.setData({ processed: event.currentTarget.dataset.view === 'processed', selected: null });
+    const processed = event.currentTarget.dataset.view === 'processed';
+    if (processed === this.data.processed) return;
+    const ready = readVersion('/api/admin/registrations?view=pending') &&
+      (!processed || readVersion('/api/admin/registrations?view=processed'));
+    this.setData({ processed, selected: null, loading: !ready });
     void this.refresh();
   },
   open(event: WechatMiniprogram.TouchEvent) {
@@ -78,6 +94,7 @@ Page({
       await this.refresh();
     } catch (error) {
       if (error instanceof RequestError && error.code === 'REGISTRATION_CHANGED') {
+        invalidateRead('/api/admin/registrations?view=pending');
         await this.refresh();
         wx.showToast({ title: '申请已更新，请核对', icon: 'none' });
       } else this.setData({ saveError: errorMessage(error) });

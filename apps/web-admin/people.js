@@ -71,10 +71,12 @@ export async function finance(ctx) {
   const id = ctx.query.get('id');
   const adjusting = ctx.query.get('mode') === 'adjust';
   const mode = adjusting ? 'adjust' : 'credit';
-  const family = id ? await loadFamily(ctx, id) : (await ctx.api('/parents'))[0];
-  if (!family) { ctx.show(html`${title('积分调整')}${empty('暂无可操作的家庭账户。')}`); return; }
-  const path = accountUrl(family.id);
-  const [account, bookings] = await Promise.all([ctx.api(path), ctx.api(path + '/bookings')]);
+  const firstFamily = id ? null : (await ctx.api('/parents'))[0];
+  if (!id && !firstFamily) { ctx.show(html`${title('积分调整')}${empty('暂无可操作的家庭账户。')}`); return; }
+  const path = accountUrl(id || firstFamily.id);
+  const [family, account, bookings] = await Promise.all([
+    firstFamily || loadFamily(ctx, id), ctx.api(path), adjusting ? ctx.api(path + '/bookings') : []
+  ]);
   const action = adjusting ? '确认调整' : '确认充值';
   const pointForm = html`${tabs([
     ['充值', href('finance', { id: family.id }), !adjusting],

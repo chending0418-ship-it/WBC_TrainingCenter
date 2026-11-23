@@ -24,8 +24,10 @@ function decision(note, secondary, primary) {
 
 export async function registrations(ctx) {
   const processed = ctx.query.get('view') === 'processed';
-  const pending = await ctx.api('/registrations?view=pending');
-  const entries = processed ? await ctx.api('/registrations?view=processed') : pending;
+  const [pending, history] = await Promise.all([
+    ctx.api('/registrations?view=pending'), processed ? ctx.api('/registrations?view=processed') : null
+  ]);
+  const entries = history ?? pending;
   const rows = entries.map(row => ({ ...row, id: row.userId, name: row.child.name }));
   const selected = rows.find(row => row.id === ctx.query.get('id')) || rows[0];
   const list = selectableTable(['队员', '联系人 · 尾号', '提交时间'], rows, selected, row =>

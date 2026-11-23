@@ -219,21 +219,25 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  function hours(coachId: string, date: string): CoachHours {
+  function hours(coachId: string, date: string, days: 1 | 7): CoachHours[] {
     requireCoach(coachId);
-    const start = dateAt(date);
-    const end = dateAt(addDays(date, 1));
-    const windows = db.prepare(`
-      SELECT start_minute AS start, end_minute AS end FROM coach_availability
-      WHERE coach_id = ? AND weekday = ? ORDER BY start_minute
-    `).all(coachId, weekday(date)) as unknown as MinuteWindow[];
-    const rows = db.prepare(`
+    const weekly = db.prepare(`
+      SELECT weekday, start_minute AS start, end_minute AS end FROM coach_availability
+      WHERE coach_id = ? ORDER BY weekday, start_minute
+    `).all(coachId) as unknown as (MinuteWindow & { weekday: number })[];
+    const exceptions = db.prepare(`
       SELECT exception_id AS id, starts_at AS startsAt, ends_at AS endsAt, reason FROM coach_exceptions
       WHERE coach_id = ? AND starts_at >= ? AND starts_at < ? ORDER BY starts_at
-    `).all(coachId, start, end) as unknown as { id: string; startsAt: string; endsAt: string; reason: string }[];
-    return { windows, exceptions: rows.map(row => ({
-      id: row.id, reason: row.reason, start: minuteOfDay(row.startsAt, date), end: minuteOfDay(row.endsAt, date)
-    })) };
+    `).all(coachId, dateAt(date), dateAt(addDays(date, days))) as unknown as { id: string; startsAt: string; endsAt: string; reason: string }[];
+    return Array.from({ length: days }, (_, offset) => {
+      const day = addDays(date, offset);
+      return {
+        windows: weekly.filter(row => row.weekday === weekday(day)).map(({ start, end }) => ({ start, end })),
+        exceptions: exceptions.filter(row => venueDate(row.startsAt) === day).map(row => ({
+          id: row.id, reason: row.reason, start: minuteOfDay(row.startsAt, day), end: minuteOfDay(row.endsAt, day)
+        }))
+      };
+    });
   }
 
   function saveHours(coachId: string, day: number, windows: MinuteWindow[], actor: string) {

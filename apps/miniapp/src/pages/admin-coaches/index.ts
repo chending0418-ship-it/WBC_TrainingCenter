@@ -1,6 +1,6 @@
 import type { CourseType, ManagedCoach } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
-import { allowPage } from '../../lib/session';
+import { allowPage, readVersion } from '../../lib/session';
 import { confirmAction, staffApi, staffWrite } from '../../lib/staff';
 
 const defaultPrivateType = { id: null, name: '一对一训练（默认）' };
@@ -11,17 +11,22 @@ Page({
     privateTypes: [defaultPrivateType] as { id: string | null; name: string }[],
     editor: null as { id: string; name: string; points: string; enabled: boolean; privateTypeIndex: number } | null
   },
+  coachVersion: 0,
+  typeVersion: 0,
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    if (authorized) void this.load();
+    if (authorized && (!this.coachVersion || this.coachVersion !== readVersion('/api/admin/coaches') ||
+        this.typeVersion !== readVersion('/api/admin/course-types'))) void this.load();
   },
   async load() {
-    this.setData({ loading: true, error: '' });
+    this.setData({ loading: !this.coachVersion, error: '' });
     try {
       const [coaches, types] = await Promise.all([
         staffApi<ManagedCoach[]>('/coaches'), staffApi<CourseType[]>('/course-types')
       ]);
+      this.coachVersion = readVersion('/api/admin/coaches');
+      this.typeVersion = readVersion('/api/admin/course-types');
       const privateTypes = [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)];
       this.setData({
         privateTypes,

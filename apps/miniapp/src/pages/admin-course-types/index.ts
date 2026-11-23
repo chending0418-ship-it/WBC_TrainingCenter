@@ -1,6 +1,6 @@
 import type { CourseType } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/request';
-import { allowPage } from '../../lib/session';
+import { allowPage, readVersion } from '../../lib/session';
 import { staffApi, staffWrite } from '../../lib/staff';
 
 const emptyForm = { name: '', maxStudents: '', fullRefund: false, partialRefund: '', saveError: '' };
@@ -15,15 +15,18 @@ Page({
     error: '',
     types: [] as CourseType[]
   },
+  typeVersion: 0,
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    if (authorized) void this.load();
+    if (authorized && (!this.typeVersion || this.typeVersion !== readVersion('/api/admin/course-types'))) void this.load();
   },
   async load() {
-    this.setData({ loading: true, error: '' });
+    this.setData({ loading: !this.typeVersion, error: '' });
     try {
-      this.setData({ types: await staffApi<CourseType[]>('/course-types') });
+      const types = await staffApi<CourseType[]>('/course-types');
+      this.typeVersion = readVersion('/api/admin/course-types');
+      this.setData({ types });
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {
