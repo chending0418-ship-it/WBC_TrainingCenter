@@ -118,6 +118,8 @@ export interface ClassPlan extends ClassDraft {
 }
 
 export interface ManagedTemplate extends ClassPlan {
+  courseTypeName: string | null;
+  courseTypeMaxStudents: number | null;
   coachIds: string[];
   id: string;
   coachName: string;
@@ -125,6 +127,7 @@ export interface ManagedTemplate extends ClassPlan {
 }
 
 export interface ManagedClass extends ClassDraft {
+  courseTypeMaxStudents: number | null;
   coachIds: string[];
   courseTypeId: string | null;
   courseTypeName: string | null;

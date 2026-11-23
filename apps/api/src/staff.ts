@@ -95,6 +95,27 @@ export function registerStaffRoutes(
     });
   }
 
+  function courseTypeDraft(body: Record<string, unknown>) {
+    const name = requiredText(body.name, 50);
+    const maxStudents = integer(body.maxStudents, 1, 500, '人数上限须为 1 至 500 的整数');
+    const refundPercent = body.refundPercent;
+    if (typeof refundPercent !== 'number' || !Number.isFinite(refundPercent) || refundPercent < 0 || refundPercent > 100 ||
+        Math.abs(refundPercent * 100 - Math.round(refundPercent * 100)) > 1e-8) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '退还比例须在 0% 到 100% 之间，最多两位小数');
+    }
+    return { name, maxStudents, refundPercent };
+  }
+
+  function insertCourseType(draft: Omit<CourseType, 'id'>): CourseType {
+    if (db.prepare("SELECT 1 FROM course_types WHERE name = ? AND status = 'ACTIVE'").get(draft.name)) {
+      throw new ApiError(409, 'COURSE_TYPE_EXISTS', '已存在同名课程类型');
+    }
+    const id = randomUUID();
+    db.prepare('INSERT INTO course_types (id, name, max_students, refund_basis_points) VALUES (?, ?, ?, ?)')
+      .run(id, draft.name, draft.maxStudents, Math.round(draft.refundPercent * 100));
+    return { id, ...draft };
+  }
+
   function users(): ManagedUser[] {
     return db.prepare(`
       SELECT u.id, c.name AS childName,
@@ -157,28 +178,46 @@ export function registerStaffRoutes(
     });
     routes.get('/course-types', async () => db.prepare(`
       SELECT id, name, max_students AS maxStudents, refund_basis_points / 100.0 AS refundPercent
-      FROM course_types ORDER BY name
+      FROM course_types WHERE status = 'ACTIVE' ORDER BY name
     `).all() as unknown as CourseType[]);
     routes.post('/course-types', async request => {
       const body = object(request.body);
-      const name = requiredText(body.name, 50);
-      const maxStudents = integer(body.maxStudents, 1, 500, '人数上限须为 1 至 500 的整数');
-      const refundPercent = body.refundPercent;
-      if (typeof refundPercent !== 'number' || !Number.isFinite(refundPercent) || refundPercent < 0 || refundPercent > 100 ||
-          Math.abs(refundPercent * 100 - Math.round(refundPercent * 100)) > 1e-8) {
-        throw new ApiError(400, 'VALIDATION_ERROR', '退还比例须在 0% 到 100% 之间，最多两位小数');
-      }
-      const draft = { name, maxStudents, refundPercent };
+      const draft = courseTypeDraft(body);
       return safeWrite(requiredText(body.requestKey), 'COURSE_TYPE_CREATED', draft, () => {
-        if (db.prepare('SELECT 1 FROM course_types WHERE name = ?').get(name)) {
-          throw new ApiError(409, 'COURSE_TYPE_EXISTS', '已存在同名课程类型');
-        }
-        const id = randomUUID();
-        db.prepare('INSERT INTO course_types (id, name, max_students, refund_basis_points) VALUES (?, ?, ?, ?)')
-          .run(id, name, maxStudents, Math.round(refundPercent * 100));
-        audit(db, actor(request), 'COURSE_TYPE_CREATED', id, clock().toISOString());
-        return { id, ...draft };
+        const result = insertCourseType(draft);
+        audit(db, actor(request), 'COURSE_TYPE_CREATED', result.id, clock().toISOString());
+        return result;
       });
+    });
+    routes.put('/course-types/:id', async request => {
+      const id = requiredText(object(request.params).id);
+      const body = object(request.body);
+      const draft = courseTypeDraft(body);
+      return safeWrite(requiredText(body.requestKey), 'COURSE_TYPE_UPDATED', { id, ...draft }, () => {
+        const old = db.prepare("SELECT * FROM course_types WHERE id = ? AND status = 'ACTIVE'").get(id);
+        if (!old) throw new ApiError(409, 'COURSE_TYPE_CHANGED', '类型已修改或删除，请重新打开列表');
+        if (old.name === draft.name && old.max_students === draft.maxStudents &&
+            old.refund_basis_points === Math.round(draft.refundPercent * 100)) return { id, ...draft };
+        db.prepare("UPDATE course_types SET status = 'REPLACED' WHERE id = ?").run(id);
+        const result = insertCourseType(draft);
+        db.prepare('UPDATE coaches SET private_course_type_id = ? WHERE private_course_type_id = ?')
+          .run(draft.maxStudents === 1 ? result.id : null, id);
+        audit(db, actor(request), 'COURSE_TYPE_UPDATED', id, clock().toISOString());
+        return result;
+      });
+    });
+    routes.delete('/course-types/:id', async (request, reply) => {
+      const id = requiredText(object(request.params).id);
+      transaction(db, () => {
+        const row = db.prepare('SELECT status FROM course_types WHERE id = ?').get(id);
+        if (!row) throw new ApiError(404, 'NOT_FOUND', '未找到课程类型');
+        if (row.status === 'DELETED') return;
+        if (row.status === 'REPLACED') throw new ApiError(409, 'COURSE_TYPE_CHANGED', '类型已修改，请重新打开列表');
+        db.prepare("UPDATE course_types SET status = 'DELETED' WHERE id = ?").run(id);
+        db.prepare('UPDATE coaches SET private_course_type_id = NULL WHERE private_course_type_id = ?').run(id);
+        audit(db, actor(request), 'COURSE_TYPE_DELETED', id, clock().toISOString());
+      });
+      return reply.code(204).send();
     });
     routes.get('/schedule', async request => {
       const query = object(request.query);

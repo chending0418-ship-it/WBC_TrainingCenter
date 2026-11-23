@@ -222,7 +222,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     let refundPoints = 0;
     const courseTypeId = selection.courseTypeId ?? day.courseTypeId;
     if (courseTypeId) {
-      const course = db.prepare('SELECT name, max_students, refund_basis_points FROM course_types WHERE id = ?')
+      const course = db.prepare("SELECT name, max_students, refund_basis_points FROM course_types WHERE id = ? AND status = 'ACTIVE'")
         .get(courseTypeId);
       if (!course) throw new ApiError(404, 'NOT_FOUND', '未找到该课程类型');
       if (course.max_students !== 1) throw new ApiError(400, 'VALIDATION_ERROR', '请为私教选择一对一课程类型');

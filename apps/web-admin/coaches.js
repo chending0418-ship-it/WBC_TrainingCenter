@@ -81,15 +81,15 @@ export async function editCoach(ctx) {
   };
 }
 
-function newCourseType(ctx) {
-  const root = ctx.show(html`${title('新增课程类型', link('返回课程类型', 'courseTypes'))}<form class="coach-edit-form">
-    ${box('类型设置', html`<div class="form-grid form-pad">${field('类型名称', 'name', '', { maxLength: 50 })}
-      ${field('每位教练最多带几名学员', 'maxStudents', '', { type: 'number', min: 1, max: 500 })}</div>`)}
+function courseTypeEditor(ctx, type) {
+  const root = ctx.show(html`${title(type ? '编辑课程类型' : '新增课程类型', link('返回课程类型', 'courseTypes'))}<form class="coach-edit-form">
+    ${box('类型设置', html`<div class="form-grid form-pad">${field('类型名称', 'name', type?.name, { maxLength: 50 })}
+      ${field('每位教练最多带几名学员', 'maxStudents', type?.maxStudents, { type: 'number', min: 1, max: 500 })}</div>`)}
     ${box('取消退还', html`<div class="form-pad"><div class="form-grid">
-      ${select('退还方式', 'refund', [['partial', '按比例退还'], ['full', '全额退还']], 'partial')}
+      ${select('退还方式', 'refund', [['partial', '按比例退还'], ['full', '全额退还']], type?.refundPercent === 100 ? 'full' : 'partial')}
       <label class="w-field"><span>退还比例（%）</span><input type="number" name="refundPercent" min="0" max="99.99"
-        step="0.01" placeholder="不退还填 0" required></label></div>
-      <p class="quiet-text">取消预约时自动退回积分，小数部分舍去。</p></div>`)}
+        step="0.01" value="${type?.refundPercent === 100 ? 0 : type?.refundPercent}" placeholder="不退还填 0" required></label></div>
+      <p class="quiet-text">${type ? '保存后，新排课使用新规则。已排课程和预约保留原规则。' : '取消预约时自动退回积分，小数部分舍去。'}</p></div>`)}
     ${buttons(link('取消', 'courseTypes', {}, 'wb outline'), submit('保存类型'))}</form>`);
   if (!root) return;
   const form = root.querySelector('form');
@@ -98,22 +98,37 @@ function newCourseType(ctx) {
     refundPercent.disabled = refund.value === 'full';
     refundPercent.closest('label').hidden = refundPercent.disabled;
   };
+  refund.onchange();
   form.onsubmit = event => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
     ctx.perform(async () => {
-      await ctx.write('/course-types', 'POST', { name: data.name.trim(), maxStudents: Number(data.maxStudents),
+      await ctx.write(type ? '/course-types/' + type.id : '/course-types', type ? 'PUT' : 'POST', { name: data.name.trim(), maxStudents: Number(data.maxStudents),
         refundPercent: data.refund === 'full' ? 100 : Number(data.refundPercent) }, true);
-      if (ctx.active()) { ctx.notice('课程类型已新增'); ctx.navigate('courseTypes'); }
+      if (ctx.active()) { ctx.notice(type ? '课程类型已更新' : '课程类型已新增'); ctx.navigate('courseTypes'); }
     });
   };
 }
 
 export async function courseTypes(ctx) {
-  if (ctx.query.get('new') === '1') return newCourseType(ctx);
-  const types = await ctx.api('/course-types');
+  if (ctx.query.get('new') === '1') return courseTypeEditor(ctx);
+  const types = await ctx.api('/course-types', true);
+  const editId = ctx.query.get('edit');
+  if (editId) {
+    const type = types.find(item => item.id === editId);
+    if (!type) throw Error('类型已修改或删除，请返回课程类型列表。');
+    return courseTypeEditor(ctx, type);
+  }
   const rows = types.map(type => [type.name, type.maxStudents + ' 人',
-    type.refundPercent === 100 ? '全额退还' : type.refundPercent === 0 ? '不退还' : '退还 ' + type.refundPercent + '%']);
-  ctx.show(html`${title('课程类型', link('＋ 新增课程类型', 'courseTypes', { new: 1 }, 'wb'))}
-    ${box('类型列表', table(['类型名称', '每位教练人数上限', '取消退还'], rows, '暂无课程类型。'))}`);
+    type.refundPercent === 100 ? '全额退还' : type.refundPercent === 0 ? '不退还' : '退还 ' + type.refundPercent + '%',
+    html`${link('编辑', 'courseTypes', { edit: type.id })} <button type="button" class="txt" data-remove="${type.id}">删除</button>`]);
+  const root = ctx.show(html`${title('课程类型', link('＋ 新增课程类型', 'courseTypes', { new: 1 }, 'wb'))}
+    ${box('类型列表', table(['类型名称', '每位教练人数上限', '取消退还', '操作'], rows, '暂无课程类型。'))}`);
+  if (!root) return;
+  for (const button of root.querySelectorAll('[data-remove]')) button.onclick = () => ctx.perform(async () => {
+    const type = types.find(item => item.id === button.dataset.remove);
+    if (!await confirmAction('删除课程类型', '删除「' + type.name + '」后，新排课无法选择该类型。已排课程和预约保留原规则。')) return;
+    await ctx.write('/course-types/' + type.id, 'DELETE', {});
+    if (ctx.active()) { ctx.notice('课程类型已删除'); ctx.refresh(); }
+  });
 }

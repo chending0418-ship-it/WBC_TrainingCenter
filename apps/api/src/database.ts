@@ -354,6 +354,32 @@ export function openDatabase(path: string): DatabaseSync {
     if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 15) return;
     db.exec('ALTER TABLE class_sessions ADD COLUMN deleted_at TEXT; PRAGMA user_version = 15');
   });
+  // Rebuild the parent table to replace global name uniqueness with active-name uniqueness.
+  if (Number(db.prepare('PRAGMA user_version').get()?.user_version) < 16) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    try {
+      transaction(db, () => {
+        if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 16) return;
+        db.exec(`
+          CREATE TABLE course_types_v16 (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE,
+            max_students INTEGER NOT NULL CHECK (max_students BETWEEN 1 AND 500),
+            refund_basis_points INTEGER NOT NULL CHECK (refund_basis_points BETWEEN 0 AND 10000),
+            status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REPLACED', 'DELETED'))
+          ) STRICT;
+          INSERT INTO course_types_v16 (id, name, max_students, refund_basis_points)
+            SELECT id, name, max_students, refund_basis_points FROM course_types;
+          DROP TABLE course_types;
+          ALTER TABLE course_types_v16 RENAME TO course_types;
+          CREATE UNIQUE INDEX course_types_active_name ON course_types(name) WHERE status = 'ACTIVE';
+          PRAGMA user_version = 16;
+        `);
+        if (db.prepare('PRAGMA foreign_key_check').get()) throw new Error('Course type migration failed foreign key check');
+      });
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+  }
   return db;
 }
 

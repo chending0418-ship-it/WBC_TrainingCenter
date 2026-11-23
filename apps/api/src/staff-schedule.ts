@@ -17,9 +17,9 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     if (active && !coach.enabled) throw new ApiError(409, 'COACH_DISABLED', '请先启用该教练');
   }
 
-  function validateCourseCapacity(courseTypeId: string | null, capacity: number, coachCount: number) {
+  function validateCourseCapacity(courseTypeId: string | null, capacity: number, coachCount: number, originalTypeId: string | null = null) {
     if (!courseTypeId) return;
-    const type = db.prepare('SELECT max_students FROM course_types WHERE id = ?').get(courseTypeId);
+    const type = db.prepare("SELECT max_students FROM course_types WHERE id = ? AND (status = 'ACTIVE' OR id = ?)").get(courseTypeId, originalTypeId);
     if (!type) throw new ApiError(404, 'NOT_FOUND', '未找到该课程类型');
     if (capacity > Number(type.max_students) * coachCount) {
       throw new ApiError(400, 'COURSE_TYPE_CAPACITY', '班次容量不能超过所选教练合计可带人数');
@@ -43,7 +43,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     const rows = db.prepare(`
       SELECT s.id, s.coach_id AS coachId, ${sessionRoster.ids} AS coachIds, ${sessionRoster.names} AS coachName, s.title, s.venue,
         s.starts_at AS startsAt, s.ends_at AS endsAt, s.points, s.capacity, s.status,
-        s.course_type_id AS courseTypeId, t.name AS courseTypeName,
+        s.course_type_id AS courseTypeId, t.name AS courseTypeName, t.max_students AS courseTypeMaxStudents,
         (s.status = 'PUBLISHED' AND ${sessionRoster.enabled} AND ${templateAllowsBooking}) AS bookable,
         (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS bookedCount
       FROM class_sessions s
@@ -152,8 +152,9 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
   function templates(activeOnly = false): ManagedTemplate[] {
     const plans = db.prepare(`
       SELECT t.id, t.coach_id AS coachId, ${templateRoster.ids} AS coachIds, ${templateRoster.names} AS coachName, t.title, t.venue, t.first_date AS date, t.enabled,
-        t.weekdays, t.start_minutes AS startMinutes, t.duration, t.capacity, t.points, t.course_type_id AS courseTypeId
-      FROM class_templates t
+        t.weekdays, t.start_minutes AS startMinutes, t.duration, t.capacity, t.points, t.course_type_id AS courseTypeId,
+        ct.name AS courseTypeName, ct.max_students AS courseTypeMaxStudents
+      FROM class_templates t LEFT JOIN course_types ct ON ct.id = t.course_type_id
       WHERE ? = 0 OR (t.enabled = 1 AND ${templateRoster.enabled}) ORDER BY t.enabled DESC, t.rowid
     `).all(Number(activeOnly)) as unknown as
       (Omit<ManagedTemplate, 'weekdays' | 'startMinutes' | 'enabled' | 'startMinute' | 'coachIds'> &
@@ -166,15 +167,15 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
 
   function reviseTemplate(id: string, plan: ClassPlan, enabled: boolean, actor: string, now: string) {
     const current = db.prepare(`
-      SELECT json_group_array(coach_id ORDER BY position) AS coachIds
-      FROM template_coach_assignments WHERE template_id = ? GROUP BY template_id
+      SELECT t.course_type_id AS courseTypeId, ${templateRoster.ids} AS coachIds
+      FROM class_templates t WHERE t.id = ?
     `).get(id);
     if (!current) {
       throw new ApiError(404, 'NOT_FOUND', '未找到该排课模板');
     }
     const coachIds = assignedCoaches(plan, JSON.parse(String(current.coachIds)));
     for (const coachId of coachIds) requireCoach(coachId, enabled);
-    validateCourseCapacity(plan.courseTypeId ?? null, plan.capacity, coachIds.length);
+    validateCourseCapacity(plan.courseTypeId ?? null, plan.capacity, coachIds.length, current.courseTypeId as string | null);
     if (!plan.weekdays.length || plan.date > addDays(venueDate(now), 29)) {
       throw new ApiError(400, 'VALIDATION_ERROR', '请填写有效的周期及起始日期');
     }
@@ -225,7 +226,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       }
       const existingTypeId = current.course_type_id as string | null;
       const courseTypeId = draft.courseTypeId === undefined ? existingTypeId : draft.courseTypeId;
-      validateCourseCapacity(courseTypeId, draft.capacity, coachIds.length);
+      validateCourseCapacity(courseTypeId, draft.capacity, coachIds.length, existingTypeId);
       if (current.booked && status === 'CLOSED') {
         throw new ApiError(409, 'CLASS_HAS_BOOKINGS', '停开前请先处理该班次的预约');
       }

@@ -1,9 +1,9 @@
 import type { CourseType } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/request';
-import { allowPage, readVersion } from '../../lib/session';
+import { allowPage, invalidateRead, readVersion } from '../../lib/session';
 import { staffApi, staffWrite } from '../../lib/staff';
 
-const emptyForm = { name: '', maxStudents: '', fullRefund: false, partialRefund: '', saveError: '' };
+const emptyForm = { editingId: '', name: '', maxStudents: '', fullRefund: false, partialRefund: '', saveError: '' };
 
 Page({
   data: {
@@ -12,6 +12,7 @@ Page({
     loading: true,
     busy: false,
     editing: false,
+    deleteId: '',
     error: '',
     types: [] as CourseType[]
   },
@@ -19,7 +20,10 @@ Page({
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    if (authorized && (!this.typeVersion || this.typeVersion !== readVersion('/api/admin/course-types'))) void this.load();
+    if (authorized && !this.data.editing) {
+      invalidateRead('/api/admin/course-types');
+      void this.load();
+    }
   },
   async load() {
     this.setData({ loading: !this.typeVersion, error: '' });
@@ -34,11 +38,41 @@ Page({
     }
   },
   start() {
-    this.setData({ ...emptyForm, editing: true });
+    this.setData({ ...emptyForm, editing: true, deleteId: '' });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
+  edit(event: WechatMiniprogram.TouchEvent) {
+    const type = this.data.types.find(item => item.id === event.currentTarget.dataset.id);
+    if (!type || this.data.busy) return;
+    this.setData({ editing: true, deleteId: '', editingId: type.id, name: type.name, maxStudents: String(type.maxStudents),
+      fullRefund: type.refundPercent === 100, partialRefund: type.refundPercent === 100 ? '0' : String(type.refundPercent), saveError: '' });
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+  confirmRemove(event: WechatMiniprogram.TouchEvent) {
+    if (!this.data.busy) this.setData({ deleteId: String(event.currentTarget.dataset.id) });
+  },
+  cancelRemove() {
+    if (!this.data.busy) this.setData({ deleteId: '' });
+  },
+  async remove(event: WechatMiniprogram.TouchEvent) {
+    const type = this.data.types.find(item => item.id === event.currentTarget.dataset.id);
+    if (!type || this.data.busy) return;
+    this.setData({ busy: true, error: '' });
+    try {
+      await staffApi('/course-types/' + type.id, 'DELETE');
+      this.setData({ deleteId: '' });
+      await this.load();
+      wx.showToast({ title: '课程类型已删除', icon: 'success' });
+    } catch (error) {
+      invalidateRead('/api/admin/course-types');
+      this.setData({ error: errorMessage(error) });
+    } finally { this.setData({ busy: false }); }
+  },
   close() {
-    if (!this.data.busy) this.setData({ editing: false });
+    if (this.data.busy) return;
+    this.setData({ editing: false });
+    invalidateRead('/api/admin/course-types');
+    void this.load();
   },
   changeField(event: WechatMiniprogram.Input) {
     const field = event.currentTarget.dataset.field as 'name' | 'maxStudents' | 'partialRefund';
@@ -68,10 +102,11 @@ Page({
 
     this.setData({ busy: true, saveError: '' });
     try {
-      await staffWrite<CourseType>('/course-types', { name, maxStudents, refundPercent });
+      const id = this.data.editingId;
+      await staffWrite<CourseType>(id ? '/course-types/' + id : '/course-types', { name, maxStudents, refundPercent }, undefined, id ? 'PUT' : 'POST');
       this.setData({ editing: false });
       await this.load();
-      wx.showToast({ title: '课程类型已新增', icon: 'success' });
+      wx.showToast({ title: id ? '课程类型已更新' : '课程类型已新增', icon: 'success' });
     } catch (error) {
       this.setData({ saveError: errorMessage(error) });
     } finally {

@@ -8,7 +8,7 @@ export function staffReadAffected(writePath: string, readPath: string): boolean 
   const [resource, readId, readField] = read.slice(prefix.length).split('/');
   switch (write) {
     case 'course-types':
-      return resource === 'course-types';
+      return resource === 'course-types' || resource === 'coaches';
     case 'registrations':
       return ['registrations', 'parents', 'overview'].includes(resource);
     case 'accounts':

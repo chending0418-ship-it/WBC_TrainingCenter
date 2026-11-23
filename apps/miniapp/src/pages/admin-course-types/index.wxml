@@ -1,6 +1,6 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <view class="{{!editing && !loading && !error ? 'screen-heading' : ''}}">
-    <text class="page-title" role="heading" aria-level="1">{{editing ? '新增课程类型' : '课程类型'}}</text>
+    <text class="page-title" role="heading" aria-level="1">{{editing ? (editingId ? '编辑课程类型' : '新增课程类型') : '课程类型'}}</text>
     <button wx:if="{{!editing && !loading && !error}}" class="button row-action" bindtap="start" disabled="{{busy}}" hover-class="press">新增课程类型</button>
   </view>
   <form wx:if="{{editing}}" bindsubmit="save">
@@ -26,6 +26,7 @@
       <input class="field" type="digit" value="{{partialRefund}}" maxlength="5" placeholder="例如 50，不退填 0"
         data-field="partialRefund" bindinput="changeField" disabled="{{busy}}" />
     </label>
+    <view wx:if="{{editingId}}" class="muted">保存后，新排课使用新规则。已排课程和预约保留原规则。</view>
     <view class="muted">取消预约时自动退回积分，小数部分舍去。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
     <view class="section-actions form-actions">
@@ -43,6 +44,17 @@
     <view wx:for="{{types}}" wx:key="id" class="list-row">
       <view class="row-name">{{item.name}}</view>
       <view class="muted">1 对 {{item.maxStudents}} · {{item.refundPercent === 100 ? '全额退还' : item.refundPercent === 0 ? '不退还' : '退还 ' + item.refundPercent + '%'}}</view>
+      <block wx:if="{{deleteId === item.id}}">
+        <view class="muted">删除后，新排课无法选择「{{item.name}}」。已排课程和预约保留原规则。</view>
+        <view class="section-actions item-actions">
+          <button class="button quiet" bindtap="cancelRemove" disabled="{{busy}}" hover-class="press">保留类型</button>
+          <button class="button" data-id="{{item.id}}" bindtap="remove" disabled="{{busy}}" hover-class="press">确认删除</button>
+        </view>
+      </block>
+      <view wx:else class="section-actions item-actions">
+        <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑</button>
+        <button class="button quiet" data-id="{{item.id}}" bindtap="confirmRemove" disabled="{{busy}}" hover-class="press">删除</button>
+      </view>
     </view>
   </block>
 </view>
