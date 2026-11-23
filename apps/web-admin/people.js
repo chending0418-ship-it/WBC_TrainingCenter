@@ -2,6 +2,8 @@ import { accountUrl, bookingLabels, box, buttons, confirmAction, datetime, detai
   href, html, link, maskedPhone, phoneTail, regLabels, select, stamp, submit, table, tabs, title } from './ui.js';
 
 const statusChoices = [['', '全部'], ...Object.entries(regLabels)];
+const directoryChoices = [['submitted', '已提交队员资料'], ['missing', '仅登录、未提交资料'],
+  ...Object.entries(regLabels).filter(([key]) => key !== 'UNREGISTERED')];
 const nameOf = family => family.childName || '未填写队员资料';
 const stateOf = family => regLabels[family.registrationStatus || 'UNREGISTERED'];
 function balances(account) {
@@ -12,10 +14,12 @@ function balances(account) {
 export async function people(ctx) {
   const choosing = ctx.query.get('choose') === 'finance';
   const mode = ctx.query.get('mode') || 'credit';
+  const choices = choosing ? statusChoices : directoryChoices;
+  const initial = choices.find(([value]) => value === ctx.query.get('filter'))?.[0] ?? choices[0][0];
   const root = ctx.show(html`${title(choosing ? '选择家庭' : '队员档案')}
     <form class="tool-row" role="search"><label class="web-search"><i aria-hidden="true"></i>
-    <input name="q" type="search" maxlength="50" aria-label="搜索队员" placeholder="队员姓名、联系人或手机号后四位"></label>
-    ${filter('注册状态', 'status', statusChoices, '')}</form><div id="family-list" aria-live="polite"></div>`);
+    <input name="q" type="search" maxlength="50" aria-label="搜索队员" value="${ctx.query.get('q') || ''}" placeholder="姓名、电话或账户 ID"></label>
+    ${filter(choosing ? '注册状态' : '档案筛选', 'status', choices, initial)}</form><div id="family-list" aria-live="polite"></div>`);
   if (!root) return;
   const form = root.querySelector('form');
   const result = root.querySelector('#family-list');
@@ -24,16 +28,22 @@ export async function people(ctx) {
   async function search() {
     const request = ++revision;
     const query = new URLSearchParams(new FormData(form));
+    const selected = form.status.value;
+    const missing = selected === 'missing';
+    if (selected === 'submitted' || missing) {
+      query.delete('status');
+      query.set('profile', selected);
+    }
     const rows = await ctx.api('/parents?' + query.toString());
     if (!ctx.active() || request !== revision) return;
     const contents = rows.map(family => [
-      html`<b>${nameOf(family)}</b>`, family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—',
+      html`<b>${missing ? '账户 · ' + family.id.slice(-8) : nameOf(family)}</b>`, family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—',
       phoneTail(family.contact), stamp(stateOf(family)), family.balance - family.reservedPoints, family.reservedPoints,
-      choosing ? link('选择家庭', 'finance', { id: family.id, mode }) : link('查看档案', 'person', { id: family.id })
+      choosing ? link('选择家庭', 'finance', { id: family.id, mode }) : link('查看档案', 'person', { id: family.id, filter: selected, q: form.q.value.trim() })
     ]);
-    const count = rows.length === 50 ? '显示前 50 名，请搜索缩小范围' : '共 ' + rows.length + ' 名';
-    result.innerHTML = box('队员名单',
-      table(['队员', '出生年月 · 性别', '联系人 · 尾号', '注册状态', '可用积分', '预留积分', ''], contents, '未找到符合条件的队员'),
+    const count = rows.length === 50 ? '显示前 50 名，请搜索缩小范围' : '共 ' + rows.length + (missing ? ' 个账户' : ' 名');
+    result.innerHTML = box(missing ? '未提交资料的账户' : '队员名单',
+      table([missing ? '账户' : '队员', '出生年月 · 性别', '联系人 · 尾号', '注册状态', '可用积分', '预留积分', ''], contents, missing ? '未找到符合条件的账户' : '未找到符合条件的队员'),
       html`<span class="secondary">${count}</span>`).value;
   }
   function update() {
@@ -58,9 +68,9 @@ export async function person(ctx) {
   if (!id) return ctx.navigate('people');
   const path = accountUrl(id);
   const [family, account, bookings] = await Promise.all([loadFamily(ctx, id), ctx.api(path), ctx.api(path + '/bookings')]);
-  const profile = details([['姓名', nameOf(family)], ['出生年月 / 性别', family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—'],
+  const profile = details([...(family.child ? [] : [['账户 ID', id]]), ['姓名', nameOf(family)], ['出生年月 / 性别', family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—'],
     ['联系人', family.contact ? family.contact.name + ' · ' + maskedPhone(family.contact.phone) : '—'], ['注册状态', stamp(stateOf(family))]]);
-  ctx.show(html`${title(nameOf(family) + '的队员档案', link('返回队员名单', 'people'))}
+  ctx.show(html`${title(nameOf(family) + '的队员档案', link('返回队员名单', 'people', { filter: ctx.query.get('filter'), q: ctx.query.get('q') }))}
     <div class="split equal">${box('队员资料', profile)}${box('积分账户', html`${balances(account)}
       ${buttons(link('充值', 'finance', { id }, 'wb outline'), link('调整积分', 'finance', { id, mode: 'adjust' }, 'wb outline'))}`)}</div>
     ${box('近期预约', table(['开课时间', '课程', '教练', '积分', '状态'], bookings.map(b =>

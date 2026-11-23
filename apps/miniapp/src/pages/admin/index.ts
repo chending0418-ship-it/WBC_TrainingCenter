@@ -12,7 +12,7 @@ Page({
       { page: 'admin-bookings', label: '预约管理', icon: 'bookings' },
       { page: 'admin-course-types', label: '课程类型', icon: 'types' },
       { page: 'admin-coaches', label: '教练管理', icon: 'coaches' },
-      { page: 'admin-parents', label: '家长资料', icon: 'parents' },
+      { page: 'admin-parents', label: '队员档案', icon: 'parents' },
       { page: 'admin-points', label: '积分调整', icon: 'points' }
     ]
   },

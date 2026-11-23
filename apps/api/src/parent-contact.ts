@@ -26,11 +26,16 @@ export function saveContact(db: DatabaseSync, userId: string, input: unknown): P
   return { name, phone };
 }
 
-export function searchParents(db: DatabaseSync, query: string, now: string, status: unknown): ManagedParent[] {
+export function searchParents(db: DatabaseSync, query: string, now: string, status: unknown, profile: unknown): ManagedParent[] {
   const filter = status === undefined || status === '' ? '' : requiredText(status, 20);
   if (filter && !['APPROVED', 'PENDING', 'RETURNED', 'UNREGISTERED'].includes(filter)) {
     throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的注册状态');
   }
+  if (profile !== undefined && profile !== 'submitted' && profile !== 'missing') {
+    throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的队员资料范围');
+  }
+  const profileCondition = profile === 'submitted' ? 'AND c.guardian_id IS NOT NULL'
+    : profile === 'missing' ? 'AND c.guardian_id IS NULL' : '';
   const rows = db.prepare(`
     SELECT u.id, c.name AS childName, c.birth_month AS birthMonth, c.gender, p.name AS contactName, p.phone, r.status AS registrationStatus,
       (SELECT COALESCE(SUM(b.points), 0) FROM bookings b WHERE b.user_id = u.id AND b.status = 'CONFIRMED'
@@ -39,7 +44,7 @@ export function searchParents(db: DatabaseSync, query: string, now: string, stat
     FROM users u LEFT JOIN children c ON c.guardian_id = u.id
     LEFT JOIN parent_contacts p ON p.user_id = u.id
     LEFT JOIN registrations r ON r.user_id = u.id
-    WHERE (? = '' OR coalesce(r.status, 'UNREGISTERED') = ?) AND (? = '' OR instr(lower(u.id), lower(?)) > 0 OR instr(lower(c.name), lower(?)) > 0
+    WHERE (? = '' OR coalesce(r.status, 'UNREGISTERED') = ?) ${profileCondition} AND (? = '' OR instr(lower(u.id), lower(?)) > 0 OR instr(lower(c.name), lower(?)) > 0
       OR instr(lower(p.name), lower(?)) > 0 OR instr(p.phone, ?) > 0)
     ORDER BY u.id = 'parent' DESC, u.id LIMIT 50
   `).all(now, filter, filter, query, query, query, query, query) as unknown as
