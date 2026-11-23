@@ -168,7 +168,10 @@ export function registerStaffRoutes(
         return { id, ...draft };
       });
     });
-    routes.get('/classes', async request => schedule.list(dateInput(object(request.query).date)));
+    routes.get('/classes', async request => {
+      const query = object(request.query);
+      return schedule.list(dateInput(query.date), query.view === 'week' ? 7 : 1);
+    });
     routes.post('/classes', async request => {
       const body = object(request.body);
       const plan = classPlan(body);

@@ -77,7 +77,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     });
   }
 
-  app.get('/api/schedule', async request => service.schedule(user(request)));
+  app.get('/api/schedule', async request => service.schedule(user(request), object(request.query).view === 'week'));
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
     return service.listSlots(requiredText(object(request.params).id), dateInput(object(request.query).date));

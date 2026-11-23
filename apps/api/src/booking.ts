@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../packages/shared/contracts.js';
 import { audit, maxPrivateMinutes, privateVenue, slotMinutes, transaction } from './database.ts';
-import { addDays, covers, dateAt, venueDate } from './time.ts';
+import { addDays, covers, dateAt, venueDate, weekday } from './time.ts';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -62,14 +62,15 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return { now, today, lastDate: addDays(today, 29) };
   }
 
-  function schedule(user: string): Schedule {
+  function schedule(user: string, includeWeekStart = false): Schedule {
     const { today, lastDate } = horizon();
+    const from = includeWeekStart ? addDays(today, -((weekday(today) + 6) % 7)) : today;
     const rows = db.prepare(`
       SELECT ${classFields} FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
       LEFT JOIN course_types t ON t.id = s.course_type_id
       WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
       ORDER BY s.starts_at
-    `).all(user, dateAt(today), dateAt(addDays(lastDate, 1))) as unknown as ClassRow[];
+    `).all(user, dateAt(from), dateAt(addDays(lastDate, 1))) as unknown as ClassRow[];
     const coaches = db.prepare('SELECT id, name, avatar_key AS avatarKey FROM coaches WHERE enabled = 1 ORDER BY id').all() as unknown as Coach[];
     return { today, lastDate, courses: rows.map(({ mine, ...course }) => ({ ...course, bookedByMe: mine === 1 })), coaches };
   }

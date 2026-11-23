@@ -1,3 +1,5 @@
+import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
+import { coachLabel } from '../../lib/coach-avatar';
 import { allowPage } from '../../lib/session';
 import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
@@ -5,7 +7,7 @@ import { addDays, mondayOfWeek } from '../../lib/private-availability';
 import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
-type ClassRow = ManagedClass & { timeLabel: string; names: string; editable: boolean };
+type ClassRow = ManagedClass & { timeLabel: string; coachLabel: string; names: string; editable: boolean };
 type TemplateRow = ManagedTemplate & { timetable: string };
 type WeeklyHours = { weekday: number; label: string; windows: CoachHours['windows']; summary: string };
 type TypeOption = { id: string | null; label: string; maxStudents: number };
@@ -24,7 +26,9 @@ Page({
     mode: 'classes',
     date: '', today: '', lastDate: '', dayLabel: '',
     loading: true, loadError: '', saveError: '', busy: false,
-    coaches: [] as Coach[], coachIndex: 0, classes: [] as ClassRow[],
+    coaches: [] as Coach[], coachIndex: 0,
+    groups: [] as ReturnType<typeof weekAgenda<ClassRow>>['groups'],
+    dates: [] as ReturnType<typeof weekAgenda>['dates'], total: 0, weekLabel: '', hasPrevious: false, hasNext: false, expandedId: '',
     templates: [] as TemplateRow[],
     typeOptions: [untyped] as TypeOption[],
     editor: null as Editor | null, days: weekdays.map((label, index) => ({ label, index, active: false })),
@@ -72,13 +76,18 @@ Page({
     this.setData({ loading: true, loadError: '', dayLabel: weekdays[dayOfWeek(date)] });
     try {
       if (mode === 'classes') {
-        const classes = await staffApi<ManagedClass[]>('/classes?date=' + date);
+        const classes = await staffApi<ManagedClass[]>('/classes?date=' + mondayOfWeek(date) + '&view=week');
         const now = new Date().toISOString();
         if (current !== request) return;
-        this.setData({ classes: classes.map(row => ({
-          ...row, timeLabel: timeRange(row.startsAt, row.endsAt), editable: row.startsAt > now && coaches.some(coach => coach.id === row.coachId),
-          names: row.attendees.map(attendee => attendee.childName).join('、')
-        })) });
+        const byDate = new Map<string, ClassRow[]>();
+        for (const row of classes) {
+          const day = byDate.get(row.date) ?? [];
+          day.push({ ...row, timeLabel: timeRange(row.startsAt, row.endsAt), coachLabel: coachLabel(row.coachName),
+            editable: row.startsAt > now && coaches.some(coach => coach.id === row.coachId),
+            names: row.attendees.map(attendee => attendee.childName).join('、') });
+          byDate.set(row.date, day);
+        }
+        this.setData(weekAgenda(date, this.data.today, this.data.lastDate, byDate));
       } else if (mode === 'templates') {
         const templates = await staffApi<ManagedTemplate[]>('/class-templates');
         if (current === request) this.setData({ templates: templates.map(template => ({
@@ -115,8 +124,29 @@ Page({
     this.setData({ mode: String(event.currentTarget.dataset.mode), saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
+  changeWeek(event: WechatMiniprogram.TouchEvent) {
+    const { date, today, lastDate, busy } = this.data;
+    if (busy || !date) return;
+    const next = adjacentWeek(date, Number(event.currentTarget.dataset.step), today, lastDate);
+    if (!next) return;
+    this.setData({ date: next, expandedId: '', saveError: '' });
+    void this.refresh();
+  },
+  jumpDay(event: WechatMiniprogram.TouchEvent) {
+    const day = this.data.dates.find(item => item.date === event.currentTarget.dataset.date);
+    if (!day || day.outside || this.data.busy) return;
+    if (day.date >= this.data.today) this.setData({ date: day.date });
+    goToAgendaDay(day.date, day.count);
+  },
+  toggleDetails(event: WechatMiniprogram.TouchEvent) {
+    const id = String(event.currentTarget.dataset.id);
+    if (!this.data.busy) this.setData({ expandedId: this.data.expandedId === id ? '' : id });
+  },
+  findClass(id: string) {
+    return this.data.groups.flatMap(day => day.lessons).find(item => item.id === id);
+  },
   changeDate(event: WechatMiniprogram.PickerChange) {
-    this.setData({ date: String(event.detail.value), saveError: '', blocking: false, editingWeekday: -1 });
+    this.setData({ date: String(event.detail.value), expandedId: '', saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
   changeHoursCoach(event: WechatMiniprogram.PickerChange) {
@@ -164,7 +194,7 @@ Page({
     }
   },
   editClass(event: WechatMiniprogram.TouchEvent) {
-    const row = this.data.classes.find(item => item.id === event.currentTarget.dataset.id);
+    const row = this.findClass(String(event.currentTarget.dataset.id));
     if (!row) return;
     this.setData({
       editor: { id: row.id, title: row.title, venue: row.venue, date: row.date,
@@ -242,7 +272,7 @@ Page({
     }
   },
   async toggleClass(event: WechatMiniprogram.TouchEvent) {
-    const row = this.data.classes.find(item => item.id === event.currentTarget.dataset.id);
+    const row = this.findClass(String(event.currentTarget.dataset.id));
     if (this.data.busy || !row) return;
     const closing = row.status === 'PUBLISHED';
     this.setData({ busy: true, saveError: '' });

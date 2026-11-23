@@ -38,6 +38,18 @@ async function session(app: FastifyInstance, staff = true) {
   return { authorization: 'Bearer ' + response.json<{ token: string }>().token };
 }
 
+test('团课周查询按上海开课日期分组，跨年班次保留自己的日期和时长', async context => {
+  const { app } = fixture(context);
+  const headers = await session(app);
+  const list = async (query: string) => (await app.inject({ url: '/api/admin/classes?' + query, headers })).json<ManagedClass[]>();
+  const week = await list('date=2030-12-30&view=week');
+  const nextDay = await list('date=2031-01-01');
+  assert.ok(nextDay.length);
+  assert.deepEqual(week.filter(row => row.date === '2031-01-01'), nextDay);
+  assert.ok(week.some(row => row.date === '2031-01-05'));
+  assert.ok(week.every(row => row.date >= '2030-12-30' && row.date <= '2031-01-05'));
+});
+
 test('管理会话验证密码，家长凭据无权访问或写入，退出后会话失效', async context => {
   const { app } = fixture(context);
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/session', payload: { password: 'x' } })).statusCode, 401);
