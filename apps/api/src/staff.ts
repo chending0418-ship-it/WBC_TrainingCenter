@@ -13,7 +13,7 @@ import { roleSessions } from './role-session.ts';
 import { addCoach, coachDraft, listCoaches, updateCoach } from './staff-coaches.ts';
 import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
-import { addDays, dateAt, venueDate } from './time.ts';
+import { addDays, dateAt, venueDate, weekday } from './time.ts';
 import type { Authorize } from './wechat-auth.ts';
 
 const demoAdmin = 'local-admin';
@@ -327,6 +327,8 @@ export function registerStaffRoutes(
       const now = clock().toISOString();
       const pendingOnly = query.pending === '1';
       const date = pendingOnly ? '' : dateInput(query.date);
+      const weekly = !pendingOnly && query.view === 'week';
+      const start = weekly ? addDays(date, -((weekday(date) + 6) % 7)) : date;
       const rows = db.prepare(`
         SELECT b.id, b.type, ${bookingStatus} AS status, b.title, COALESCE(b.group_coach_names, c.name) AS coachName, b.venue, b.points, b.user_id AS userId,
           b.starts_at AS startsAt, b.ends_at AS endsAt, b.refund_points AS refundPoints, child.name AS childName,
@@ -335,7 +337,7 @@ export function registerStaffRoutes(
         FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.guardian_id = b.user_id
         WHERE ${pendingOnly ? "b.status = 'CONFIRMED' AND b.approval_pending = 1 AND b.starts_at > ?" : 'b.starts_at >= ? AND b.starts_at < ?'}
         ORDER BY b.starts_at, b.created_at
-      `).all(...(pendingOnly ? [now] : [dateAt(date), dateAt(addDays(date, 1))])) as unknown as
+      `).all(...(pendingOnly ? [now] : [dateAt(start), dateAt(addDays(start, weekly ? 7 : 1))])) as unknown as
         (Omit<ManagedBooking, 'staffCreated' | 'staffCancelled' | 'canCancel' | 'canApprove'> &
           { staffCreated: number; staffCancelled: number })[];
       return rows.map(row => ({ ...row, staffCreated: !!row.staffCreated, staffCancelled: !!row.staffCancelled,

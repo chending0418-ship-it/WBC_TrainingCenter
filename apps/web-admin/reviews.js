@@ -1,4 +1,4 @@
-import { bookingLabels, box, buttons, coach, confirmAction, datetime, details, empty, field, gender, href,
+import { addDays, monthDay, weekday, bookingLabels, box, buttons, coach, confirmAction, datetime, details, empty, field, gender, href,
   html, link, maskedPhone, phoneTail, regLabels, stamp, table, tabs, time, title } from './ui.js';
 
 function selectableTable(columns, rows, selected, makeCells, blank) {
@@ -57,37 +57,46 @@ export async function registrations(ctx) {
   }
 }
 
-export async function bookings(ctx, byDate = ctx.query.get('view') === 'date') {
+export async function bookings(ctx, byWeek = ctx.query.get('view') !== 'pending') {
   const pending = await ctx.api('/bookings?pending=1');
   let entries = pending;
-  let date = '';
-  if (byDate) {
-    date = ctx.query.get('date') || (await ctx.api('/context')).today;
-    entries = await ctx.api('/bookings?date=' + encodeURIComponent(date));
+  let date = ctx.query.get('date') || '';
+  let first = '';
+  let lastDate = '';
+  if (byWeek) {
+    const context = await ctx.api('/context');
+    lastDate = context.lastDate;
+    date = date || context.today;
+    entries = await ctx.api('/bookings?view=week&date=' + encodeURIComponent(date));
+    first = addDays(date, -((weekday(date) + 6) % 7));
   }
   const rows = entries.map(row => ({ ...row, name: row.childName }));
   const selected = rows.find(row => row.id === ctx.query.get('id')) || rows[0];
   const family = selected ? (await ctx.api('/parents?q=' + encodeURIComponent(selected.userId))).find(p => p.id === selected.userId) : null;
   const statusLabel = row => row.status === 'PENDING' && !row.canApprove ? '已过期' : bookingLabels[row.status];
-  const list = selectableTable(['队员', '课程', '开课时间', ...(byDate ? ['状态'] : [])], rows, selected,
-    row => [row.title, datetime(row.startsAt), ...(byDate ? [stamp(statusLabel(row))] : [])], byDate ? '当日暂无预约' : '暂无预约申请');
+  const list = selectableTable(['队员', '课程', '开课时间', ...(byWeek ? ['状态'] : [])], rows, selected,
+    row => [(row.type === 'PRIVATE' ? '私教' : '团课') + ' · ' + row.title, datetime(row.startsAt), ...(byWeek ? [stamp(statusLabel(row))] : [])], byWeek ? '本周暂无预约' : '暂无预约申请');
   const info = selected ? html`${details([
     ['课程', selected.title], ['开课时间', datetime(selected.startsAt) + '–' + time(selected.endsAt)],
     ['教练 / 训练场地', coach(selected.coachName) + ' · ' + selected.venue],
     ['队员资格', stamp(regLabels[family?.registrationStatus || 'UNREGISTERED'])],
     [selected.canApprove ? '本次预留' : '课程积分', selected.points + ' 积分'], ['预约状态', stamp(statusLabel(selected))],
-    ...(byDate ? [['预约来源', selected.staffCreated ? '管理员代约' : '家长预约']] : [])
+    ...(byWeek ? [['预约来源', selected.staffCreated ? '管理员代约' : '家长预约']] : [])
   ])}${selected.canApprove ? decision('确认后扣除已预留的 ' + selected.points + ' 积分。', '拒绝申请', '确认预约')
     : selected.canCancel ? html`<div class="decision">${buttons(html`<button type="button" class="wb outline" data-action="cancel">取消预约</button>`)}</div>` : ''}` : empty('暂无申请详情');
-  const root = ctx.show(html`${title(byDate ? '按日期查看预约' : '预约审核', link('管理员代约', 'newBooking', { date }, 'wb'))}
-    ${tabs([['待确认（' + pending.length + '）', href('bookings'), !byDate], ['按日期查看', href('bookingDay', { date }), byDate]])}
-    ${byDate ? html`<div class="tool-row">${field('开课日期', 'date', date, { type: 'date' })}</div>` : ''}
-    <div class="split queue">${box(byDate ? '当日预约' : '预约申请', list)}${box(selected ? selected.name + '的预约申请' : '预约详情', info)}</div>`);
+  const root = ctx.show(html`${title(byWeek ? '预约管理' : '预约审核', link('管理员代约', 'newBooking', { date }, 'wb'))}
+    ${tabs([['待确认（' + pending.length + '）', href('bookings', { view: 'pending', date }), !byWeek], ['按周查看', href('bookingDay', { date }), byWeek]])}
+    ${byWeek ? html`<div class="tool-row"><b class="week-range">${monthDay(first)} — ${monthDay(addDays(first, 6))}</b>
+      ${buttons(link('上一周', 'bookingDay', { date: addDays(first, -7) }, 'wb outline'),
+        link('本周', 'bookingDay', {}, 'wb outline'),
+        addDays(first, 7) <= lastDate ? link('下一周', 'bookingDay', { date: addDays(first, 7) }, 'wb outline') : '')}
+      ${field('跳至日期所在周', 'date', date, { type: 'date', max: lastDate })}</div>` : ''}
+    <div class="split queue">${box(byWeek ? '本周预约' : '预约申请', list)}${box(selected ? selected.name + '的预约申请' : '预约详情', info)}</div>`);
   if (!root) return;
-  if (byDate) root.querySelector('[name=date]').onchange = event => {
+  if (byWeek) root.querySelector('[name=date]').onchange = event => {
     if (event.target.value) ctx.navigate('bookingDay', { date: event.target.value });
   };
-  bindRows(root, selected?.id, id => ctx.navigate(byDate ? 'bookingDay' : 'bookings', { date, id }));
+  bindRows(root, selected?.id, id => ctx.navigate(byWeek ? 'bookingDay' : 'bookings', { date, id, view: byWeek ? null : 'pending' }));
   for (const button of root.querySelectorAll('[data-action]')) {
     const approve = button.dataset.action === 'approve';
     button.onclick = () => ctx.perform(async () => {

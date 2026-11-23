@@ -1,7 +1,7 @@
 <template name="week">
   <view class="week-panel">
     <view class="week-head">
-      <picker wx:if="{{canPick}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
+      <picker wx:if="{{canPick}}" mode="date" start="{{allowHistory ? '' : today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
         <view class="week-picker"><text class="week-caption">{{weekLabel}}</text><view class="picker-caret"></view></view>
       </picker>
       <text wx:else class="week-caption">{{weekLabel}}</text>
@@ -12,7 +12,7 @@
     </view>
     <view wx:if="{{showDays}}" class="week-strip">
       <button wx:for="{{dates}}" wx:key="date" class="week-cell {{item.date === today ? 'is-today' : ''}}" data-date="{{item.date}}"
-        disabled="{{item.outside || busy}}" aria-label="{{item.date}} {{item.weekday}}，{{item.outside ? '未开放' : item.count + ' 节团课'}}"
+        disabled="{{item.outside || busy}}" aria-label="{{item.date}} {{item.weekday}}，{{item.outside ? '未开放' : item.count + (bookingWeek ? ' 笔预约' : ' 节团课')}}"
         bindtap="jumpDay" hover-class="press">
         <text class="cell-weekday">{{item.date === today ? '今天' : item.weekday}}</text>
         <text class="cell-date">{{item.day}}</text>
