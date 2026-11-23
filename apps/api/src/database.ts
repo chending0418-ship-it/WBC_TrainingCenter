@@ -2,8 +2,6 @@ import { DatabaseSync } from 'node:sqlite';
 import { addDays, dateAt, venueDate } from './time.ts';
 
 export const privateVenue = '训练室 B';
-export const slotMinutes = 30;
-export const maxPrivateMinutes = 120;
 
 export function openDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
@@ -312,6 +310,19 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 12;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 13) return;
+    db.exec(`
+      ALTER TABLE coaches ADD COLUMN points_90 INTEGER NOT NULL DEFAULT 1 CHECK (points_90 > 0);
+      ALTER TABLE coaches ADD COLUMN points_120 INTEGER NOT NULL DEFAULT 1 CHECK (points_120 > 0);
+      UPDATE coaches SET points_90 = (points_per_slot * 3 + 1) / 2, points_120 = points_per_slot * 2;
+      UPDATE staff_requests SET result = json_set(result,
+        '$.points90', (json_extract(result, '$.pointsPerSlot') * 3 + 1) / 2,
+        '$.points120', json_extract(result, '$.pointsPerSlot') * 2)
+        WHERE action = 'COACH_CREATED';
+      PRAGMA user_version = 13;
+    `);
+  });
   return db;
 }
 
@@ -355,7 +366,8 @@ export function seedDemo(db: DatabaseSync, now: Date): void {
     // TODO: product decision — 线下实收换算与课程积分定价，以下均为种子数据。
     // Seed weekly hours once. An empty day can be an intentional staff edit.
     if (db.prepare('SELECT COUNT(*) AS n FROM coaches').get()?.n === 0) db.exec(`
-      INSERT OR IGNORE INTO coaches (id, name, points_per_slot) VALUES ('li', '李晨', 30), ('wang', '王悦', 25);
+      INSERT OR IGNORE INTO coaches (id, name, points_per_slot, points_90, points_120) VALUES
+        ('li', '李晨', 30, 45, 60), ('wang', '王悦', 25, 38, 50);
       WITH weekdays(day) AS (VALUES (0), (1), (2), (3), (4), (5), (6)),
            windows(start_minute, end_minute) AS (VALUES (540, 600), (600, 720), (840, 1080), (1080, 1260))
       INSERT OR IGNORE INTO coach_availability

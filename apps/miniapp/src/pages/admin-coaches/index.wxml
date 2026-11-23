@@ -5,7 +5,12 @@
   </view>
   <form wx:if="{{editor}}" class="lesson-card" bindsubmit="save">
     <label class="form-field first-field"><text>教练姓名</text><input class="field" value="{{editor.name}}" maxlength="40" data-field="name" bindinput="change" disabled="{{busy}}" /></label>
-    <label class="form-field"><text>每 30 分钟所需私教积分</text><input class="field" type="number" value="{{editor.points}}" maxlength="5" data-field="points" bindinput="change" disabled="{{busy}}" /></label>
+    <view class="price-heading">私教积分</view>
+    <view class="price-grid">
+      <label wx:for="{{prices}}" wx:key="field" class="form-field"><text>{{item.minutes}} 分钟</text>
+        <input class="field" type="number" value="{{editor[item.field]}}" maxlength="5" data-field="{{item.field}}" bindinput="change" disabled="{{busy}}" aria-label="{{item.minutes}} 分钟私教积分" />
+      </label>
+    </view>
     <picker range="{{privateTypes}}" range-key="name" value="{{editor.privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">私教课程类型</text><text class="picker-value">{{privateTypes[editor.privateTypeIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
     </picker>
@@ -26,7 +31,11 @@
     <view wx:for="{{coaches}}" wx:key="id" class="lesson-card">
       <view class="card-head"><text class="card-title">{{item.name}}</text><text class="card-state">{{item.enabled ? '已启用' : '已停用'}}</text></view>
       <view class="card-note">私教课程 · {{item.privateTypeName}}</view>
-      <view class="card-footer"><text class="accent">{{item.pointsPerSlot}} 积分</text> / 30 分钟</view>
+      <view class="card-footer price-grid">
+        <view wx:for="{{prices}}" wx:for-item="tier" wx:key="field">
+          <text>{{tier.minutes}} 分钟</text><text class="accent">{{item[tier.field]}} 积分</text>
+        </view>
+      </view>
       <navigator wx:if="{{item.enabled && !busy}}" class="button quiet row-action hours-link" url="/pages/admin-schedule/index?coachId={{item.id}}" hover-class="press">查看私教开放时间</navigator>
       <view class="section-actions item-actions">
         <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑资料</button>
