@@ -50,6 +50,26 @@ test('团课周查询按上海开课日期分组，跨年班次保留自己的�
   assert.ok(week.every(row => row.date >= '2030-12-30' && row.date <= '2031-01-05'));
 });
 
+test('预约周视图包含上海周一至周日的预约，跨年翻周不重复，待确认队列覆盖各周', async context => {
+  const { app } = fixture(context, () => new Date(dateAt('2030-12-29', 480)));
+  const parent = await session(app, false);
+  const headers = await session(app);
+  const days = ['2030-12-29', '2030-12-30', '2031-01-05', '2031-01-06'];
+  const ids = [];
+  for (const date of days) {
+    const result = await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+      payload: { type: 'GROUP', classSessionId: date + '-strength', requestKey: date } });
+    assert.equal(result.statusCode, 200);
+    ids.push(result.json().id);
+  }
+  const list = async (query: string) => (await app.inject({ url: '/api/admin/bookings?' + query, headers }))
+    .json<ManagedBooking[]>().map(row => row.id);
+  assert.deepEqual(await list('view=week&date=2031-01-01'), ids.slice(1, 3));
+  assert.deepEqual(await list('view=week&date=2031-01-06'), ids.slice(3));
+  assert.deepEqual(await list('date=2030-12-30'), ids.slice(1, 2));
+  assert.deepEqual(await list('pending=1'), ids);
+});
+
 test('管理会话验证密码，家长凭据无权访问或写入，退出后会话失效', async context => {
   const { app } = fixture(context);
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/session', payload: { password: 'x' } })).statusCode, 401);

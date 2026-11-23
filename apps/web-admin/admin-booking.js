@@ -33,7 +33,7 @@ async function sendBooking(ctx, pending) {
 export async function newBooking(ctx) {
   const pending = JSON.parse(sessionStorage.getItem(pendingKey));
   if (pending) {
-    const root = ctx.show(html`${title('管理员代约', link('查看当日预约', 'bookingDay', { date: pending.date }))}
+    const root = ctx.show(html`${title('管理员代约', link('查看该周预约', 'bookingDay', { date: pending.date }))}
       ${box('核对代约结果', html`<div class="form-pad"><p>${pending.date} 的${pending.payload.type === 'GROUP' ? '团课' : '私教'}代约尚未收到提交结果。</p>
       ${buttons(html`<button class="wb" type="button" data-retry>重试原代约</button>`)}</div>`)}`);
     if (root) root.querySelector('[data-retry]').onclick = () => ctx.perform(async () => {
@@ -149,7 +149,7 @@ export async function newBooking(ctx) {
       try { quote = await ctx.postQuote('/bookings/quote', selection); }
       catch (error) { if (ctx.active()) await loadChoices(true); throw error; }
       if (!ctx.active()) return;
-      const refund = quote.refundPoints ? '取消将退回 ' + quote.refundPoints + ' 积分。' : '取消不退积分。';
+      const refund = '取消须至少提前 6 小时，' + (quote.refundPoints ? '退回 ' + quote.refundPoints + ' 积分。' : '不退积分。');
       const result = await confirmAction('确认代约', familyLabel(family) + ' · ' + quote.title + ' · ' + coach(quote.coachName) + ' · ' +
         datetime(quote.startsAt) + '–' + time(quote.endsAt) + '。确认后扣除 ' + quote.points + ' 积分。' + refund);
       if (!result || !ctx.active()) return;

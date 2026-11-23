@@ -40,7 +40,7 @@ function openCurrentHome(courseId?: string, notice?: NoticePage) {
     if (notice === 'bookings') {
       reads.get(active)?.invalidate(key => parentReadAffected('/api/bookings', key));
     } else invalidateRead(noticePages[notice].read);
-    wx.reLaunch({ url: '/pages/' + notice + '/index' });
+    wx.reLaunch({ url: '/pages/' + notice + '/index' + (notice === 'admin-bookings' ? '?pending=1' : '') });
     return;
   }
   const url = courseId && active?.role === 'PARENT'

@@ -1,3 +1,4 @@
+<import src="../../calendar/week.wxml" />
 <view wx:if="{{authorized}}" class="page-shell">
   <view class="{{!adding && !loading && !loadError ? 'screen-heading' : ''}}">
     <text class="page-title" role="heading" aria-level="1">{{adding ? '为家长代约' : '预约管理'}}</text>
@@ -5,9 +6,10 @@
   </view>
   <view wx:if="{{!adding}}" class="section-actions review-tabs">
     <button size="mini" class="button {{pendingOnly ? '' : 'quiet'}}" data-view="pending" bindtap="changeView" hover-class="press">待确认</button>
-    <button size="mini" class="button {{pendingOnly ? 'quiet' : ''}}" data-view="date" bindtap="changeView" hover-class="press">按日期查看</button>
+    <button size="mini" class="button {{pendingOnly ? 'quiet' : ''}}" data-view="week" bindtap="changeView" hover-class="press">按周查看</button>
   </view>
-  <picker wx:if="{{date && (adding || !pendingOnly)}}" mode="date" start="{{adding ? today : ''}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
+  <template wx:if="{{!adding && !pendingOnly && weekStart}}" is="week" data="{{weekLabel, hasPrevious: true, hasNext, dates, today, lastDate, date: weekStart, canPick: true, allowHistory: true, bookingWeek: true, showDays: true, busy}}" />
+  <picker wx:if="{{date && adding}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
     <view class="picker"><text class="picker-label">预约日期</text><text class="picker-value">{{date}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
   </picker>
 
@@ -50,19 +52,22 @@
   </view>
   <block wx:else>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view wx:if="{{!bookings.length}}" class="message">{{pendingOnly ? '没有待确认的申请。' : '这天还没有预约。'}}</view>
-    <view wx:for="{{bookings}}" wx:key="id" class="list-row">
-      <view class="row-line"><text class="row-name">{{item.childName}} · {{item.title}}</text><text class="muted">{{item.statusLabel}}</text></view>
-      <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}} · {{item.coachLabel}}</view>
-      <view class="muted">{{item.venue}} · {{item.points}} 积分</view>
-      <view class="muted">{{item.staffCreated ? '管理员代约' : '家长预约'}}{{item.staffCancelled ? ' · 管理员取消' : ''}}</view>
-      <view wx:if="{{item.status === 'PENDING'}}" class="section-actions item-actions">
-        <button wx:if="{{item.canApprove}}" class="button" data-id="{{item.id}}" data-action="approve" bindtap="decide" disabled="{{busy}}" hover-class="press">确认预约</button>
-        <button class="button quiet" data-id="{{item.id}}" data-action="reject" bindtap="decide" disabled="{{busy}}" hover-class="press">拒绝申请</button>
+    <view wx:if="{{!bookings.length}}" class="message">{{pendingOnly ? '没有待确认的申请。' : '这周还没有预约。'}}</view>
+    <block wx:for="{{bookings}}" wx:key="id">
+      <view wx:if="{{item.dayHeading}}" id="agenda-{{item.day}}" class="section-title">{{item.dayHeading}}</view>
+      <view class="list-row">
+        <view class="row-line"><text class="row-name">{{item.childName}} · {{item.title}}</text><text class="muted">{{item.statusLabel}}</text></view>
+        <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}} · {{item.coachLabel}}</view>
+        <view class="muted">{{item.venue}} · {{item.points}} 积分</view>
+        <view class="muted">{{item.staffCreated ? '管理员代约' : '家长预约'}}{{item.staffCancelled ? ' · 管理员取消' : ''}}</view>
+        <view wx:if="{{item.status === 'PENDING'}}" class="section-actions item-actions">
+          <button wx:if="{{item.canApprove}}" class="button" data-id="{{item.id}}" data-action="approve" bindtap="decide" disabled="{{busy}}" hover-class="press">确认预约</button>
+          <button class="button quiet" data-id="{{item.id}}" data-action="reject" bindtap="decide" disabled="{{busy}}" hover-class="press">拒绝申请</button>
+        </view>
+        <button wx:if="{{item.canCancel}}" class="button quiet row-action" data-id="{{item.id}}" data-action="cancel" bindtap="decide" disabled="{{busy}}" hover-class="press">取消预约</button>
+        <view wx:if="{{item.status === 'CONFIRMED' && !item.canCancel}}" class="muted">已过取消截止时间</view>
+        <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="muted">已退回 {{item.refundPoints}} 积分</view>
       </view>
-      <button wx:if="{{item.canCancel}}" class="button quiet row-action" data-id="{{item.id}}" data-action="cancel" bindtap="decide" disabled="{{busy}}" hover-class="press">取消预约</button>
-      <view wx:if="{{item.status === 'CONFIRMED' && !item.canCancel}}" class="muted">已过取消截止时间</view>
-      <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="muted">已退回 {{item.refundPoints}} 积分</view>
-    </view>
+    </block>
   </block>
 </view>

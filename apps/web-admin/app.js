@@ -142,14 +142,14 @@ async function dashboard(ctx) {
   ]);
   const live = classes.filter(row => row.bookable);
   const first = applications.map(r => r.submittedAt).sort()[0];
-  const task = (name, count, destination, action, note) => box(name, html`<div class="task-line">
-    <b>${count}</b>${link(action, destination)}</div><p class="quiet-text">${note}</p>`);
+  const task = (name, count, destination, action, note, params = {}) => box(name, html`<div class="task-line">
+    <b>${count}</b>${link(action, destination, params)}</div><p class="quiet-text">${note}</p>`);
   ctx.show(html`${title('工作台', link('＋ 新增团课', 'newClass', {}, 'wb'))}
     <div class="summary-band"><div><small>今日训练</small><h2>${monthDay(today)} <span>${weekdays[weekday(today)]}</span></h2></div>
     <div><small>团课班次</small><b>${live.length}</b></div><div><small>团课已占名额</small><b>${live.reduce((n, row) => n + row.bookedCount, 0)}</b></div></div>
     ${box('今日排课', classTable(classes.filter(row => row.bookable || row.type === 'PRIVATE')), link('查看周课表', 'schedule'))}
     <div class="split equal">${task('队员注册审核', applications.length + ' 个待审核申请', 'registrations', '去审核', first ? '最早提交于 ' + datetime(first) : '暂无待审核申请')}
-    ${task('预约审核', pending.length + ' 笔预约待确认', 'bookings', '去确认', pending.length ? '下一节课于 ' + datetime(pending[0].startsAt) + ' 开始' : '暂无待确认预约')}</div>`);
+    ${task('预约审核', pending.length + ' 笔预约待确认', 'bookings', '去确认', pending.length ? '下一节课于 ' + datetime(pending[0].startsAt) + ' 开始' : '暂无待确认预约', { view: 'pending' })}</div>`);
 }
 
 function navigate(page, params = {}) {
