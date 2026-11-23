@@ -2,7 +2,7 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">积分调整</text>
   <picker wx:if="{{users.length}}" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy || targetUserId || original}}">
-    <view class="picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text></view>
+    <view class="picker points-picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text><view wx:if="{{!targetUserId}}" class="chevron" aria-hidden="true"></view></view>
   </picker>
   <view wx:if="{{loading}}" class="message">正在查询积分账户…</view>
   <view wx:elif="{{error}}" class="message">
@@ -11,19 +11,19 @@
   <block wx:elif="{{users.length}}">
     <view class="details">当前可用积分 <text class="accent">{{balance}}</text></view>
     <view wx:if="{{reservedPoints}}" class="muted">待确认预约预留 {{reservedPoints}} 积分</view>
-    <view class="section-actions review-tabs">
-      <button class="button {{source === 'OFFLINE_CREDIT' ? '' : 'quiet'}}" data-source="OFFLINE_CREDIT"
+    <view class="review-tabs points-tabs">
+      <button size="mini" class="button {{source === 'OFFLINE_CREDIT' ? '' : 'quiet'}}" data-source="OFFLINE_CREDIT"
         bindtap="setMode" disabled="{{busy}}" aria-pressed="{{source === 'OFFLINE_CREDIT'}}" hover-class="press">充值</button>
-      <button class="button {{source === 'ADJUSTMENT' ? '' : 'quiet'}}" data-source="ADJUSTMENT"
+      <button size="mini" class="button {{source === 'ADJUSTMENT' ? '' : 'quiet'}}" data-source="ADJUSTMENT"
         bindtap="setMode" disabled="{{busy}}" aria-pressed="{{source === 'ADJUSTMENT'}}" hover-class="press">调整</button>
     </view>
     <form bindsubmit="save">
       <view wx:if="{{source === 'ADJUSTMENT'}}">
         <view class="subheading">调整方向</view>
-        <view class="section-actions">
-          <button class="button {{direction === 1 ? '' : 'quiet'}}" data-direction="1" bindtap="setDirection"
+        <view class="direction-options" aria-role="group" aria-label="调整方向">
+          <button size="mini" class="button direction-option {{direction === 1 ? '' : 'quiet'}}" data-direction="1" bindtap="setDirection"
             disabled="{{busy}}" aria-pressed="{{direction === 1}}" hover-class="press">增加</button>
-          <button class="button {{direction === -1 ? '' : 'quiet'}}" data-direction="-1" bindtap="setDirection"
+          <button size="mini" class="button direction-option {{direction === -1 ? '' : 'quiet'}}" data-direction="-1" bindtap="setDirection"
             disabled="{{busy}}" aria-pressed="{{direction === -1}}" hover-class="press">扣减</button>
         </view>
       </view>
@@ -32,7 +32,7 @@
         <input class="field" type="number" maxlength="6" placeholder="例如 100" value="{{points}}" data-field="points" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <picker wx:if="{{source === 'ADJUSTMENT'}}" range="{{bookings}}" range-key="label" value="{{bookingIndex}}" bindchange="selectBooking" disabled="{{busy}}">
-        <view class="picker"><text class="picker-label">关联预约</text><text class="picker-value">{{bookings[bookingIndex].label}}</text></view>
+        <view class="picker points-picker"><text class="picker-label">关联预约</text><text class="picker-value">{{bookings[bookingIndex].label}}</text><view class="chevron" aria-hidden="true"></view></view>
       </picker>
       <label class="form-field">
         <text>{{source === 'OFFLINE_CREDIT' ? '充值说明' : '调整原因'}}</text>
