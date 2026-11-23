@@ -5,7 +5,10 @@ export interface Coach {
 }
 
 export interface ManagedCoach extends Coach {
+  /** Total price of a 60-minute private lesson. */
   pointsPerSlot: number;
+  points90: number;
+  points120: number;
   enabled: boolean;
   privateCourseTypeId: string | null;
 }

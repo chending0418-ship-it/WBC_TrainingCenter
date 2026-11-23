@@ -183,12 +183,14 @@ test('升级已有数据库时保留队员和历史预约，不补发升级前�
     DROP TRIGGER invalidate_deleted_wechat_subscriptions;
     DROP TABLE wechat_subscription_grants;
     DROP TABLE notification_outbox;
+    ALTER TABLE coaches DROP COLUMN points_90;
+    ALTER TABLE coaches DROP COLUMN points_120;
     PRAGMA user_version = 11;
   `);
   previous.close();
   const migrated = openDatabase(path);
   try {
-    assert.equal(migrated.prepare('PRAGMA user_version').get()?.user_version, 12);
+    assert.equal(migrated.prepare('PRAGMA user_version').get()?.user_version, 13);
     assert.equal(migrated.prepare("SELECT status FROM registrations WHERE user_id='parent'").get()?.status, 'APPROVED');
     assert.equal(bookingService(migrated, () => now).bookings('parent')[0].status, 'PENDING');
     assert.equal(migrated.prepare('SELECT COUNT(*) AS n FROM notification_outbox').get()?.n, 0);

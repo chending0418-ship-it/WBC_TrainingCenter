@@ -15,7 +15,7 @@ type DurationOption = PrivateSlot & { minutes: number; endLabel: string };
 type StartOption = { startsAt: string; label: string; options: DurationOption[] };
 type AvailableRange = { startsAt: string; label: string; starts: StartOption[] };
 
-// Group adjacent available half hours for display. Only server-returned
+// Group overlapping or adjacent hour-long slots for display. Only server-returned
 // start/end pairs may be selected, even inside a long continuous range.
 export function availableRanges(slots: PrivateSlot[]): AvailableRange[] {
   const starts = new Map<string, StartOption>();
@@ -29,13 +29,13 @@ export function availableRanges(slots: PrivateSlot[]): AvailableRange[] {
   const ranges: AvailableRange[] = [];
   let previousEnd = '';
   for (const start of starts.values()) {
-    const halfHour = start.options.find(option => option.minutes === 30);
-    if (!halfHour) continue;
-    if (previousEnd !== start.startsAt) ranges.push({ startsAt: start.startsAt, label: '', starts: [] });
+    const hour = start.options.find(option => option.minutes === 60);
+    if (!hour) continue;
+    if (previousEnd < start.startsAt) ranges.push({ startsAt: start.startsAt, label: '', starts: [] });
     const range = ranges[ranges.length - 1];
     range.starts.push(start);
-    range.label = range.starts[0].label + '–' + halfHour.endLabel;
-    previousEnd = halfHour.endsAt;
+    range.label = range.starts[0].label + '–' + hour.endLabel;
+    previousEnd = hour.endsAt;
   }
   return ranges;
 }

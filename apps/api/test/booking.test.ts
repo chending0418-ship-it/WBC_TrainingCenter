@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
-import type { Account, Booking, BookingSelection, PrivateSlot, PublicSchedule, Registration, Schedule } from '../../../packages/shared/contracts.js';
+import type { Account, Booking, BookingSelection, ManagedCoach, PrivateSlot, PublicSchedule, Registration, Schedule } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
-import { openDatabase } from '../src/database.ts';
+import { openDatabase, seedDemo } from '../src/database.ts';
 import { addDays, dateAt } from '../src/time.ts';
 
 const date = '2030-12-31';
@@ -207,6 +207,111 @@ test('多个请求争抢最后一个团课名额，仅一笔可以预留', async
   assert.equal(schedule.lastDate, '2031-01-29');
 });
 
+test('私教三档独立积分用于两端的时段、核价和预约，调价不改已预留的积分和退款', async context => {
+  const { app } = fixture(context);
+  const parent = await login(app);
+  const admin = await adminSession(app);
+  const create = await app.inject({ method: 'POST', url: '/api/admin/coaches', headers: admin,
+    payload: { name: '测试教练', pointsPerSlot: 40, points90: 51, points120: 67, requestKey: 'prices' } });
+  assert.equal(create.statusCode, 200);
+  const coach = create.json<ManagedCoach>();
+  assert.deepEqual([coach.pointsPerSlot, coach.points90, coach.points120], [40, 51, 67]);
+  const coachPath = '/api/admin/coaches/' + coach.id;
+  const edit = (fields: object) => app.inject({ method: 'PUT', url: coachPath, headers: admin,
+    payload: { name: coach.name, enabled: true, pointsPerSlot: 25, ...fields } });
+  assert.equal((await edit({})).statusCode, 204);
+  for (const invalid of [{ points90: 0 }, { points120: 1.2 }, { points90: 37501 }, { points120: 50001 }]) {
+    assert.equal((await edit(invalid)).statusCode, 400);
+  }
+  const type = await app.inject({ method: 'POST', url: '/api/admin/course-types', headers: admin,
+    payload: { name: '半额退还', maxStudents: 1, refundPercent: 50, requestKey: 'half' } });
+  assert.equal((await edit({ privateCourseTypeId: type.json().id })).statusCode, 204);
+  assert.equal((await app.inject({ method: 'PUT', url: coachPath + '/hours', headers: admin,
+    payload: { weekday: 2, windows: [{ start: 840, end: 1200 }] } })).statusCode, 204);
+  const select = (minutes: number, start = 870) => privateTraining(start, start + minutes, coach.id);
+  const options = [60, 90, 120].map((minutes, i) => ({
+    startsAt: dateAt(date, 870), endsAt: dateAt(date, 870 + minutes), points: [25, 51, 67][i]
+  }));
+  for (const staff of [false, true]) {
+    const prefix = staff ? '/api/admin' : '/api';
+    const headers = staff ? admin : parent;
+    const extra = staff ? { userId: 'parent' } : {};
+    const slots = (await app.inject({ url: prefix + '/coaches/' + coach.id + '/slots?date=' + date, headers })).json<PrivateSlot[]>();
+    assert.deepEqual(slots.filter(slot => slot.startsAt === dateAt(date, 870)), options);
+    for (const { startsAt, endsAt, points } of options) {
+      const quote = await app.inject({ method: 'POST', url: prefix + '/bookings/quote', headers,
+        payload: { ...extra, type: 'PRIVATE', coachId: coach.id, startsAt, endsAt } });
+      assert.equal(quote.json().points, points);
+    }
+    for (const url of [prefix + '/bookings/quote', prefix + '/bookings']) {
+      const short = await app.inject({ method: 'POST', url, headers, payload: { ...extra, ...select(30), requestKey: 'short' } });
+      assert.equal(short.statusCode, 400);
+    }
+  }
+  const quote = async () => (await app.inject({ method: 'POST', url: '/api/bookings/quote', headers: parent, payload: select(90) })).json();
+  const apply = (revision: string) => app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { ...select(90), expectedRevision: revision, requestKey: 'parent-price' } });
+  const old = await quote();
+  await edit({ points90: 81 });
+  assert.equal((await apply(old.revision)).json().code, 'QUOTE_CHANGED');
+  const reserved = (await apply((await quote()).revision)).json<Booking>();
+  assert.equal(reserved.points, 81);
+  assert.equal((await account(app, parent)).reservedPoints, 81);
+  await edit({ points90: 99 });
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings/' + reserved.id + '/approve', headers: admin })).statusCode, 204);
+  assert.equal((await account(app, parent)).balance, 239);
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/admin/bookings/' + reserved.id, headers: admin, payload: {} })).statusCode, 204);
+  assert.equal((await account(app, parent)).balance, 279);
+  const proxy = await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+    payload: { ...select(120), userId: 'parent', requestKey: 'proxy-price' } });
+  assert.equal(proxy.json().points, 67);
+  assert.equal((await account(app, parent)).balance, 212);
+});
+
+test('旧教练的三档只在升级时初始化，历史半小时预约和旧幂等响应在重开后仍可使用', async context => {
+  const directory = mkdtempSync(join(tmpdir(), 'wbc-private-prices-'));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, 'old.sqlite');
+  const old = openDatabase(path);
+  seedDemo(old, now());
+  const short = privateTraining(870, 900, 'wang');
+  old.exec(`
+    ALTER TABLE coaches DROP COLUMN points_90;
+    ALTER TABLE coaches DROP COLUMN points_120;
+    PRAGMA user_version = 12;
+  `);
+  old.prepare(`INSERT INTO bookings (id, user_id, type, coach_id, title, venue, starts_at, ends_at, points,
+      refund_points, request_key, request_payload, created_at, approval_pending)
+    VALUES ('legacy-booking','parent','PRIVATE','wang','旧半小时私教','训练室 B',?,?,25,7,'legacy',?,?,1)`)
+    .run(short.startsAt, short.endsAt, JSON.stringify(short), now().toISOString());
+  old.prepare('INSERT INTO staff_requests VALUES (?, ?, ?, ?)').run('old-coach', 'COACH_CREATED',
+    JSON.stringify({ name: '王悦', pointsPerSlot: 25 }),
+    JSON.stringify({ id: 'wang', name: '王悦', pointsPerSlot: 25, enabled: true, privateCourseTypeId: null }));
+  old.close();
+
+  const first = openDatabase(path);
+  assert.deepEqual({ ...first.prepare("SELECT points_per_slot, points_90, points_120 FROM coaches WHERE id='wang'").get() },
+    { points_per_slot: 25, points_90: 38, points_120: 50 });
+  first.prepare("UPDATE coaches SET points_90=47, points_120=61 WHERE id='wang'").run();
+  first.close();
+
+  const { app, db } = fixture(context, path);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 13);
+  const admin = await adminSession(app);
+  const parent = await login(app);
+  const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();
+  const current = coaches.find(c => c.id === 'wang')!;
+  assert.deepEqual([current.pointsPerSlot, current.points90, current.points120], [25, 47, 61]);
+  const replay = (await app.inject({ method: 'POST', url: '/api/admin/coaches', headers: admin,
+    payload: { name: '王悦', pointsPerSlot: 25, requestKey: 'old-coach' } })).json<ManagedCoach>();
+  assert.deepEqual([replay.pointsPerSlot, replay.points90, replay.points120], [25, 38, 50]);
+  const existing = (await book(app, parent, short, 'legacy')).json<Booking>();
+  assert.equal(existing.id, 'legacy-booking');
+  assert.equal(existing.points, 25);
+  assert.equal(existing.refundPoints, 7);
+  assert.equal((await book(app, parent, short, 'another')).statusCode, 400);
+});
+
 test('家长预约管理员开放的每周私教时段，确认后扣分并按课程类型退还', async context => {
   const { app } = fixture(context);
   const parents = await Promise.all([login(app), login(app, 'other-parent')]);
@@ -255,7 +360,8 @@ test('家长预约管理员开放的每周私教时段，确认后扣分并按�
   const quote = await app.inject({ method: 'POST', url: '/api/bookings/quote', headers: parents[0], payload: selection });
   assert.equal(quote.statusCode, 200);
   assert.equal(quote.json().title, '专项私教');
-  assert.equal(quote.json().refundPoints, 30);
+  assert.equal(quote.json().points, 30);
+  assert.equal(quote.json().refundPoints, 15);
   assert.equal((await book(app, parents[0], { ...selection, courseTypeId }, 'override')).statusCode, 400);
   const results = await Promise.all([
     book(app, parents[0], selection, 'overlap-1'),
@@ -268,22 +374,22 @@ test('家长预约管理员开放的每周私教时段，确认后扣分并按�
   const parent = parents[winner];
   assert.equal(created.status, 'PENDING');
   assert.equal(created.title, '专项私教');
-  assert.equal(created.refundPoints, 30);
+  assert.equal(created.refundPoints, 15);
   assert.deepEqual((await account(app, parent)).ledger.map(entry => entry.delta), [320]);
-  assert.equal((await account(app, parent)).reservedPoints, 60);
+  assert.equal((await account(app, parent)).reservedPoints, 30);
   assert.deepEqual((await app.inject({ url: '/api/me/bookings', headers: parent })).json(), [created]);
   assert.deepEqual((await app.inject({ url: '/api/me/bookings', headers: parents[1 - winner] })).json(), []);
   assert.equal((await book(app, parents[1 - winner], privateTraining(1080, 1140, 'wang'), 'other-coach')).statusCode, 200);
   const adminBooking = '/api/admin/bookings/' + created.id;
   assert.equal((await app.inject({ method: 'POST', url: adminBooking + '/approve', headers: admin })).statusCode, 204);
-  assert.equal((await account(app, parent)).balance, 260);
+  assert.equal((await account(app, parent)).balance, 290);
 
   assert.equal((await configureCoach(null)).statusCode, 204);
   assert.equal((await app.inject({ method: 'DELETE', url: adminBooking, headers: admin })).statusCode, 204);
   const cancelled = await account(app, parent);
   assert.equal(cancelled.reservedPoints, 0);
-  assert.equal(cancelled.balance, 290);
-  assert.deepEqual(cancelled.ledger.map(entry => entry.delta), [30, -60, 320]);
+  assert.equal(cancelled.balance, 305);
+  assert.deepEqual(cancelled.ledger.map(entry => entry.delta), [15, -30, 320]);
   assert.equal((await book(app, parent, selection, 'opened-again')).statusCode, 200);
 });
 
@@ -379,6 +485,8 @@ test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
   const previous = openDatabase(path);
   previous.exec(`
     DROP TABLE registrations;
+    ALTER TABLE coaches DROP COLUMN points_90;
+    ALTER TABLE coaches DROP COLUMN points_120;
     PRAGMA user_version = 10;
     INSERT INTO users VALUES ('legacy'), ('incomplete');
     INSERT INTO children (guardian_id,name,birth_month,gender) VALUES ('legacy','队员','2015-06','MALE'),('incomplete','待补全',NULL,NULL);

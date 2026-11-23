@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, PublicSchedule, Quote, Schedule } from '../../../packages/shared/contracts.js';
-import { audit, maxPrivateMinutes, privateVenue, slotMinutes, transaction } from './database.ts';
+import { audit, privateVenue, transaction } from './database.ts';
 import { notifyBooking } from './notification-events.ts';
 import { addDays, covers, dateAt, venueDate, weekday } from './time.ts';
 
@@ -36,6 +36,8 @@ export const bookingStatus = `
        WHEN b.status = 'CANCELLED' THEN 'REJECTED'
        ELSE 'PENDING' END
 `;
+const privateStartIntervalMinutes = 30;
+const privateDurations = [60, 90, 120] as const;
 export const cancellationLeadMs = 6 * 60 * 60 * 1000;
 
 export function reservedPoints(db: DatabaseSync, user: string, now: string): number {
@@ -124,7 +126,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
 
   function dayAvailability(coachId: string, date: string) {
     const coach = db.prepare(`
-      SELECT name, points_per_slot AS points, private_course_type_id FROM coaches WHERE id = ? AND enabled = 1
+      SELECT name, points_per_slot, points_90, points_120, private_course_type_id FROM coaches WHERE id = ? AND enabled = 1
     `).get(coachId);
     if (!coach) throw new ApiError(404, 'NOT_FOUND', '教练未开放预约');
     const startOfDay = dateAt(date);
@@ -148,7 +150,8 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       start: (Date.parse(String(row.starts_at)) - dayStart) / 60_000,
       end: (Date.parse(String(row.ends_at)) - dayStart) / 60_000
     }));
-    return { name: String(coach.name), points: Number(coach.points),
+    return { name: String(coach.name),
+      prices: { 60: Number(coach.points_per_slot), 90: Number(coach.points_90), 120: Number(coach.points_120) },
       courseTypeId: coach.private_course_type_id as string | null, windows, occupied };
   }
 
@@ -156,23 +159,18 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return covers(day.windows, start, end) && !day.occupied.some(block => block.start < end && block.end > start);
   }
 
-  function privatePoints(minutes: number, pointsPerSlot: number): number {
-    // TODO: product decision — 私教跨相邻时段的实际积分算法，本地按每 30 分钟累加。
-    return minutes / slotMinutes * pointsPerSlot;
-  }
-
   function listSlots(coachId: string, date: string): PrivateSlot[] {
     const { now, today, lastDate } = horizon();
     if (date < today || date > lastDate) throw new ApiError(400, 'VALIDATION_ERROR', '请选择未来 30 天内的日期');
     const day = dayAvailability(coachId, date);
     const slots: PrivateSlot[] = [];
-    for (let start = 0; start < 1440; start += slotMinutes) {
+    for (let start = 0; start < 1440; start += privateStartIntervalMinutes) {
       const startsAt = dateAt(date, start);
       if (startsAt <= now.toISOString()) continue;
-      for (let duration = slotMinutes; duration <= maxPrivateMinutes; duration += slotMinutes) {
+      for (const duration of privateDurations) {
         const end = start + duration;
         if (end > 1440 || !isOpen(day, start, end)) break;
-        slots.push({ startsAt, endsAt: dateAt(date, end), points: privatePoints(duration, day.points) });
+        slots.push({ startsAt, endsAt: dateAt(date, end), points: day.prices[duration] });
       }
     }
     return slots;
@@ -208,13 +206,13 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     const dayStart = Date.parse(dateAt(date));
     const start = (Date.parse(startsAt) - dayStart) / 60_000;
     const end = (Date.parse(endsAt) - dayStart) / 60_000;
-    const duration = end - start;
-    if (end > 1440 || duration <= 0 || duration > maxPrivateMinutes || start % slotMinutes || end % slotMinutes) {
-      throw new ApiError(400, 'VALIDATION_ERROR', '请选择同一天内 30 至 120 分钟的私教时段');
+    const duration = privateDurations.find(minutes => minutes === end - start);
+    if (end > 1440 || start % privateStartIntervalMinutes !== 0 || duration === undefined) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '请选择同一天内 60、90 或 120 分钟的私教时段');
     }
     const day = dayAvailability(coachId, date);
     if (!isOpen(day, start, end)) throw new ApiError(409, 'SLOT_TAKEN', '该时段已被占用或未开放');
-    const points = privatePoints(duration, day.points);
+    const points = day.prices[duration];
     let title = '一对一训练';
     let refundPoints = 0;
     const courseTypeId = selection.courseTypeId ?? day.courseTypeId;

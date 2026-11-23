@@ -169,10 +169,10 @@ test('私教开放和例外设置影响家长可约时间，已预约时段受�
   assert.ok((await getSlots()).some(slot => slot.startsAt === startsAt));
   assert.equal((await app.inject({
     method: 'POST', url: '/api/admin/bookings', headers: admin,
-    payload: { type: 'PRIVATE', userId: 'parent', coachId: 'li', startsAt, endsAt: dateAt(today, 870), requestKey: 'private' }
+    payload: { type: 'PRIVATE', userId: 'parent', coachId: 'li', startsAt, endsAt: dateAt(today, 900), requestKey: 'private' }
   })).statusCode, 200);
   assert.equal((await change([])).json().code, 'SCHEDULE_CONFLICT');
-  assert.equal((await change([{ start: 840, end: 870 }])).statusCode, 204);
+  assert.equal((await change([{ start: 840, end: 900 }])).statusCode, 204);
 });
 
 test('线下录入同步到家长余额，凭证、操作人及幂等请求保留下来', async context => {
@@ -563,7 +563,8 @@ test('教练管理控制可预约和演示登录，停用不会中断已有预�
   assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/coaches/' + coach.id + '/hours', headers: admin,
     payload: { weekday: weekday(today), windows: [{ start: 840, end: 960 }] } })).statusCode, 204);
   const slots = (await app.inject({ url: '/api/admin/coaches/' + coach.id + '/slots?date=' + today, headers: admin })).json();
-  assert.ok(slots.some((slot: { points: number }) => slot.points === 72));
+  assert.deepEqual(slots.filter((slot: { startsAt: string }) => slot.startsAt === dateAt(today, 840))
+    .map((slot: { points: number }) => slot.points), [36, 60, 80]);
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
     payload: { ...slots[0], userId: 'parent', type: 'PRIVATE', coachId: coach.id, requestKey: 'book-new-coach' } })).statusCode, 200);
   assert.equal((await change(false)).json().code, 'COACH_HAS_BOOKINGS');
