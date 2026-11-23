@@ -130,6 +130,39 @@ test('微信暂时拒发预约确认后管理员取消，未消费授权改投�
   assert.deepEqual(delivered, ['已取消']);
 });
 
+test('团课改期后，排队中的申请和确认提醒发送最新课程、时间与训练场地', async t => {
+  const { db, booking } = fixture(t);
+  const grant = db.prepare(`INSERT INTO wechat_subscription_grants (user_id, app_id, open_id, role, template_id, request_key, created_at)
+    VALUES (?, 'wbc', ?, ?, 'booking', 'consent', ?)`);
+  grant.run('admin-a', 'admin-a-openid', 'ADMIN', now.getTime());
+  grant.run('parent', 'parent-openid', 'PARENT', now.getTime());
+  const record = booking.book('parent', group, 'rescheduled');
+  const template = { templateId: 'booking', fields: { thing1: 'title', time2: 'time', thing3: 'venue', phrase4: 'status' } } as const;
+  const sent: string[][] = [];
+  const worker = notificationWorker(db, 'wbc', { BOOKING_SUBMITTED: template, BOOKING_CONFIRMED: template }, 'trial', {
+    async token() {
+      // The class edit can commit even after the delivery is claimed, while the worker awaits WeChat.
+      const hour = sent.length === 0 ? '10' : '11';
+      db.prepare('UPDATE bookings SET title = ?, starts_at = ?, ends_at = ?, venue = ? WHERE id = ?')
+        .run('训练 ' + hour, '2030-12-31T' + hour + ':00:00.000Z', '2030-12-31T12:00:00.000Z', '训练场地 ' + hour, record.id);
+      return 'local-token';
+    },
+    invalidate() {},
+    async send(_, { touser, data }) {
+      sent.push([touser, data.thing1.value, data.time2.value, data.thing3.value, data.phrase4.value]);
+      return 0;
+    }
+  }, () => now.getTime());
+  while (await worker.runOne()) { /* drain administrator notifications */ }
+  booking.approve(record.id, 'admin-a');
+  assert.equal(await worker.runOne(), true);
+  assert.equal(await worker.runOne(), false);
+  assert.deepEqual(sent, [
+    ['admin-a-openid', '训练 10', '2030-12-31 18:00', '训练场地 10', '待确认'],
+    ['parent-openid', '训练 11', '2030-12-31 19:00', '训练场地 11', '已确认']
+  ]);
+});
+
 test('通知与申请、扣分同一事务提交，入队失败后重试只生效一次', t => {
   const { db, booking } = fixture(t);
   db.exec(`CREATE TRIGGER force_failure BEFORE INSERT ON notification_outbox BEGIN
