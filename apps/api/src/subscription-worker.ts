@@ -66,15 +66,10 @@ export function notificationWorker(db: DatabaseSync, appId: string, templates: T
         finishUnsent(event, 'SKIPPED', 'NO_GRANT', 'PENDING');
         return { skipped: true } as const;
       }
-      let body: ReturnType<typeof messageBody>;
-      try { body = messageBody(event.kind, template, state, event.open_id, event.payload); } catch {
-        finishUnsent(event, 'FAILED', 'INVALID_MESSAGE', 'PENDING');
-        return { skipped: true } as const;
-      }
       db.prepare('UPDATE wechat_subscription_grants SET claimed_delivery = ? WHERE id = ?').run(event.id, grant.id);
       db.prepare(`UPDATE notification_outbox SET status = 'SENDING', attempts = attempts + 1, next_attempt_at = ? WHERE id = ?`)
         .run(now + leaseMs, event.id);
-      return { event, body, grantId: grant.id } as const;
+      return { event, template, grantId: grant.id } as const;
     });
   }
 
@@ -91,7 +86,7 @@ export function notificationWorker(db: DatabaseSync, appId: string, templates: T
     const claimed = claim();
     if (!claimed) return false;
     if ('skipped' in claimed) return true;
-    const { event, body, grantId } = claimed;
+    const { event, template, grantId } = claimed;
     let token: string;
     try { token = await client.token(); } catch { rejected(event, 'TOKEN_UNAVAILABLE', true); return true; }
     // Verify after token acquisition, immediately before dispatch, including a revocation during token refresh.
@@ -104,6 +99,19 @@ export function notificationWorker(db: DatabaseSync, appId: string, templates: T
     }
     if (grant.superseded_at !== null || !stillPending(event)) {
       transaction(db, () => finishUnsent(event, 'SKIPPED', 'APPLICATION_PROCESSED', 'SENDING'));
+      return true;
+    }
+    let body: ReturnType<typeof messageBody>;
+    try {
+      let payload = event.payload;
+      if (event.kind === 'BOOKING_SUBMITTED' || event.kind === 'BOOKING_CONFIRMED') {
+        const bookingId = event.event_key.slice(event.kind.length + 1);
+        const lesson = db.prepare("SELECT title, starts_at AS time, venue FROM bookings WHERE id = ? AND type = 'GROUP'").get(bookingId);
+        if (lesson) payload = JSON.stringify({ ...JSON.parse(payload), ...lesson });
+      }
+      body = messageBody(event.kind, template, state, event.open_id, payload);
+    } catch {
+      transaction(db, () => finishUnsent(event, 'FAILED', 'INVALID_MESSAGE', 'SENDING'));
       return true;
     }
     const latestGrant = Number(db.prepare('SELECT MAX(id) AS id FROM wechat_subscription_grants').get()?.id ?? grantId);

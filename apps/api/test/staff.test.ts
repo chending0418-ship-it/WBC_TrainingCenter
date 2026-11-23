@@ -65,7 +65,7 @@ test('管理会话验证密码，家长凭据无权访问或写入，退出后�
   assert.equal((await app.inject({ url: scheduleUrl, headers: admin })).statusCode, 401);
 });
 
-test('排课进入家长端，代约扣分与审计，已有预约的班次不能改课或停开', async context => {
+test('排课进入家长端，代约扣分与审计，已有预约的班次可改课、停开须先处理预约', async context => {
   const { app, db } = fixture(context);
   const admin = await session(app);
   const parent = await session(app, false);
@@ -93,7 +93,7 @@ test('排课进入家长端，代约扣分与审计，已有预约的班次不�
   assert.equal((await app.inject(book)).json().id, booking.id);
   assert.equal((await app.inject({ url: '/api/me/account', headers: parent })).json().balance, 275);
   assert.equal((await update({ status: 'CLOSED' })).json().code, 'CLASS_HAS_BOOKINGS');
-  assert.equal((await update({ startMinute: 930 })).json().code, 'CLASS_HAS_BOOKINGS');
+  assert.equal((await update({ startMinute: 930 })).statusCode, 204);
   assert.equal((await update({ capacity: 1 })).statusCode, 204);
   const attendee = (await app.inject({ url: scheduleUrl, headers: admin })).json<ManagedClass[]>().find(row => row.id === id);
   assert.deepEqual(attendee?.attendees, [{ userId: 'parent', childName: '陈同学' }]);
@@ -111,6 +111,54 @@ test('排课进入家长端，代约扣分与审计，已有预约的班次不�
   const parentSchedule = (await app.inject({ url: '/api/schedule', headers: parent })).json<{ courses: { id: string }[] }>();
   assert.ok(!parentSchedule.courses.some(row => row.id === id));
   assert.ok(parentSchedule.courses.some(row => row.id === today + '-strength'));
+});
+
+test('跨日调整有待确认和已确认预约的团课，保留各自积分和状态，校验队员冲突与名额', async context => {
+  const { app } = fixture(context);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const id = today + '-strength';
+  const next = addDays(today, 1);
+  const selection = { type: 'GROUP', classSessionId: id };
+  const pending = await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { ...selection, requestKey: 'pending' } });
+  const bookFor = (classSessionId: string) => app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+    payload: { ...selection, classSessionId, userId: 'other-parent', requestKey: classSessionId } });
+  const confirmed = await bookFor(id);
+  assert.equal(pending.statusCode, 200);
+  assert.equal(confirmed.statusCode, 200);
+  assert.equal((await bookFor(next + '-stability')).statusCode, 200);
+  const revise = (changes: object) => app.inject({ method: 'PUT', url: '/api/admin/class-sessions/' + id, headers: admin,
+    payload: { ...draft, capacity: 12, coachIds: ['li', 'wang'], date: next, status: 'PUBLISHED', ...changes } });
+  assert.equal((await revise({ capacity: 1 })).json().code, 'CAPACITY_BELOW_BOOKINGS');
+  // Only the child's other class conflicts; the selected coach is free.
+  const clash = await revise({ startMinute: 1140, coachIds: ['li'] });
+  assert.equal(clash.json().code, 'SCHEDULE_CONFLICT');
+  assert.match(clash.json().message, /队员/);
+  const bookingsOn = async (date: string) => (await app.inject({ url: '/api/admin/bookings?date=' + date, headers: admin })).json<ManagedBooking[]>();
+  assert.equal((await bookingsOn(today)).length, 2);
+  assert.equal((await revise({ duration: 90 })).statusCode, 204);
+  assert.equal((await bookingsOn(today)).length, 0);
+  const active = (await bookingsOn(next)).filter(row => [confirmed.json().id, pending.json().id].includes(row.id));
+  assert.equal(active.length, 2);
+  for (const b of active) {
+    assert.equal(b.status, b.id === pending.json().id ? 'PENDING' : 'CONFIRMED');
+    assert.equal(b.title, draft.title);
+    assert.equal(b.venue, draft.venue);
+    assert.equal(b.coachName, '李晨、王悦');
+    assert.equal(b.startsAt, dateAt(next, draft.startMinute));
+    assert.equal(b.endsAt, dateAt(next, draft.startMinute + 90));
+    assert.equal(b.points, 40);
+  }
+  const history = (await app.inject({ url: '/api/me/bookings', headers: parent })).json<ManagedBooking[]>();
+  assert.equal(history[0].startsAt, active[0].startsAt);
+  assert.equal(history[0].status, 'PENDING');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings/' + pending.json().id + '/approve', headers: admin })).statusCode, 204);
+  assert.equal((await app.inject({ url: '/api/me/account', headers: parent })).json().balance, 280);
+  const course = (await app.inject({ url: '/api/schedule', headers: parent })).json<Schedule>().courses.find(row => row.id === id);
+  assert.equal(course?.bookedCount, 2);
+  assert.equal(course.capacity, 12);
+  assert.equal(course.points, draft.points);
 });
 
 test('团课共享名额和两位教练的课表，并检查每位教练的排课、私教和请假冲突', async context => {
@@ -156,7 +204,7 @@ test('团课共享名额和两位教练的课表，并检查每位教练的排�
     payload: { type: 'GROUP', userId: 'parent', classSessionId: group.id, requestKey: 'paired-book' } });
   assert.equal(booked.statusCode, 200);
   assert.equal(booked.json().coachName, group.coachName);
-  assert.equal((await edit({ coachIds: ['li'] })).json().code, 'CLASS_HAS_BOOKINGS');
+
   assert.equal((await list()).find(row => row.id === group.id)?.bookedCount, 1);
   for (const id of team) {
     const login = await app.inject({ method: 'POST', url: '/api/dev/coach-session', payload: { profile: 'coach-' + id } });
@@ -529,7 +577,7 @@ test('管理员新增课程类型，班次及周期排课沿用类型和人数�
     payload: { type: 'GROUP', classSessionId: row.id, requestKey: 'book-typed' }
   });
   assert.equal(booking.statusCode, 200);
-  assert.equal((await configure({ courseTypeId: null })).json().code, 'CLASS_HAS_BOOKINGS');
+  assert.equal((await configure({ courseTypeId: null })).statusCode, 204);
   assert.equal((await app.inject({
     method: 'POST', url: '/api/admin/bookings/' + booking.json().id + '/approve', headers: admin
   })).statusCode, 204);

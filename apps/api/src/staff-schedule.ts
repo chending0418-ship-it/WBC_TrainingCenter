@@ -213,11 +213,17 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       const existingTypeId = current.course_type_id as string | null;
       const courseTypeId = draft.courseTypeId === undefined ? existingTypeId : draft.courseTypeId;
       validateCourseCapacity(courseTypeId, draft.capacity, coachIds.length);
-      const changesDetails = JSON.stringify(coachIds) !== current.coachIds || draft.venue !== current.venue ||
-        draft.title !== current.title || draft.points !== current.points || startsAt !== current.starts_at ||
-        endsAt !== current.ends_at || courseTypeId !== existingTypeId;
-      if (Number(current.booked) > 0 && (changesDetails || status === 'CLOSED')) {
-        throw new ApiError(409, 'CLASS_HAS_BOOKINGS', '该班次已有预约，可调整容量。改课或停开前请先处理预约');
+      if (current.booked && status === 'CLOSED') {
+        throw new ApiError(409, 'CLASS_HAS_BOOKINGS', '停开前请先处理该班次的预约');
+      }
+      if (current.booked && (startsAt !== current.starts_at || endsAt !== current.ends_at)) {
+        const overlap = db.prepare(`
+          SELECT 1 FROM bookings attendee JOIN bookings other ON other.user_id = attendee.user_id
+          WHERE attendee.class_id = ? AND attendee.status = 'CONFIRMED' AND other.status = 'CONFIRMED'
+            AND other.id <> attendee.id AND other.starts_at < ? AND other.ends_at > ?
+          LIMIT 1
+        `).get(id, endsAt, startsAt);
+        if (overlap) throw new ApiError(409, 'SCHEDULE_CONFLICT', '有已报名队员在新时段另有预约，请调整开课时间');
       }
       if (status === 'PUBLISHED' && coachIds.some(coachId => conflict(coachId, startsAt, endsAt, id))) {
         throw new ApiError(409, 'SCHEDULE_CONFLICT', '该教练已有课程、私教预约或停用时段');
@@ -227,6 +233,13 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
           points = ?, capacity = ?, status = ?, course_type_id = ? WHERE id = ?
       `).run(draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, status, courseTypeId, id);
       saveExtras(db, 'class', id, coachIds);
+      if (current.booked) {
+        // Active bookings, including pending approvals, follow the class and keep their original financial terms.
+        db.prepare(`
+          UPDATE bookings SET coach_id = ?, group_coach_names = (SELECT ${sessionRoster.names} FROM class_sessions s WHERE s.id = ?),
+            title = ?, venue = ?, starts_at = ?, ends_at = ? WHERE class_id = ? AND status = 'CONFIRMED'
+        `).run(draft.coachId, id, draft.title, draft.venue, startsAt, endsAt, id);
+      }
       db.prepare('UPDATE template_occurrences SET manual_override = 1 WHERE class_id = ?').run(id);
       audit(db, actor, 'CLASS_UPDATED', id, now);
     });

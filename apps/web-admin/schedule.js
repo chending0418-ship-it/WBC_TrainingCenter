@@ -9,7 +9,7 @@ export function classTable(classes, editDate) {
   return table(['时段', '团课', '教练', '训练场地', '已占 / 容量'], classes.map(row => {
     const label = coach(row.coachName);
     const editable = editDate && Date.parse(row.startsAt) > Date.now();
-    const cell = editable ? html`${label} ${link(row.bookedCount ? '调整容量' : '编辑班次', 'classCoaches', { date: editDate, id: row.id })}` : label;
+    const cell = editable ? html`${label} ${link('编辑班次', 'classCoaches', { date: editDate, id: row.id })}` : label;
     return [hours(row), row.title + (row.bookable ? '' : '（已停开）'), cell, row.venue, row.bookedCount + ' / ' + row.capacity];
   }), '当天暂无团课');
 }
@@ -132,15 +132,13 @@ function classEditor(ctx, context, types, choices, row, path) {
   const existing = row ? rowSettings(row) : null;
   const template = Boolean(row?.weekdays);
   const repeating = template || ctx.query.get('repeat') === 'weekly';
-  const booked = Boolean(row?.bookedCount);
   const initial = existing?.coachIds ?? choices.slice(0, 1).map(c => c.id);
   const back = template ? 'classTemplates' : 'schedule';
   const returnDate = selectedDate || context.today;
-  const heading = template ? '编辑周期模板' : booked ? '调整班次容量' : row ? '编辑团课班次' : '新增团课';
+  const heading = template ? '编辑周期模板' : row ? '编辑团课班次' : '新增团课';
   const action = row ? '保存修改' : '发布团课';
   const days = existing?.weekdays ?? [weekday(date)];
-  const classFields = booked ? details([['团课', row.title], ['教练', coach(row.coachName)], ['已占名额', row.bookedCount]]) :
-    html`${field('课程名称', 'title', row?.title, { maxLength: 50 })}
+  const classFields = html`${field('课程名称', 'title', row?.title, { maxLength: 50 })}
       ${select('课程类型', 'courseTypeId', [['', '无课程类型'], ...types.map(t => [t.id, t.name])], row?.courseTypeId ?? '')}
       ${coachChoices(choices, initial)}
       ${field('训练场地', 'venue', row?.venue, { maxLength: 50 })}
@@ -165,7 +163,6 @@ function classEditor(ctx, context, types, choices, row, path) {
   root.querySelector('[type=submit]').disabled = !choices.length;
   function draft() {
     const capacity = Number(fields.capacity.value);
-    if (booked) return { ...existing, capacity };
     const data = new FormData(form);
     const weekly = template || data.get('repeat') === 'weekly';
     const [hour, minute] = fields.start.value.split(':').map(Number);
@@ -205,12 +202,13 @@ function classEditor(ctx, context, types, choices, row, path) {
     const value = draft();
     const type = types.find(t => t.id === value.courseTypeId);
     updateCapacity(form, type, value.coachIds.length);
-    if (booked) fields.capacity.min = row.bookedCount;
+    if (row?.bookedCount) fields.capacity.min = row.bookedCount;
     preview.innerHTML = details([
       ['日期', value.date ? monthDay(value.date) + ' · ' + weekdays[weekday(value.date)] : '—'],
       ...(value.weekdays.length ? [['每周', value.weekdays.map(d => weekdays[d]).join('、')]] : []),
       ['时段', value.startMinutes.map(t => minuteTime(t) + '–' + minuteTime(t + value.duration)).join('、')],
       ['教练', value.coachIds.map(id => coach(choices.find(c => c.id === id).name)).join('、') || '—'],
+      ...(row?.bookedCount ? [['已占名额', row.bookedCount + ' 人']] : []),
       ['容量 / 积分', (value.capacity || '—') + ' 人 · ' + (value.points || '—') + ' 积分']
     ]).value;
   }
