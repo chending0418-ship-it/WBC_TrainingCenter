@@ -123,7 +123,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
 
   function account(user: string): Account {
     const ledger = db.prepare(`
-      SELECT id, delta, reason, created_at AS createdAt FROM ledger WHERE user_id = ? ORDER BY id DESC
+      SELECT id, delta, reason, created_at AS createdAt, training_title AS trainingTitle, training_start AS trainingStart FROM ledger WHERE user_id = ? ORDER BY id DESC
     `).all(user) as unknown as Account['ledger'];
     return { balance: ledger.reduce((total, entry) => total + entry.delta, 0),
       reservedPoints: reservedPoints(db, user, clock().toISOString()), ledger };

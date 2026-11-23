@@ -14,16 +14,18 @@
   },
   "dependencies": {
     "fastify": "5.12.8",
+    "pdfkit": "^0.21.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "@types/node": "24.19.2",
+    "@types/pdfkit": "^0.17.7",
     "eslint": "9.39.5",
     "globals": "16.5.0",
     "miniprogram-api-typings": "5.3.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.2"
   },
-  "version": "1.1.8"
+  "version": "1.2.0"
 }

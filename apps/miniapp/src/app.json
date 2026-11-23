@@ -17,6 +17,8 @@
     "pages/admin-bookings/index",
     "pages/admin-family-picker/index",
     "pages/admin-points/index",
+    "pages/admin-export/index",
+    "pages/admin-roles/index",
     "pages/coach/index"
   ],
   "window": {

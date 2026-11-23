@@ -136,7 +136,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     throw new ApiError(403, 'ADMIN_ONLY', '请线下联系管理员处理取消');
   });
   const authorizeWeb = registerWebAdmin(app, clock, demo, webAdminPassword);
-  registerStaffRoutes(app, db, clock, service, scheduling, demo, auth && (header => auth.authorize(header, 'ADMIN')), authorizeWeb);
+  registerStaffRoutes(app, db, clock, service, scheduling, demo, auth && (header => auth.authorize(header, 'ADMIN')), authorizeWeb, wechat?.appId);
   registerCoachRoutes(app, db, clock, demo, auth && (header => auth.authorize(header, 'COACH')));
   return app;
 }

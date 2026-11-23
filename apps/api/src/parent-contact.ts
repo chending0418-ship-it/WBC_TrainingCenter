@@ -37,7 +37,7 @@ export function searchParents(db: DatabaseSync, query: string, now: string, stat
   const profileCondition = profile === 'submitted' ? 'AND c.guardian_id IS NOT NULL'
     : profile === 'missing' ? 'AND c.guardian_id IS NULL' : '';
   const rows = db.prepare(`
-    SELECT u.id, c.name AS childName, c.birth_month AS birthMonth, c.gender, p.name AS contactName, p.phone, r.status AS registrationStatus,
+    SELECT u.id, c.name AS childName, c.jersey_number AS jerseyNumber, c.birth_month AS birthMonth, c.gender, p.name AS contactName, p.phone, r.status AS registrationStatus,
       (SELECT COALESCE(SUM(b.points), 0) FROM bookings b WHERE b.user_id = u.id AND b.status = 'CONFIRMED'
         AND b.approval_pending = 1 AND b.starts_at > ?) AS reservedPoints,
       (SELECT COALESCE(SUM(l.delta), 0) FROM ledger l WHERE l.user_id = u.id) AS balance
@@ -45,9 +45,9 @@ export function searchParents(db: DatabaseSync, query: string, now: string, stat
     LEFT JOIN parent_contacts p ON p.user_id = u.id
     LEFT JOIN registrations r ON r.user_id = u.id
     WHERE (? = '' OR coalesce(r.status, 'UNREGISTERED') = ?) ${profileCondition} AND (? = '' OR instr(lower(u.id), lower(?)) > 0 OR instr(lower(c.name), lower(?)) > 0
-      OR instr(lower(p.name), lower(?)) > 0 OR instr(p.phone, ?) > 0)
+      OR instr(lower(p.name), lower(?)) > 0 OR instr(p.phone, ?) > 0 OR c.jersey_number = ?)
     ORDER BY u.id = 'parent' DESC, u.id LIMIT 50
-  `).all(now, filter, filter, query, query, query, query, query) as unknown as
+  `).all(now, filter, filter, query, query, query, query, query, query) as unknown as
     (Omit<ManagedParent, 'contact' | 'child'> & { contactName: string | null; phone: string | null;
       birthMonth: NonNullable<ManagedParent['child']>['birthMonth']; gender: NonNullable<ManagedParent['child']>['gender'] })[];
   return rows.map(({ contactName, phone, birthMonth, gender, ...account }) => ({

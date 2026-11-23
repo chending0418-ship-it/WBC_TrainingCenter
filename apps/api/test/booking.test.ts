@@ -348,6 +348,10 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   seedDemo(old, now());
   const short = privateTraining(870, 900, 'wang');
   old.exec(`
+    ALTER TABLE children DROP COLUMN jersey_number;
+    ALTER TABLE ledger DROP COLUMN training_title;
+    ALTER TABLE ledger DROP COLUMN training_start;
+    ALTER TABLE wechat_accounts DROP COLUMN is_parent;
     DROP VIEW class_coach_assignments;
     DROP VIEW template_coach_assignments;
     DROP TABLE class_extra_coaches;
@@ -374,7 +378,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   first.close();
 
   const { app, db } = fixture(context, path);
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 16);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 17);
   const admin = await adminSession(app);
   const parent = await login(app);
   const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();
@@ -571,6 +575,10 @@ test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
   const previous = openDatabase(path);
   previous.exec(`
     DROP TABLE registrations;
+    ALTER TABLE children DROP COLUMN jersey_number;
+    ALTER TABLE ledger DROP COLUMN training_title;
+    ALTER TABLE ledger DROP COLUMN training_start;
+    ALTER TABLE wechat_accounts DROP COLUMN is_parent;
     DROP VIEW class_coach_assignments;
     DROP VIEW template_coach_assignments;
     DROP TABLE class_extra_coaches;

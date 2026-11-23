@@ -1,11 +1,32 @@
-<view wx:if="{{visible && !accountId && !demoRoles}}" class="portal">
+<view wx:if="{{visible && !(allowedRoles.length > 1) && !demoRoles}}" class="portal {{home ? 'club-home' : ''}}">
   <view class="portal-hero">
     <image class="portal-photo" src="./images/baseball.jpg" mode="aspectFill" />
     <view class="portal-title" role="heading" aria-level="1"><text>WBC</text><text>训练助手</text></view>
+    <button wx:if="{{home}}" class="member-link" bindtap="startLogin" loading="{{busy}}" disabled="{{busy}}" hover-class="press">成员登录</button>
   </view>
-  <view class="portal-actions">
+  <view wx:if="{{home}}" class="home-schedule">
+    <view class="home-week-heading">
+      <view><text class="home-week-title" role="heading" aria-level="2">本周课程</text><view wx:if="{{weekLabel}}" class="home-week-range">{{weekLabel}}</view></view>
+      <navigator class="full-schedule" url="/pages/public-schedule/index" hover-class="press">完整课表<view class="browse-chevron"></view></navigator>
+    </view>
+    <view wx:if="{{error}}" class="form-error">{{error}}</view>
+    <view wx:if="{{weekLoading}}" class="week-status">正在加载课程…</view>
+    <view wx:elif="{{weekError}}" class="week-status">{{weekError}}<button class="retry-week" size="mini" bindtap="loadWeek">重新加载</button></view>
+    <view wx:elif="{{!groups.length}}" class="week-status">本周暂无已发布的团课，可在完整课表中查看其他周次。</view>
+    <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" class="home-day">
+      <view class="home-date"><text class="day-number">{{day.day}}</text><text>{{day.date === today ? '今天' : day.weekday}}</text></view>
+      <view class="home-lessons">
+        <navigator wx:for="{{day.lessons}}" wx:key="id" class="home-lesson" url="/pages/public-schedule/index?day={{day.date}}" hover-class="press">
+          <view class="lesson-hours">{{item.hours}}<text wx:if="{{item.hasStarted}}" class="started-label">已开课</text></view>
+          <view class="home-course-title">{{item.title}}</view>
+          <view class="home-course-detail">{{item.coachLabel}} · {{item.venue}}</view>
+        </navigator>
+      </view>
+    </view>
+  </view>
+  <view wx:else class="portal-actions">
     <button class="button" bindtap="startLogin" loading="{{busy}}" disabled="{{busy}}" hover-class="press">{{wechatMode ? '微信登录' : '演示登录'}}</button>
-    <button class="browse-link" bindtap="browseSchedule" disabled="{{busy}}" hover-class="press">先看课表<view class="browse-chevron"></view></button>
+    <button class="browse-link" bindtap="browseSchedule" disabled="{{busy}}" hover-class="press">浏览课表<view class="browse-chevron"></view></button>
     <view wx:if="{{error}}" class="form-error" aria-live="polite">{{error}}</view>
   </view>
   <view class="portal-signature">
@@ -13,13 +34,12 @@
   </view>
 </view>
 <view wx:elif="{{visible}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{wechatMode && accountId ? '选择身份' : (mode === 'ADMIN' ? '管理员登录' : (mode === 'COACH' ? '教练登录' : 'WBC 训练助手'))}}</text>
+  <text class="page-title" role="heading" aria-level="1">{{wechatMode && allowedRoles.length > 1 ? '选择身份' : (mode === 'ADMIN' ? '管理员登录' : (mode === 'COACH' ? '教练登录' : 'WBC 训练助手'))}}</text>
   <block wx:if="{{wechatMode}}">
     <view wx:if="{{noticeRoleLabel}}" class="muted">使用{{noticeRoleLabel}}身份查看这条服务通知。</view>
     <view class="entry-actions">
       <button wx:for="{{allowedRoles}}" wx:key="role" class="button {{index ? 'quiet' : ''}}"
         data-role="{{item.role}}" bindtap="chooseWechatRole" disabled="{{busy}}" hover-class="press">{{item.label}}</button>
-      <button class="button quiet" bindtap="copyAccountId" disabled="{{busy}}" hover-class="press">复制账号 ID</button>
     </view>
     <view wx:if="{{error}}" class="form-error" aria-live="polite">{{error}}</view>
   </block>

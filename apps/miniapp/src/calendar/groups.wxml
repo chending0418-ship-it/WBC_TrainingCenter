@@ -16,9 +16,9 @@
     </view>
     <view>
       <block wx:for="{{day.lessons}}" wx:key="id">
-        <button wx:if="{{!showBooking && !item.hasStarted}}" class="agenda-card public-course" aria-label="{{'预约' + item.title + '，' + item.hours + '，' + item.venue + '，' + item.coachLabel}}" data-id="{{item.id}}" bindtap="openCourse" hover-class="press">
+        <button wx:if="{{!showBooking && !item.hasStarted}}" class="agenda-card public-course" aria-label="{{'查看' + item.title + '，' + item.hours + '，' + item.venue + '，' + item.coachLabel}}" data-id="{{item.id}}" bindtap="openCourse" hover-class="press">
           <template is="courseSummary" data="{{item}}" />
-          <view class="agenda-bottom public-actions"><text class="reserve">预约</text></view>
+          <view class="agenda-bottom public-actions"><text class="reserve">查看课程</text></view>
         </button>
         <view wx:elif="{{!showBooking}}" class="agenda-card"><template is="courseSummary" data="{{item}}" /></view>
         <view wx:else class="agenda-card">

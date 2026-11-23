@@ -10,8 +10,10 @@ import { dateInput, expectedRevision, integer, object, requiredText, selection }
 import { searchParents } from './parent-contact.ts';
 import { registrations, reviewRegistration } from './registration.ts';
 import { roleSessions } from './role-session.ts';
+import { businessExport } from './business-export.ts';
+import { accountRoles, saveRoles } from './account-roles.ts';
 import { addCoach, coachDraft, listCoaches, updateCoach } from './staff-coaches.ts';
-import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
+import { pastTrainingSql, ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
 import { addDays, dateAt, venueDate, weekday } from './time.ts';
 import type { Authorize } from './wechat-auth.ts';
@@ -64,7 +66,7 @@ function windowInput(input: unknown): MinuteWindow {
 export function registerStaffRoutes(
   app: FastifyInstance, db: DatabaseSync, clock: () => Date,
   booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>, demo: boolean, authorizeWechat?: Authorize,
-  authorizeWeb?: (header: string | undefined) => { subject: string } | undefined
+  authorizeWeb?: (header: string | undefined) => { subject: string } | undefined, appId = ''
 ) {
   const sessions = roleSessions('ADMIN', clock, '请先登录管理端');
   if (demo) {
@@ -297,6 +299,30 @@ export function registerStaffRoutes(
     routes.get('/registrations', async request => registrations(db, object(request.query).view));
     routes.post('/registrations/:id/review', async request => reviewRegistration(db, requiredText(object(request.params).id),
       request.body, actor(request), clock()));
+    routes.get('/exports/:category', async (request, reply) => {
+      const file = businessExport(db, object(request.params).category, object(request.query).format);
+      return reply.type(file.type).header('Cache-Control', 'no-store')
+        .header('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(file.filename)).send(file.body);
+    });
+    routes.get('/account-roles', async request => {
+      const { q } = object(request.query);
+      return accountRoles(db, appId, q ? requiredText(q, 50) : '');
+    });
+    routes.put('/account-roles/:id', async (request, reply) => {
+      saveRoles(db, appId, requiredText(object(request.params).id), request.body, actor(request), clock().toISOString());
+      return reply.code(204).send();
+    });
+    routes.get('/past-training', async () => {
+      const now = clock().toISOString();
+      return db.prepare(pastTrainingSql + ' ORDER BY startsAt DESC, id').all(now, now);
+    });
+    routes.put('/parents/:id/jersey', async (request, reply) => {
+      const { number } = object(request.body);
+      if (typeof number !== 'string' || !/^\d{0,4}$/.test(number)) throw new ApiError(400, 'VALIDATION_ERROR', '球衣号码可填写一至四位数字或留空');
+      if (!db.prepare('UPDATE children SET jersey_number = ? WHERE guardian_id = ?').run(number || null, requiredText(object(request.params).id)).changes)
+        throw new ApiError(404, 'NOT_FOUND', '未找到队员档案');
+      return reply.code(204).send();
+    });
     routes.get('/parents', async request => {
       const { q: query, status, profile } = object(request.query);
       return searchParents(db, query === undefined || query === '' ? '' : requiredText(query, 50), clock().toISOString(), status, profile);

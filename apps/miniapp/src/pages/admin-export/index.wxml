@@ -1,0 +1,14 @@
+<view wx:if="{{authorized}}" class="page-shell">
+  <text class="page-title">信息导出</text>
+  <picker range="{{categories}}" range-key="label" value="{{category}}" bindchange="select" data-field="category" disabled="{{busy}}"><view class="picker">数据类别<text>{{categories[category].label}}</text></view></picker>
+  <picker range="{{formats}}" value="{{format}}" bindchange="select" data-field="format" disabled="{{busy}}"><view class="picker">文件格式<text>{{formats[format]}}</text></view></picker>
+  <button class="button" bindtap="open" loading="{{busy}}" disabled="{{busy}}">导出并打开</button>
+  <view wx:if="{{error}}" class="form-error">{{error}}</view>
+  <block wx:if="{{headers.length}}">
+    <view class="section-title">CSV · 共 {{total}} 条记录</view>
+    <view wx:for="{{preview}}" wx:for-item="row" wx:key="index" class="list-row">
+      <view wx:for="{{row}}" wx:for-index="col" wx:key="col">{{headers[col]}} · {{item || '—'}}</view>
+    </view>
+    <view wx:if="{{total > 20}}" class="section-actions"><button size="mini" disabled="{{!offset}}" data-step="-1" bindtap="page">上一页</button><button size="mini" disabled="{{offset + 20 >= total}}" data-step="1" bindtap="page">下一页</button></view>
+  </block>
+</view>

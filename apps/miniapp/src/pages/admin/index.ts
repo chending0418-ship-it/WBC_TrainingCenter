@@ -13,6 +13,8 @@ Page({
       { page: 'admin-course-types', label: '课程类型', icon: 'types' },
       { page: 'admin-coaches', label: '教练管理', icon: 'coaches' },
       { page: 'admin-parents', label: '队员档案', icon: 'parents' },
+      { page: 'admin-export', label: '信息导出', icon: 'export' },
+      { page: 'admin-roles', label: '用户管理', icon: 'parents' },
       { page: 'admin-points', label: '积分调整', icon: 'points' }
     ]
   },

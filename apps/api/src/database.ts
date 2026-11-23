@@ -380,6 +380,16 @@ export function openDatabase(path: string): DatabaseSync {
       db.exec('PRAGMA foreign_keys = ON');
     }
   }
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 17) return;
+    db.exec(`
+      ALTER TABLE children ADD COLUMN jersey_number TEXT;
+      ALTER TABLE ledger ADD COLUMN training_title TEXT;
+      ALTER TABLE ledger ADD COLUMN training_start TEXT;
+      ALTER TABLE wechat_accounts ADD COLUMN is_parent INTEGER NOT NULL DEFAULT 1 CHECK (is_parent IN (0, 1));
+      PRAGMA user_version = 17;
+    `);
+  });
   return db;
 }
 

@@ -67,7 +67,7 @@ test('wechat login uses server config, binds existing identities and issues role
   changeWechatRole(db, appId, first.accountId, 'grant-admin', undefined, now.toISOString());
   const second = await login(app, 'parent-two');
   assert.equal(second.accountId, first.accountId);
-  assert.deepEqual(second.roles, ['PARENT', 'ADMIN']);
+  assert.deepEqual(second.roles, ['PARENT', 'COACH', 'ADMIN']);
   const admin = await select(app, second.token, 'ADMIN');
   const create = await app.inject({
     method: 'POST', url: '/api/admin/coaches', headers: headers(admin.token),
@@ -120,7 +120,7 @@ test('wechat login uses server config, binds existing identities and issues role
 
   const restoredParent = await select(app, admin.token, 'PARENT');
   assert.equal((await app.inject({ url: '/api/admin/coaches', headers: headers(admin.token) })).statusCode, 401);
-  await select(app, restoredParent.token, 'ADMIN', 403);
+  await select(app, restoredParent.token, 'ADMIN');
   const freshLogin = await login(app, 'admin-again');
   const restoredAdmin = await select(app, freshLogin.token, 'ADMIN');
   changeWechatRole(db, appId, first.accountId, 'revoke-admin', undefined, now.toISOString());
