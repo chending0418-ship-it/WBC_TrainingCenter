@@ -11,6 +11,7 @@ const at = Date.parse('2026-11-23T02:05:00Z');
 const common = { templateId: 'test-result', fields: { thing1: 'title', time2: 'time', phrase3: 'status' } };
 const config = subscriptionConfig(JSON.stringify({
   BOOKING_CONFIRMED: common, BOOKING_REJECTED: common, BOOKING_CANCELLED: common,
+  REGISTRATION_APPROVED: { ...common, templateId: 'test-registration' },
   REGISTRATION_SUBMITTED: { ...common, templateId: 'test-admin' }, BOOKING_SUBMITTED: { ...common, templateId: 'test-admin' }
 }), 'trial');
 const payload = JSON.stringify({ title: '预约', time: new Date(at).toISOString(), status: '已确认' });
@@ -53,6 +54,7 @@ test('role-specific subscriptions, one-time grant, idempotent acceptance and no 
   const response = await env.app.inject({ url: env.url, headers: env.headers });
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.deepEqual(response.json().templates, [
+    { kind: 'REGISTRATION_APPROVED', templateId: 'test-registration' },
     { kind: 'BOOKING_CONFIRMED', templateId: env.id }, { kind: 'BOOKING_REJECTED', templateId: env.id },
     { kind: 'BOOKING_CANCELLED', templateId: env.id }
   ]);
@@ -62,6 +64,8 @@ test('role-specific subscriptions, one-time grant, idempotent acceptance and no 
   const old = env.enqueue();
   assert.equal((await env.accept('consent')).statusCode, 200);
   assert.equal((await env.accept('consent')).statusCode, 200);
+  assert.equal((await env.app.inject({ method: 'POST', url: env.url, headers: env.headers,
+    payload: { requestKey: 'consent', templateIds: ['test-registration'] } })).statusCode, 409);
   const one = env.enqueue(), two = env.enqueue();
   let sent = 0;
   const worker = env.createWorker({ send: async (_, body) => {
