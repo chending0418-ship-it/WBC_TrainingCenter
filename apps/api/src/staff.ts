@@ -111,10 +111,7 @@ export function registerStaffRoutes(
         return reply.code(204).send();
       });
     }
-    routes.get('/context', async () => {
-      const { today, lastDate, coaches } = booking.schedule('');
-      return { today, lastDate, coaches };
-    });
+    routes.get('/context', async () => booking.scheduleContext());
     routes.get('/overview', async () => {
       const now = clock().toISOString();
       const date = venueDate(now);
@@ -202,7 +199,10 @@ export function registerStaffRoutes(
       return reply.code(204).send();
     });
     routes.get('/coaches/:id/hours', async request => {
-      return schedule.hours(requiredText(object(request.params).id), dateInput(object(request.query).date));
+      const query = object(request.query);
+      const week = query.view === 'week';
+      const hours = schedule.hours(requiredText(object(request.params).id), dateInput(query.date), week ? 7 : 1);
+      return week ? hours : hours[0];
     });
     routes.put('/coaches/:id/hours', async (request, reply) => {
       const id = requiredText(object(request.params).id);
@@ -242,7 +242,6 @@ export function registerStaffRoutes(
     });
     routes.get('/accounts/:id', async request => {
       const userId = requiredText(object(request.params).id);
-      requireUser(userId);
       return readStaffAccount(db, userId, clock().toISOString());
     });
     routes.get('/accounts/:id/bookings', async request => {

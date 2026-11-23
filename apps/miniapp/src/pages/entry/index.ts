@@ -1,7 +1,9 @@
 import type { SessionRole } from '../../../../../packages/shared/contracts.js';
 import { config } from '../../lib/config';
-import { errorMessage, send } from '../../lib/request';
+import { errorMessage } from '../../lib/request';
 import { allowEntry, selectWechatRole, signIn, signInWechat, wechatIdentity } from '../../lib/session';
+
+import { publicRead, publicReadVersion, demoCoachProfilesPath } from '../../lib/public-read';
 
 const roleLabels = { PARENT: '家长', COACH: '教练', ADMIN: '管理员' };
 
@@ -80,11 +82,14 @@ Page({
       if (role === 'COACH') void this.loadCoaches();
     }
   },
+  coachProfilesVersion: 0,
   async loadCoaches() {
-    this.setData({ coaches: [], loadingCoaches: true, error: '' });
+    if (this.coachProfilesVersion && this.coachProfilesVersion === publicReadVersion(demoCoachProfilesPath)) return;
+    this.setData({ loadingCoaches: !this.coachProfilesVersion, error: '' });
     try {
-      const coaches = await send<{ profile: string; name: string }[]>('/api/dev/coach-profiles', 'GET');
-      if (this.data.mode === 'COACH') this.setData({ coaches });
+      const coaches = await publicRead<{ profile: string; name: string }[]>(demoCoachProfilesPath);
+      this.coachProfilesVersion = publicReadVersion(demoCoachProfilesPath);
+      this.setData({ coaches });
     } catch (error) {
       if (this.data.mode === 'COACH') this.setData({ error: errorMessage(error) });
     } finally {

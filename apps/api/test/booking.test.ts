@@ -170,6 +170,25 @@ test('两端同时审核时，拒绝操作不会取消已被另一端确认的�
   assert.equal(history.json<Booking[]>()[0].status, 'CONFIRMED');
 });
 
+test('私教可约时段按周读取与逐日结果一致，沿用登录校验和预约日期范围', async context => {
+  const { app } = fixture(context);
+  const parent = await login(app);
+  const path = '/api/coaches/li/slots?date=';
+  const rangeUrl = path + date + '&days=7';
+  assert.equal((await app.inject({ url: rangeUrl })).statusCode, 401);
+  const week = await app.inject({ url: rangeUrl, headers: parent });
+  assert.equal(week.statusCode, 200);
+  const daily = await Promise.all(Array.from({ length: 7 }, async (_, i) => {
+    const response = await app.inject({ url: path + addDays(date, i), headers: parent });
+    return response.json<PrivateSlot[]>();
+  }));
+  assert.deepEqual(week.json(), daily.flat());
+  for (const days of ['0', '8', 'x', '']) {
+    assert.equal((await app.inject({ url: path + date + '&days=' + days, headers: parent })).statusCode, 400);
+  }
+  assert.equal((await app.inject({ url: path + addDays(date, 29) + '&days=2', headers: parent })).statusCode, 400);
+});
+
 test('多个请求争抢最后一个团课名额，仅一笔可以预留', async context => {
   const { app, db } = fixture(context);
   db.prepare('UPDATE class_sessions SET capacity = 1 WHERE id = ?').run(group.classSessionId);
@@ -320,6 +339,9 @@ test('注册退回、重新提交和重复审核保持同一申请版本及预�
   const search = async (status: string) => (await app.inject({ url: '/api/admin/parents?q=0021&status=' + status, headers: admin })).json();
   assert.equal((await app.inject({ url: '/api/admin/registrations', headers: parent })).statusCode, 401);
   assert.equal((await app.inject({ method: 'PUT', url, payload: { child } })).statusCode, 401);
+  assert.deepEqual((await app.inject({ url, headers: parent })).json(), { registration: null, draft: { child: null, contact: null } });
+  assert.equal((await app.inject({ url: '/api/me/contact', method: 'PUT', headers: parent, payload: contact })).statusCode, 200);
+  assert.deepEqual((await app.inject({ url, headers: parent })).json().draft.contact, contact);
   const draft = { child, contact };
   const pending = (await submit(draft)).json<Registration>();
   assert.equal(pending.status, 'PENDING');

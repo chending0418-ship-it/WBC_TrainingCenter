@@ -8,10 +8,10 @@ import { test } from 'node:test';
 import sharp from 'sharp';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
-import type { CoachSchedule, ManagedBooking, ManagedClass, Schedule, StaffAccount } from '../../../packages/shared/contracts.js';
+import type { CoachHours, CoachSchedule, ManagedBooking, ManagedClass, Schedule, StaffAccount } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
 import { openDatabase } from '../src/database.ts';
-import { dateAt, weekday } from '../src/time.ts';
+import { addDays, dateAt, weekday } from '../src/time.ts';
 
 const today = '2030-12-31';
 const now = () => new Date(dateAt(today, 480));
@@ -154,6 +154,14 @@ test('私教开放和例外设置影响家长可约时间，已预约时段受�
     payload: { date: today, start: 840, end: 870, reason: '演示请假', requestKey: 'block' }
   });
   assert.equal(block.statusCode, 200);
+  const weekFrom = '2030-12-30';
+  const week = (await app.inject({ url: hoursUrl + '?date=' + weekFrom + '&view=week', headers: admin })).json<CoachHours[]>();
+  assert.equal(week.length, 7);
+  assert.equal(week[1].exceptions[0]?.id, block.json().id);
+  for (const [i, day] of week.entries()) {
+    const single = await app.inject({ url: hoursUrl + '?date=' + addDays(weekFrom, i), headers: admin });
+    assert.deepEqual(day, single.json<CoachHours>());
+  }
   assert.ok(!(await getSlots()).some(slot => slot.startsAt === startsAt));
   assert.equal((await app.inject({
     method: 'DELETE', url: '/api/admin/coaches/li/exceptions/' + block.json().id, headers: admin, payload: {}

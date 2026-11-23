@@ -10,7 +10,7 @@
     <button class="button quiet" bindtap="refresh" hover-class="press">重新加载</button>
   </view>
 
-  <block wx:else>
+  <block wx:if="{{today}}">
     <view class="calendar-tabs">
       <button class="calendar-tab {{mode === 'GROUP' ? 'active' : ''}}" data-mode="GROUP"
         bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'GROUP'}}">团课</button>
@@ -43,8 +43,8 @@
         <view>{{slotError}}</view>
         <button class="button quiet" bindtap="refreshSlots" hover-class="press">重新查询</button>
       </view>
-      <view wx:elif="{{!coaches.length}}" class="message">暂无开放私教预约的教练。</view>
-      <block wx:else>
+      <view wx:if="{{!slotLoading && !coaches.length}}" class="message">暂无开放私教预约的教练。</view>
+      <block wx:elif="{{!slotLoading && (privateDays.length || !slotError)}}">
         <view class="section-title" role="heading" aria-level="2">可约时段</view>
         <view wx:for="{{privateDays}}" wx:key="date" wx:for-item="day" wx:for-index="di" class="availability-day">
           <view class="row-name">{{day.label}}</view>

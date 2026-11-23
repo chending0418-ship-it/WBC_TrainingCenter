@@ -1,7 +1,7 @@
 import type { CoachLesson, CoachSchedule } from '../../../../../packages/shared/contracts.js';
 import { coachIdentity } from '../../lib/coach-avatar';
 import { errorMessage } from '../../lib/request';
-import { allowPage, roleRequest } from '../../lib/session';
+import { allowPage, roleRequest, readVersion, invalidateRead, hasFreshRead } from '../../lib/session';
 import { dateLabel, localTimestamp, timeRange } from '../../lib/display';
 
 type Period = 'today' | 'week';
@@ -9,7 +9,9 @@ type Day = {
   date: string; label: string;
   lessons: (CoachLesson & { key: string; hours: string; names: string })[];
 };
-let request = 0;
+function schedulePath(period: Period) {
+  return '/api/coach/me/schedule?period=' + period;
+}
 
 function groupLessons(lessons: CoachLesson[]): Day[] {
   const days = new Map<string, Day>();
@@ -36,14 +38,20 @@ Page({
     identity: coachIdentity(''), hasProfile: false, uploading: false, period: 'today' as Period,
     rangeLabel: '', days: [] as Day[], loading: true, error: ''
   },
+  requestNumber: 0,
+  shownVersion: 0,
+  onUnload() { this.requestNumber++; },
   onShow() {
     const authorized = allowPage('COACH');
     this.setData({ authorized });
-    if (authorized) void this.refresh();
+    if (authorized && (!this.shownVersion || this.shownVersion !== readVersion(schedulePath(this.data.period)))) void this.refresh();
   },
   async onPullDownRefresh() {
     try {
-      if (this.data.authorized) await this.refresh();
+      if (this.data.authorized) {
+        invalidateRead(schedulePath(this.data.period));
+        await this.refresh();
+      }
     } finally {
       wx.stopPullDownRefresh();
     }
@@ -65,8 +73,8 @@ Page({
         wx.showToast({ title: '图片过大，请选择较小的头像', icon: 'none' });
         return;
       }
-      await roleRequest('COACH', '/api/coach/me/avatar', 'PUT', { image });
-      await this.refresh();
+      const { avatarKey } = await roleRequest<{ avatarKey: string }>('COACH', '/api/coach/me/avatar', 'PUT', { image });
+      this.setData({ 'identity.avatarUrl': coachIdentity(this.data.identity.label, avatarKey).avatarUrl });
       wx.showToast({ title: '头像已保存', icon: 'none' });
     } catch (error) {
       wx.showToast({ title: errorMessage(error), icon: 'none' });
@@ -77,23 +85,27 @@ Page({
   changePeriod(event: WechatMiniprogram.TouchEvent) {
     const period = event.currentTarget.dataset.period as Period;
     if (period === this.data.period) return;
-    this.setData({ period, rangeLabel: '', days: [] });
-    void this.refresh();
+    void this.loadPeriod(period);
   },
-  async refresh() {
-    const current = ++request;
-    this.setData({ loading: true, error: '' });
+  refresh() { return this.loadPeriod(this.data.period); },
+  async loadPeriod(period: Period) {
+    const current = ++this.requestNumber;
+    const path = schedulePath(period);
+    if (!hasFreshRead(path)) {
+      const changing = period !== this.data.period;
+      if (changing) this.shownVersion = 0;
+      this.setData({ period, loading: !this.shownVersion, error: '' });
+    }
     try {
-      const result = await roleRequest<CoachSchedule>('COACH', '/api/coach/me/schedule?period=' + this.data.period);
-      if (current !== request) return;
+      const result = await roleRequest<CoachSchedule>('COACH', path);
+      if (current !== this.requestNumber) return;
+      this.shownVersion = readVersion(path);
       this.setData({
-        identity: coachIdentity(result.coachName, result.avatarKey), hasProfile: true, days: groupLessons(result.lessons),
+        period, loading: false, error: '', identity: coachIdentity(result.coachName, result.avatarKey), hasProfile: true, days: groupLessons(result.lessons),
         rangeLabel: result.from === result.to ? dateLabel(result.from) : dateLabel(result.from) + ' – ' + dateLabel(result.to)
       });
     } catch (error) {
-      if (current === request) this.setData({ error: errorMessage(error) });
-    } finally {
-      if (current === request) this.setData({ loading: false });
+      if (current === this.requestNumber) this.setData({ period, loading: false, error: errorMessage(error) });
     }
   }
 });

@@ -9,19 +9,27 @@ Page({
     matches: [] as { id: string; name: string; contact: string; birthMonth: string; label: string }[]
   },
   searchSequence: 0,
+  inputTimer: undefined as ReturnType<typeof setTimeout> | undefined,
   onShow() {
     this.setData({ authorized: allowPage('ADMIN') });
   },
   onUnload() {
+    clearTimeout(this.inputTimer);
     this.searchSequence++;
   },
   changeQuery(event: WechatMiniprogram.Input) {
-    void this.search(event.detail.value);
+    const query = event.detail.value;
+    clearTimeout(this.inputTimer);
+    this.searchSequence++;
+    if (!query.trim()) { void this.search(query); return; }
+    this.setData({ query, hasKeyword: true, loading: true, matches: [], error: '' });
+    this.inputTimer = setTimeout(() => { void this.search(query); }, 200);
   },
   clear() {
     void this.search('');
   },
   async search(query: string) {
+    clearTimeout(this.inputTimer);
     const sequence = ++this.searchSequence;
     const keyword = query.trim();
     this.setData({ query, hasKeyword: Boolean(keyword), loading: Boolean(keyword), matches: [], error: '' });

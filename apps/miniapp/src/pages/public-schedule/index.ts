@@ -3,7 +3,8 @@ import { coachLabel } from '../../lib/coach-avatar';
 import { localTimestamp, timeRange } from '../../lib/display';
 import { groupReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
-import { errorMessage, send } from '../../lib/request';
+import { errorMessage } from '../../lib/request';
+import { publicRead, publicReadVersion, invalidatePublicRead, publicSchedulePath } from '../../lib/public-read';
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
 type Lesson = PublicCourse & { hours: string; coachLabel: string };
@@ -18,17 +19,22 @@ Page({
   },
   lessons: new Map<string, Lesson[]>(),
   requestNumber: 0,
-  onLoad() { void this.refresh(); },
+  renderedVersion: 0,
+  onShow() {
+    if (!this.renderedVersion || this.renderedVersion !== publicReadVersion(publicSchedulePath)) void this.refresh();
+  },
   onUnload() { this.requestNumber++; },
   async onPullDownRefresh() {
+    invalidatePublicRead(publicSchedulePath);
     try { await this.refresh(); } finally { wx.stopPullDownRefresh(); }
   },
   async refresh() {
     const request = ++this.requestNumber;
-    this.setData({ loading: true, error: '' });
+    if (this.data.error) this.setData({ error: '', loading: !this.data.today });
     try {
-      const schedule = await send<PublicSchedule>('/api/public/schedule', 'GET');
+      const schedule = await publicRead<PublicSchedule>(publicSchedulePath);
       if (request !== this.requestNumber) return;
+      this.renderedVersion = publicReadVersion(publicSchedulePath);
       const lessons = new Map<string, Lesson[]>();
       for (const course of schedule.courses) {
         const date = localTimestamp(course.startsAt).slice(0, 10);
@@ -43,7 +49,7 @@ Page({
     } catch (error) {
       if (request === this.requestNumber) this.setData({ error: errorMessage(error) });
     } finally {
-      if (request === this.requestNumber) this.setData({ loading: false });
+      if (request === this.requestNumber && this.data.loading) this.setData({ loading: false });
     }
   },
   changeWeek(event: WechatMiniprogram.TouchEvent) {

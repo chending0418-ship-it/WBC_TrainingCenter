@@ -1,5 +1,5 @@
 import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
-import { showParentTab } from '../../lib/session';
+import { hasFreshRead, invalidateRead, readVersion, showParentTab } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { availableRanges } from '../../lib/private-availability';
@@ -12,9 +12,7 @@ import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 type VisibleCourse = Course & { hours: string; coachLabel: string; action: string; unavailable: boolean };
 type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof availableRanges> };
 
-const coursesByDate = new Map<string, Course[]>();
-let scheduleRequest = 0;
-let slotsRequest = 0;
+const schedulePath = '/api/schedule?view=week';
 
 type Confirmation = {
   selection: BookingSelection; revision: string; title: string; when: string; coach: string;
@@ -48,64 +46,94 @@ Page({
     booking: false
   },
 
+  coursesByDate: new Map<string, Course[]>(),
+  scheduleRequest: 0,
+  slotsRequest: 0,
+  renderedVersion: 0,
+  nextCourseStart: Infinity,
+  slotsPath: '',
+  slotsVersion: 0,
+  pendingReminder: null as CourseReminder | null,
+  visible: false,
   quoteSequence: 0,
   onHide() {
+    this.visible = false;
     this.dismissRegistration();
     this.dismissQuote();
   },
   onUnload() {
+    this.visible = false;
+    this.scheduleRequest++;
+    this.slotsRequest++;
     this.dismissQuote();
   },
   onShow() {
     const authorized = showParentTab(this);
-    this.setData({ authorized });
-    if (authorized) void this.refresh();
+    this.visible = authorized;
+    if (authorized !== this.data.authorized) this.setData({ authorized });
+    if (!authorized) return;
+    this.pendingReminder = takeCourseReminder() ?? this.pendingReminder;
+    if (!this.renderedVersion || this.renderedVersion !== readVersion(schedulePath) || this.pendingReminder) {
+      void this.refresh();
+    } else if (Date.now() >= this.nextCourseStart) {
+      void this.selectDate(this.data.date);
+    } else if (this.data.mode === 'PRIVATE') {
+      void this.refreshSlots();
+    }
   },
 
   async onPullDownRefresh() {
     try {
-      if (this.data.authorized && !this.data.booking) await this.refresh();
+      if (this.data.authorized && !this.data.booking) {
+        invalidateRead(schedulePath);
+        if (this.data.mode === 'PRIVATE' && this.slotsPath) invalidateRead(this.slotsPath);
+        await this.refresh();
+      }
     } finally {
       wx.stopPullDownRefresh();
     }
   },
 
   async refresh() {
-    const request = ++scheduleRequest;
-    this.setData({ loading: true, error: '' });
+    const request = ++this.scheduleRequest;
+    if (this.data.error) this.setData({ error: '', loading: !this.data.today });
     try {
-      const schedule = await api<Schedule>('/api/schedule?view=week');
-      if (request !== scheduleRequest) return;
-      coursesByDate.clear();
+      const schedule = await api<Schedule>(schedulePath);
+      if (request !== this.scheduleRequest) return;
+      this.renderedVersion = readVersion(schedulePath);
+      this.coursesByDate = new Map();
       for (const course of schedule.courses) {
         const day = localTimestamp(course.startsAt).slice(0, 10);
-        const daily = coursesByDate.get(day);
+        const daily = this.coursesByDate.get(day);
         if (daily) daily.push(course);
-        else coursesByDate.set(day, [course]);
+        else this.coursesByDate.set(day, [course]);
       }
-      const reminder = takeCourseReminder();
+      const reminder = this.pendingReminder;
+      this.pendingReminder = null;
       const preferred = reminder?.date ?? this.data.date;
       const date = preferred >= schedule.today && preferred <= schedule.lastDate ? preferred : schedule.today;
       const coachId = reminder?.selection.type === 'PRIVATE' ? reminder.selection.coachId : this.data.coaches[this.data.coachIndex]?.id;
-      if (reminder) this.setData({ mode: reminder.selection.type });
       const coachIndex = Math.max(0, schedule.coaches.findIndex(coach => coach.id === coachId));
-      this.setData({ today: schedule.today, lastDate: schedule.lastDate, coaches: schedule.coaches.map(c => ({ ...c, ...coachIdentity(c.name, c.avatarKey) })), coachIndex });
-      this.selectDate(date);
-      if (reminder?.selection.type === 'GROUP' && date === reminder.date) {
+      this.setData({
+        today: schedule.today, lastDate: schedule.lastDate, mode: reminder?.selection.type ?? this.data.mode,
+        coaches: schedule.coaches.map(c => ({ ...c, ...coachIdentity(c.name, c.avatarKey) })), coachIndex, loading: false
+      });
+      await this.selectDate(date);
+      if (reminder?.selection.type === 'GROUP' && date === reminder.date && this.visible) {
         const id = reminder.selection.classSessionId;
         if (schedule.courses.some(course => course.id === id)) wx.nextTick(() => wx.pageScrollTo({ selector: '#agenda-' + date, duration: 200 }));
       }
     } catch (error) {
-      if (request === scheduleRequest) this.setData({ error: errorMessage(error) });
-    } finally {
-      if (request === scheduleRequest) this.setData({ loading: false });
+      if (request === this.scheduleRequest) this.setData({ error: errorMessage(error), loading: false });
     }
   },
 
   selectDate(date: string) {
     const now = new Date().toISOString();
-    const week = weekAgenda(date, this.data.today, this.data.lastDate, coursesByDate);
+    const week = weekAgenda(date, this.data.today, this.data.lastDate, this.coursesByDate);
+    this.nextCourseStart = Infinity;
     const groups = week.groups.map(day => ({ ...day, lessons: day.lessons.map(course => {
+      if (course.startsAt > now) this.nextCourseStart = Math.min(this.nextCourseStart, Date.parse(course.startsAt));
       let action = '预约';
       if (course.bookedByMe) action = '已提交';
       else if (course.startsAt <= now) action = '已开课';
@@ -113,7 +141,7 @@ Page({
       return { ...course, coachLabel: coachLabel(course.coachName), hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
     }) }));
     this.setData({ date, ...week, groups });
-    if (this.data.mode === 'PRIVATE') void this.refreshSlots();
+    if (this.visible && this.data.mode === 'PRIVATE') return this.refreshSlots();
   },
 
   changeWeek(event: WechatMiniprogram.TouchEvent) {
@@ -147,20 +175,38 @@ Page({
   },
 
   async refreshSlots() {
-    const request = ++slotsRequest;
     const coach = this.data.coaches[this.data.coachIndex];
-    this.setData({ privateDays: [], selectedRange: '', selectedStart: '', slotError: '', slotLoading: !!coach });
-    if (!coach) return;
+    const dates = this.data.dates.filter(day => day.date >= this.data.today && !day.outside);
+    const path = coach && dates.length ? '/api/coaches/' + encodeURIComponent(coach.id) +
+      '/slots?date=' + dates[0].date + '&days=' + dates.length : '';
+    const sameWeek = path === this.slotsPath;
+    if (sameWeek && this.slotsVersion && this.slotsVersion === readVersion(path)) return;
+    const request = ++this.slotsRequest;
+    this.slotsPath = path;
+    if (!sameWeek || !this.slotsVersion) {
+      this.slotsVersion = 0;
+      this.setData({ privateDays: [], selectedRange: '', selectedStart: '', slotError: '', slotLoading: !!path && !hasFreshRead(path) });
+    } else if (this.data.slotError) this.setData({ slotError: '' });
+    if (!path) return;
     try {
-      const days = await Promise.all(this.data.dates.filter(day => day.date >= this.data.today && !day.outside).map(async day => {
-        const slots = await api<PrivateSlot[]>('/api/coaches/' + coach.id + '/slots?date=' + day.date);
-        return { date: day.date, label: dateLabel(day.date) + ' · ' + day.weekday, ranges: availableRanges(slots) };
+      const slots = await api<PrivateSlot[]>(path);
+      if (request !== this.slotsRequest) return;
+      const byDate = new Map<string, PrivateSlot[]>();
+      for (const slot of slots) {
+        const date = localTimestamp(slot.startsAt).slice(0, 10);
+        const daily = byDate.get(date);
+        if (daily) daily.push(slot);
+        else byDate.set(date, [slot]);
+      }
+      const privateDays = dates.map(day => ({
+        date: day.date, label: dateLabel(day.date) + ' · ' + day.weekday, ranges: availableRanges(byDate.get(day.date) ?? [])
       }));
-      if (request === slotsRequest) this.setData({ privateDays: days });
+      const range = privateDays.flatMap(day => day.ranges).find(item => item.startsAt === this.data.selectedRange);
+      const start = range?.starts.find(item => item.startsAt === this.data.selectedStart);
+      this.slotsVersion = readVersion(path);
+      this.setData({ privateDays, selectedRange: range?.startsAt ?? '', selectedStart: start?.startsAt ?? '', slotLoading: false });
     } catch (error) {
-      if (request === slotsRequest) this.setData({ slotError: errorMessage(error) });
-    } finally {
-      if (request === slotsRequest) this.setData({ slotLoading: false });
+      if (request === this.slotsRequest) this.setData({ slotError: errorMessage(error), slotLoading: false });
     }
   },
 
@@ -190,7 +236,7 @@ Page({
     this.quoteSequence++;
     if (this.data.confirmation) this.setData({ confirmation: null });
   },
-  dismissRegistration() { this.setData({ registrationPrompt: null }); },
+  dismissRegistration() { if (this.data.registrationPrompt) this.setData({ registrationPrompt: null }); },
   openRegistration() {
     const course = this.data.registrationPrompt;
     if (!course) return;
@@ -234,6 +280,7 @@ Page({
         wx.removeStorageSync(storageKey);
       }
       if (error instanceof RequestError && ['CHILD_PROFILE_REQUIRED', 'REGISTRATION_REQUIRED'].includes(error.code)) {
+        invalidateRead('/api/me/registration');
         const course = selection.type === 'GROUP' ? this.data.groups.flatMap(day => day.lessons).find(row => row.id === selection.classSessionId) : null;
         const startsAt = selection.type === 'PRIVATE' ? selection.startsAt : course?.startsAt;
         const endsAt = selection.type === 'PRIVATE' ? selection.endsAt : course?.endsAt;
@@ -248,6 +295,8 @@ Page({
       } else {
         wx.showToast({ title: errorMessage(error), icon: 'none', duration: 2500 });
         if (error instanceof RequestError && ['FULL', 'SLOT_TAKEN', 'ALREADY_BOOKED', 'QUOTE_CHANGED'].includes(error.code)) {
+          if (selection.type === 'GROUP') invalidateRead(schedulePath);
+          else if (this.slotsPath) invalidateRead(this.slotsPath);
           await this.refresh();
         }
       }

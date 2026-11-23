@@ -5,7 +5,7 @@
     <view>{{error}}</view>
     <button class="button quiet" bindtap="refresh" hover-class="press">重新查询</button>
   </view>
-  <block wx:else>
+  <block wx:if="{{loaded}}">
     <view class="balance">
       <view>可用积分</view>
       <text class="balance-number">{{balance}}</text>
@@ -21,7 +21,7 @@
   <view class="utility-links">
     <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
   </view>
-  <block wx:if="{{!loading && !error}}">
+  <block wx:if="{{loaded}}">
     <view class="section-title" role="heading" aria-level="2">积分流水</view>
     <view wx:if="{{!ledger.length}}" class="muted">暂无积分变动。</view>
     <view wx:for="{{ledger}}" wx:key="id" class="list-row">

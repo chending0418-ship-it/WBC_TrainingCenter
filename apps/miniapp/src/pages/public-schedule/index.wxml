@@ -11,7 +11,7 @@
     <view>{{error}}</view>
     <button class="button quiet" bindtap="refresh" hover-class="press">重新加载</button>
   </view>
-  <block wx:else>
+  <block wx:if="{{today}}">
     <view class="calendar-tabs"><text class="calendar-tab active">团课</text></view>
     <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, showDays: true}}" />
     <template is="groups" data="{{groups, total, today, showBooking: false}}" />

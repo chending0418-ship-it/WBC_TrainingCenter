@@ -39,13 +39,17 @@ export const ledgerActions: Record<StaffLedgerSource, string> = {
 };
 
 export function readStaffAccount(db: DatabaseSync, userId: string, now: string): StaffAccount {
+  const user = db.prepare(`
+    SELECT c.name AS childName FROM users u LEFT JOIN children c ON c.guardian_id = u.id WHERE u.id = ?
+  `).get(userId) as { childName: string | null } | undefined;
+  if (!user) throw new ApiError(404, 'NOT_FOUND', '未找到该家长账户');
   const ledger = db.prepare(`
     SELECT l.id, l.delta, l.reason, l.created_at AS createdAt, l.source, l.reference, l.operator,
       l.booking_id AS bookingId, l.reversal_of AS reversalOf, undo.id AS reversalId
     FROM ledger l LEFT JOIN ledger undo ON undo.reversal_of = l.id
     WHERE l.user_id = ? ORDER BY l.id DESC
   `).all(userId) as unknown as StaffAccount['ledger'];
-  return { ledger, balance: ledger.reduce((sum, entry) => sum + entry.delta, 0), reservedPoints: reservedPoints(db, userId, now) };
+  return { childName: user.childName, ledger, balance: ledger.reduce((sum, entry) => sum + entry.delta, 0), reservedPoints: reservedPoints(db, userId, now) };
 }
 
 // The staff request transaction also stores the idempotency result and holds the write

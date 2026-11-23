@@ -83,11 +83,19 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return { today, lastDate, courses };
   }
 
+  function activeCoaches() {
+    return db.prepare('SELECT id, name, avatar_key AS avatarKey FROM coaches WHERE enabled = 1 ORDER BY id').all() as unknown as Coach[];
+  }
+
+  function scheduleContext() {
+    const { today, lastDate } = horizon();
+    return { today, lastDate, coaches: activeCoaches() };
+  }
+
   function schedule(user: string, includeWeekStart = false): Schedule {
     const { today, lastDate, from, until } = scheduleWindow(includeWeekStart);
     const rows = db.prepare(`SELECT ${classFields} ${publishedClasses}`).all(user, from, until) as unknown as ClassRow[];
-    const coaches = db.prepare('SELECT id, name, avatar_key AS avatarKey FROM coaches WHERE enabled = 1 ORDER BY id').all() as unknown as Coach[];
-    return { today, lastDate, courses: rows.map(({ mine, ...course }) => ({ ...course, bookedByMe: mine === 1 })), coaches };
+    return { today, lastDate, courses: rows.map(({ mine, ...course }) => ({ ...course, bookedByMe: mine === 1 })), coaches: activeCoaches() };
   }
 
   function child(user: string): Child | null {
@@ -324,5 +332,5 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  return { publicSchedule, schedule, child, account, listSlots, quote, bookings, book, approve, cancel };
+  return { publicSchedule, schedule, scheduleContext, child, account, listSlots, quote, bookings, book, approve, cancel };
 }

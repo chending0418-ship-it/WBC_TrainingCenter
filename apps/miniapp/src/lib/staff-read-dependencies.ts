@@ -1,0 +1,35 @@
+// Paths are for the current signed-in session. Query variants share the same write dependencies.
+export function staffReadAffected(writePath: string, readPath: string): boolean {
+  const read = readPath.split('?')[0];
+  if (writePath === '/api/coach/me/avatar') return read === '/api/coach/me/schedule';
+  const prefix = '/api/admin/';
+  if (!writePath.startsWith(prefix) || !read.startsWith(prefix)) return false;
+  const [write, id, field] = writePath.slice(prefix.length).split('/');
+  const [resource, readId, readField] = read.slice(prefix.length).split('/');
+  switch (write) {
+    case 'course-types':
+      return resource === 'course-types';
+    case 'registrations':
+      return ['registrations', 'parents', 'overview'].includes(resource);
+    case 'accounts':
+      return field === 'ledger' && (['parents', 'users'].includes(resource) ||
+        (resource === 'accounts' && readId === id && !readField));
+    case 'bookings':
+      return id !== 'quote' && (['overview', 'bookings', 'accounts', 'users', 'parents', 'classes'].includes(resource) ||
+        (resource === 'coaches' && readField === 'slots'));
+    case 'classes':
+    case 'class-sessions':
+    case 'class-templates':
+      return ['classes', 'class-templates', 'overview'].includes(resource) ||
+        (resource === 'coaches' && readField === 'slots');
+    case 'coaches':
+      if (field === 'hours' || field === 'exceptions') {
+        return resource === 'coaches' && readId === id && (readField === 'hours' || readField === 'slots');
+      }
+      return ['context', 'class-templates', 'classes', 'bookings', 'overview'].includes(resource) ||
+        (resource === 'accounts' && readField === 'bookings') ||
+        (resource === 'coaches' && (!readId || readId === id));
+    default:
+      return false;
+  }
+}
