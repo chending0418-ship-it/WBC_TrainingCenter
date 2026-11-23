@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import sharp from 'sharp';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
-import type { CoachHours, CoachSchedule, ManagedBooking, ManagedClass, Schedule, StaffAccount } from '../../../packages/shared/contracts.js';
+import type { CoachHours, CoachSchedule, ManagedBooking, ManagedClass, ManagedTemplate, Schedule, StaffAccount } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
 import { openDatabase } from '../src/database.ts';
 import { addDays, dateAt, weekday } from '../src/time.ts';
@@ -111,6 +111,89 @@ test('排课进入家长端，代约扣分与审计，已有预约的班次不�
   const parentSchedule = (await app.inject({ url: '/api/schedule', headers: parent })).json<{ courses: { id: string }[] }>();
   assert.ok(!parentSchedule.courses.some(row => row.id === id));
   assert.ok(parentSchedule.courses.some(row => row.id === today + '-strength'));
+});
+
+test('团课共享名额和两位教练的课表，并检查每位教练的排课、私教和请假冲突', async context => {
+  const { app } = fixture(context);
+  const admin = await session(app);
+  const parent = await session(app, false);
+  const create = (data: object, key: string) => app.inject({ method: 'POST', url: '/api/admin/classes',
+    headers: admin, payload: { ...draft, ...data, requestKey: key } });
+  const team = ['li', 'wang'];
+  const type = await app.inject({ method: 'POST', url: '/api/admin/course-types', headers: admin,
+    payload: { name: '每位教练两人', maxStudents: 2, refundPercent: 0, requestKey: 'ratio' } });
+  assert.equal(type.statusCode, 200);
+  const typed = { coachIds: team, courseTypeId: type.json().id };
+  assert.equal((await create({ ...typed, capacity: 5 }, 'over-limit')).json().code, 'COURSE_TYPE_CAPACITY');
+  // At 19:00 only the second coach has a class.
+  assert.equal((await create({ coachIds: team, startMinute: 1140 }, 'conflict')).json().code, 'SCHEDULE_CONFLICT');
+  assert.equal((await create({ coachIds: [] }, 'empty')).statusCode, 400);
+  assert.equal((await create({ ...typed, capacity: 4 }, 'paired')).statusCode, 200);
+  const list = async () => (await app.inject({ url: scheduleUrl, headers: admin })).json<ManagedClass[]>();
+  const group = (await list()).find(row => row.title === draft.title)!;
+  assert.deepEqual(group.coachIds, team);
+  assert.equal(group.coachName, '李晨、王悦');
+  for (const path of ['/api/public/schedule', '/api/schedule']) {
+    const result = await app.inject({ url: path, ...(path === '/api/schedule' ? { headers: parent } : {}) });
+    const rows = result.json<Schedule>().courses.filter(row => row.id === group.id);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].coachName, group.coachName);
+    if (path === '/api/public/schedule') assert.ok(!('bookedCount' in rows[0]));
+  }
+  assert.equal((await create({ coachId: 'wang' }, 'double-book')).json().code, 'SCHEDULE_CONFLICT');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/coaches/wang/exceptions', headers: admin,
+    payload: { date: today, start: 870, end: 900, reason: '请假', requestKey: 'block-paired' } })).json().code, 'SCHEDULE_CONFLICT');
+  const privateSlot = { type: 'PRIVATE', coachId: 'wang', startsAt: group.startsAt, endsAt: group.endsAt };
+  assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/quote', headers: parent,
+    payload: privateSlot })).json().code, 'SLOT_TAKEN');
+  const url = '/api/admin/class-sessions/' + group.id;
+  const edit = (fields: object) => app.inject({ method: 'PUT', url, headers: admin,
+    payload: { ...draft, status: 'PUBLISHED', ...fields } });
+  assert.equal((await edit({ capacity: 3 })).statusCode, 204);
+  assert.deepEqual((await list()).find(row => row.id === group.id)?.coachIds, team);
+
+  const booked = await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+    payload: { type: 'GROUP', userId: 'parent', classSessionId: group.id, requestKey: 'paired-book' } });
+  assert.equal(booked.statusCode, 200);
+  assert.equal(booked.json().coachName, group.coachName);
+  assert.equal((await edit({ coachIds: ['li'] })).json().code, 'CLASS_HAS_BOOKINGS');
+  assert.equal((await list()).find(row => row.id === group.id)?.bookedCount, 1);
+  for (const id of team) {
+    const login = await app.inject({ method: 'POST', url: '/api/dev/coach-session', payload: { profile: 'coach-' + id } });
+    const headers = { authorization: 'Bearer ' + login.json().token };
+    const schedule = (await app.inject({ url: '/api/coach/me/schedule', headers })).json<CoachSchedule>();
+    const lessons = schedule.lessons.filter(row => row.id === group.id);
+    assert.equal(lessons.length, 1);
+    assert.deepEqual(lessons[0].childNames, ['陈同学']);
+  }
+  const bookingUrl = '/api/admin/bookings/' + booked.json().id;
+  assert.equal((await app.inject({ method: 'DELETE', url: bookingUrl, headers: admin })).statusCode, 204);
+  assert.equal((await edit({ coachIds: ['li'], capacity: 2 })).statusCode, 204);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/quote', headers: parent,
+    payload: privateSlot })).statusCode, 200);
+  const history = (await app.inject({ url: '/api/me/bookings', headers: parent })).json<ManagedBooking[]>();
+  assert.equal(history.find(row => row.id === booked.json().id)?.coachName, '李晨、王悦');
+});
+
+test('周期团课保留教练顺序，编辑模板后跨月补排采用新的名单', async context => {
+  let current = now();
+  const { app } = fixture(context, () => current);
+  const headers = await session(app);
+  const plan = { ...draft, weekdays: [0, 1, 2, 3, 4, 5, 6], startMinutes: [870], coachId: 'wang', coachIds: ['wang', 'li'] };
+  const created = await app.inject({ method: 'POST', url: '/api/admin/classes', headers,
+    payload: { ...plan, requestKey: 'paired-series' } });
+  assert.equal(created.statusCode, 200);
+  const templates = (await app.inject({ url: '/api/admin/class-templates', headers })).json<ManagedTemplate[]>();
+  assert.deepEqual(templates[0].coachIds, plan.coachIds);
+  const rows = async (date: string, auth = headers) => (await app.inject({ url: '/api/admin/classes?date=' + date,
+    headers: auth })).json<ManagedClass[]>().filter(row => row.title === draft.title);
+  assert.deepEqual((await rows(today))[0].coachIds, plan.coachIds);
+  const revised = await app.inject({ method: 'PUT', url: '/api/admin/class-templates/' + templates[0].id, headers,
+    payload: { ...plan, coachIds: ['wang'], enabled: true, requestKey: 'one-coach' } });
+  assert.equal(revised.statusCode, 200);
+  current = new Date(dateAt('2031-01-01', 480));
+  const rolled = await rows('2031-01-30', await session(app));
+  assert.deepEqual(rolled.map(row => row.coachIds), [['wang']]);
 });
 
 test('周期排课支持多个时段，跨天补齐时保留单独停开的实例', async context => {

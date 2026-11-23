@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ClassDraft, ClassPlan, CourseType, ManagedBooking, ManagedUser, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError, bookingStatus, cancellationLeadMs, templateAllowsBooking } from './booking.ts';
 import type { bookingService } from './booking.ts';
+import { sessionRoster } from './class-coaches.ts';
 import { audit, transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
 import { searchParents } from './parent-contact.ts';
@@ -21,9 +22,19 @@ const demoPassword = 'wbc-demo-2026';
 function classDraft(body: Record<string, unknown>): ClassDraft {
   const duration = integer(body.duration, 1, 720, '课程时长须为 1 至 720 分钟');
   const courseTypeId = body.courseTypeId;
+  let coachIds: string[] | undefined;
+  if (body.coachIds !== undefined) {
+    if (!Array.isArray(body.coachIds) || !body.coachIds.length) throw new ApiError(400, 'VALIDATION_ERROR', '请至少选择一位教练');
+    coachIds = body.coachIds.map(id => requiredText(id));
+    if (new Set(coachIds).size !== coachIds.length) throw new ApiError(400, 'VALIDATION_ERROR', '教练不能重复选择');
+    if (body.coachId !== undefined && requiredText(body.coachId) !== coachIds[0]) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '首位教练与所选名单不一致');
+    }
+  }
   return {
     ...(courseTypeId === undefined ? {} : { courseTypeId: courseTypeId === null ? null : requiredText(courseTypeId) }),
-    title: requiredText(body.title, 50), coachId: requiredText(body.coachId),
+    title: requiredText(body.title, 50), coachId: coachIds?.[0] ?? requiredText(body.coachId),
+    ...(coachIds === undefined ? {} : { coachIds }),
     venue: requiredText(body.venue, 50), date: dateInput(body.date),
     startMinute: integer(body.startMinute, 0, 1440 - duration, '课程须在同一天结束'),
     duration, capacity: integer(body.capacity, 1, 500, '容量须为 1 至 500 人'),
@@ -121,8 +132,8 @@ export function registerStaffRoutes(
       const starts = dateAt(date);
       const ends = dateAt(addDays(date, 1));
       const classes = db.prepare(`
-        SELECT COUNT(*) AS total FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
-        WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
+        SELECT COUNT(*) AS total FROM class_sessions s
+        WHERE s.status = 'PUBLISHED' AND ${sessionRoster.enabled} AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
       `).get(starts, ends);
       const appointments = db.prepare(`
         SELECT COUNT(*) AS total FROM bookings WHERE status = 'CONFIRMED' AND approval_pending = 0
@@ -267,7 +278,7 @@ export function registerStaffRoutes(
       const pendingOnly = query.pending === '1';
       const date = pendingOnly ? '' : dateInput(query.date);
       const rows = db.prepare(`
-        SELECT b.id, b.type, ${bookingStatus} AS status, b.title, c.name AS coachName, b.venue, b.points, b.user_id AS userId,
+        SELECT b.id, b.type, ${bookingStatus} AS status, b.title, COALESCE(b.group_coach_names, c.name) AS coachName, b.venue, b.points, b.user_id AS userId,
           b.starts_at AS startsAt, b.ends_at AS endsAt, b.refund_points AS refundPoints, child.name AS childName,
           EXISTS(SELECT 1 FROM audit_logs WHERE entity_id = b.id AND action = 'BOOKING_CREATED') AS staffCreated,
           EXISTS(SELECT 1 FROM audit_logs WHERE entity_id = b.id AND action = 'BOOKING_CANCELLED') AS staffCancelled

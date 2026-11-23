@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, PublicSchedule, Quote, Schedule } from '../../../packages/shared/contracts.js';
+import { sessionRoster } from './class-coaches.ts';
 import { audit, privateVenue, transaction } from './database.ts';
 import { notifyBooking } from './notification-events.ts';
 import { addDays, covers, dateAt, venueDate, weekday } from './time.ts';
@@ -17,7 +18,7 @@ export class ApiError extends Error {
 }
 
 const publicClassFields = `
-  s.id, s.title, c.name AS coachName, s.venue, s.starts_at AS startsAt,
+  s.id, s.title, ${sessionRoster.names} AS coachName, s.venue, s.starts_at AS startsAt,
   s.ends_at AS endsAt, t.name AS courseTypeName
 `;
 const classFields = `
@@ -48,16 +49,20 @@ export function reservedPoints(db: DatabaseSync, user: string, now: string): num
 }
 
 const bookingFields = `
-  b.id, b.type, ${bookingStatus} AS status, b.title, c.name AS coachName, b.venue, b.points,
+  b.id, b.type, ${bookingStatus} AS status, b.title, COALESCE(b.group_coach_names, c.name) AS coachName, b.venue, b.points,
   b.starts_at AS startsAt, b.ends_at AS endsAt, b.refund_points AS refundPoints
 `;
 
 type ClassRow = Omit<Course, 'bookedByMe'> & { mine: number };
 type Interval = { start: number; end: number };
 
-function quoteRevision(quote: Quote & { coachId: string }): string {
-  const { title, coachId, venue, startsAt, endsAt, points, refundPoints } = quote;
-  return createHash('sha256').update(JSON.stringify([title, coachId, venue, startsAt, endsAt, points, refundPoints])).digest('hex');
+type ResolvedQuote = Quote & { coachIds: string[] };
+
+function quoteRevision(quote: ResolvedQuote): string {
+  const { title, coachIds, venue, startsAt, endsAt, points, refundPoints } = quote;
+  // Keep outstanding single-coach quotes valid across the migration.
+  const coaches = coachIds.length === 1 ? coachIds[0] : coachIds;
+  return createHash('sha256').update(JSON.stringify([title, coaches, venue, startsAt, endsAt, points, refundPoints])).digest('hex');
 }
 
 export function bookingService(db: DatabaseSync, clock: () => Date) {
@@ -74,9 +79,9 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
   }
 
   const publishedClasses = `
-    FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
+    FROM class_sessions s
     LEFT JOIN course_types t ON t.id = s.course_type_id
-    WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
+    WHERE s.status = 'PUBLISHED' AND ${sessionRoster.enabled} AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
     ORDER BY s.starts_at, s.id
   `;
 
@@ -137,8 +142,8 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       WHERE coach_id = ? AND weekday = ? ORDER BY start_minute
     `).all(coachId, weekday) as unknown as Interval[];
     const blocks = db.prepare(`
-      SELECT starts_at, ends_at FROM class_sessions
-      WHERE coach_id = ? AND status = 'PUBLISHED' AND starts_at < ? AND ends_at > ?
+      SELECT s.starts_at, s.ends_at FROM class_coach_assignments a JOIN class_sessions s ON s.id = a.class_id
+      WHERE a.coach_id = ? AND s.status = 'PUBLISHED' AND s.starts_at < ? AND s.ends_at > ?
       UNION ALL
       SELECT starts_at, ends_at FROM bookings
       WHERE coach_id = ? AND type = 'PRIVATE' AND status = 'CONFIRMED' AND starts_at < ? AND ends_at > ?
@@ -183,21 +188,21 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     }
   }
 
-  function resolve(user: string, selection: BookingSelection): Quote & { coachId: string } {
+  function resolve(user: string, selection: BookingSelection): ResolvedQuote {
     if (selection.type === 'GROUP') {
       const course = db.prepare(`
-        SELECT ${classFields}, s.coach_id AS coachId,
+        SELECT ${classFields}, ${sessionRoster.ids} AS coachIds,
           s.points * COALESCE(t.refund_basis_points, 0) / 10000 AS refundPoints
-        FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
+        FROM class_sessions s
         LEFT JOIN course_types t ON t.id = s.course_type_id
-        WHERE s.id = ? AND s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking}
-      `).get(user, selection.classSessionId) as unknown as (ClassRow & { coachId: string; refundPoints: number }) | undefined;
+        WHERE s.id = ? AND s.status = 'PUBLISHED' AND ${sessionRoster.enabled} AND ${templateAllowsBooking}
+      `).get(user, selection.classSessionId) as unknown as (ClassRow & { coachIds: string; refundPoints: number }) | undefined;
       if (!course) throw new ApiError(404, 'NOT_FOUND', '课程已停开或不存在');
       canBookAt(course.startsAt, venueDate(course.startsAt));
       if (course.mine) throw new ApiError(409, 'ALREADY_BOOKED', '你已预约该课程');
       if (course.bookedCount >= course.capacity) throw new ApiError(409, 'FULL', '该团课已满员');
-      const { title, coachName, coachId, venue, startsAt, endsAt, points, refundPoints } = course;
-      return { title, coachName, coachId, venue, startsAt, endsAt, points, refundPoints };
+      const { title, coachName, venue, startsAt, endsAt, points, refundPoints } = course;
+      return { title, coachName, coachIds: JSON.parse(course.coachIds), venue, startsAt, endsAt, points, refundPoints };
     }
 
     const { coachId, startsAt, endsAt } = selection;
@@ -224,7 +229,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       title = String(course.name);
       refundPoints = Math.floor(points * Number(course.refund_basis_points) / 10000);
     }
-    return { coachId, startsAt, endsAt, title, coachName: day.name, venue: privateVenue, points, refundPoints };
+    return { coachIds: [coachId], startsAt, endsAt, title, coachName: day.name, venue: privateVenue, points, refundPoints };
   }
 
   function quote(user: string, selection: BookingSelection): BookingQuote {
@@ -266,7 +271,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       if (expectedRevision && expectedRevision !== quoteRevision(quote)) {
         throw new ApiError(409, 'QUOTE_CHANGED', '预约信息有变，请重新确认预约');
       }
-      const { coachId, ...details } = quote;
+      const { coachIds, ...details } = quote;
       const overlap = db.prepare(`
         SELECT 1 FROM bookings WHERE user_id = ? AND status = 'CONFIRMED' AND starts_at < ? AND ends_at > ?
       `).get(user, details.endsAt, details.startsAt);
@@ -280,10 +285,11 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       db.prepare(`
         INSERT INTO bookings
           (id, user_id, type, class_id, coach_id, title, venue, starts_at, ends_at, points, refund_points,
-           request_key, request_payload, created_at, approval_pending)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, user, selection.type, selection.type === 'GROUP' ? selection.classSessionId : null, coachId,
-        details.title, details.venue, details.startsAt, details.endsAt, details.points, details.refundPoints, requestKey, payload, createdAt, Number(pending));
+           request_key, request_payload, created_at, approval_pending, group_coach_names)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, user, selection.type, selection.type === 'GROUP' ? selection.classSessionId : null, coachIds[0],
+        details.title, details.venue, details.startsAt, details.endsAt, details.points, details.refundPoints, requestKey, payload, createdAt, Number(pending),
+        selection.type === 'GROUP' ? details.coachName : null);
       if (staffActor !== undefined) {
         charge.run(user, id, -details.points, '预约 · ' + details.title, createdAt, staffActor);
         audit(db, staffActor, 'BOOKING_CREATED', id, createdAt);

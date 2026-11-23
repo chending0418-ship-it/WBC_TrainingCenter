@@ -73,10 +73,10 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
     const upper = dateAt(addDays(to, 1));
     const rows = db.prepare(`
       SELECT s.id, 'GROUP' AS type, s.title, s.venue, s.starts_at AS startsAt, s.ends_at AS endsAt, child.name AS childName
-      FROM class_sessions s
+      FROM class_coach_assignments a JOIN class_sessions s ON s.id = a.class_id
       LEFT JOIN bookings b ON b.class_id = s.id AND b.status = 'CONFIRMED' AND b.approval_pending = 0
       LEFT JOIN children child ON child.guardian_id = b.user_id
-      WHERE s.coach_id = ? AND s.status = 'PUBLISHED' AND s.starts_at >= ? AND s.starts_at < ?
+      WHERE a.coach_id = ? AND s.status = 'PUBLISHED' AND s.starts_at >= ? AND s.starts_at < ?
       UNION ALL
       SELECT b.id, 'PRIVATE', b.title, b.venue, b.starts_at, b.ends_at, child.name
       FROM bookings b JOIN children child ON child.guardian_id = b.user_id

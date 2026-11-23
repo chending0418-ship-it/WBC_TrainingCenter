@@ -56,8 +56,11 @@ export function updateCoach(db: DatabaseSync, id: string, draft: ReturnType<type
     const coach = db.prepare('SELECT enabled, private_course_type_id FROM coaches WHERE id = ?').get(id);
     if (!coach) throw new ApiError(404, 'NOT_FOUND', '未找到该教练');
     if (!enabled && coach.enabled && db.prepare(`
-      SELECT 1 FROM bookings WHERE coach_id = ? AND status = 'CONFIRMED' AND ends_at > ? LIMIT 1
-    `).get(id, now)) {
+      SELECT 1 FROM bookings b WHERE b.status = 'CONFIRMED' AND b.ends_at > ?
+        AND (b.coach_id = ? OR EXISTS (
+          SELECT 1 FROM class_extra_coaches a WHERE a.class_id = b.class_id AND a.coach_id = ?
+        )) LIMIT 1
+    `).get(now, id, id)) {
       throw new ApiError(409, 'COACH_HAS_BOOKINGS', '教练仍有未结束的预约，请先处理预约');
     }
     const privateCourseTypeId = draft.privateCourseTypeId === undefined

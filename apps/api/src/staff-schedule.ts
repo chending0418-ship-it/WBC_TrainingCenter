@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { ClassDraft, ClassPlan, ClassStatus, CoachHours, ManagedClass, ManagedTemplate, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError, templateAllowsBooking } from './booking.ts';
+import { assignedCoaches, saveExtras, sessionRoster, templateRoster } from './class-coaches.ts';
 import { audit, transaction } from './database.ts';
 import { addDays, covers, dateAt, minuteOfDay, venueDate, weekday } from './time.ts';
 
-type StoredOccurrence = Omit<ManagedClass, 'date' | 'startMinute' | 'duration' | 'attendees' | 'bookable'> & { bookable: number };
+type StoredOccurrence = Omit<ManagedClass, 'date' | 'startMinute' | 'duration' | 'attendees' | 'bookable' | 'coachIds'> & { bookable: number; coachIds: string };
 
 export function staffSchedule(db: DatabaseSync, clock: () => Date) {
   function requireCoach(coachId: string, active = false) {
@@ -16,19 +17,19 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     if (active && !coach.enabled) throw new ApiError(409, 'COACH_DISABLED', '请先启用该教练');
   }
 
-  function validateCourseCapacity(courseTypeId: string | null, capacity: number) {
+  function validateCourseCapacity(courseTypeId: string | null, capacity: number, coachCount: number) {
     if (!courseTypeId) return;
     const type = db.prepare('SELECT max_students FROM course_types WHERE id = ?').get(courseTypeId);
     if (!type) throw new ApiError(404, 'NOT_FOUND', '未找到该课程类型');
-    if (capacity > Number(type.max_students)) {
-      throw new ApiError(400, 'COURSE_TYPE_CAPACITY', '班次容量不能超过所选课程类型的人数上限');
+    if (capacity > Number(type.max_students) * coachCount) {
+      throw new ApiError(400, 'COURSE_TYPE_CAPACITY', '班次容量不能超过所选教练合计可带人数');
     }
   }
 
   function conflict(coachId: string, startsAt: string, endsAt: string, exclude = ''): boolean {
     return !!db.prepare(`
-      SELECT 1 FROM class_sessions WHERE coach_id = ? AND status = 'PUBLISHED'
-        AND starts_at < ? AND ends_at > ? AND id <> ?
+      SELECT 1 FROM class_coach_assignments a JOIN class_sessions s ON s.id = a.class_id
+      WHERE a.coach_id = ? AND s.status = 'PUBLISHED' AND s.starts_at < ? AND s.ends_at > ? AND s.id <> ?
       UNION ALL
       SELECT 1 FROM bookings WHERE coach_id = ? AND type = 'PRIVATE' AND status = 'CONFIRMED'
         AND starts_at < ? AND ends_at > ?
@@ -40,12 +41,12 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
 
   function list(firstDate: string, days = 1): ManagedClass[] {
     const rows = db.prepare(`
-      SELECT s.id, s.coach_id AS coachId, c.name AS coachName, s.title, s.venue,
+      SELECT s.id, s.coach_id AS coachId, ${sessionRoster.ids} AS coachIds, ${sessionRoster.names} AS coachName, s.title, s.venue,
         s.starts_at AS startsAt, s.ends_at AS endsAt, s.points, s.capacity, s.status,
         s.course_type_id AS courseTypeId, t.name AS courseTypeName,
-        (s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking}) AS bookable,
+        (s.status = 'PUBLISHED' AND ${sessionRoster.enabled} AND ${templateAllowsBooking}) AS bookable,
         (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS bookedCount
-      FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
+      FROM class_sessions s
       LEFT JOIN course_types t ON t.id = s.course_type_id
       WHERE s.starts_at >= ? AND s.starts_at < ?
       ORDER BY s.starts_at, s.title
@@ -58,7 +59,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     return rows.map(row => {
       const date = venueDate(row.startsAt);
       const startMinute = minuteOfDay(row.startsAt, date);
-      return { ...row, date, startMinute, duration: minuteOfDay(row.endsAt, date) - startMinute, bookable: !!row.bookable,
+      return { ...row, coachIds: JSON.parse(row.coachIds), date, startMinute, duration: minuteOfDay(row.endsAt, date) - startMinute, bookable: !!row.bookable,
         attendees: attendees.all(row.id) as ManagedClass['attendees'] };
     });
   }
@@ -75,6 +76,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       INSERT INTO class_sessions (id, coach_id, title, venue, starts_at, ends_at, points, capacity, course_type_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, draft.courseTypeId ?? null);
+    saveExtras(db, 'class', id, assignedCoaches(draft));
     return id;
   }
 
@@ -82,6 +84,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     const hasOccurrence = db.prepare('SELECT 1 FROM template_occurrences WHERE template_id = ? AND starts_at = ?');
     const link = db.prepare('INSERT INTO template_occurrences (template_id, starts_at, class_id) VALUES (?, ?, ?)');
     const today = venueDate(now);
+    const coachIds = assignedCoaches(plan);
     let count = 0;
     for (let offset = 0; offset < 30; offset++) {
       const date = addDays(today, offset);
@@ -90,7 +93,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
         const startsAt = dateAt(date, minute);
         if (startsAt <= now || hasOccurrence.get(id, startsAt)) continue;
         const endsAt = dateAt(date, minute + plan.duration);
-        if (conflict(plan.coachId, startsAt, endsAt)) {
+        if (coachIds.some(id => conflict(id, startsAt, endsAt))) {
           if (!strict) continue;
           throw new ApiError(409, 'SCHEDULE_CONFLICT', date + ' 有教练时间冲突，周期排课未保存');
         }
@@ -102,13 +105,14 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
   }
 
   function add(plan: ClassPlan, actor: string, now: string) {
-    requireCoach(plan.coachId, true);
-    validateCourseCapacity(plan.courseTypeId ?? null, plan.capacity);
+    const coachIds = assignedCoaches(plan);
+    for (const id of coachIds) requireCoach(id, true);
+    validateCourseCapacity(plan.courseTypeId ?? null, plan.capacity, coachIds.length);
     if (!plan.weekdays.length) {
       const startsAt = dateAt(plan.date, plan.startMinute);
       requireFuture(startsAt, now);
       const endsAt = dateAt(plan.date, plan.startMinute + plan.duration);
-      if (conflict(plan.coachId, startsAt, endsAt)) throw new ApiError(409, 'SCHEDULE_CONFLICT', '该教练已有课程、私教预约或停用时段');
+      if (coachIds.some(id => conflict(id, startsAt, endsAt))) throw new ApiError(409, 'SCHEDULE_CONFLICT', '该教练已有课程、私教预约或停用时段');
       const id = insertClass(plan, startsAt, endsAt);
       audit(db, actor, 'CLASS_CREATED', id, now);
       return { count: 1 };
@@ -125,6 +129,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, plan.coachId, plan.title, plan.venue, plan.date, JSON.stringify(plan.weekdays),
       JSON.stringify(plan.startMinutes), plan.duration, plan.capacity, plan.points, plan.courseTypeId ?? null);
+    saveExtras(db, 'template', id, coachIds);
     const count = materialize(id, plan, now, true);
     if (!count) throw new ApiError(400, 'VALIDATION_ERROR', '未来 30 天内没有符合重复规则的开课日期');
     audit(db, actor, 'TEMPLATE_CREATED', id, now);
@@ -133,25 +138,30 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
 
   function templates(activeOnly = false): ManagedTemplate[] {
     const plans = db.prepare(`
-      SELECT t.id, t.coach_id AS coachId, c.name AS coachName, t.title, t.venue, t.first_date AS date, t.enabled,
+      SELECT t.id, t.coach_id AS coachId, ${templateRoster.ids} AS coachIds, ${templateRoster.names} AS coachName, t.title, t.venue, t.first_date AS date, t.enabled,
         t.weekdays, t.start_minutes AS startMinutes, t.duration, t.capacity, t.points, t.course_type_id AS courseTypeId
-      FROM class_templates t JOIN coaches c ON c.id = t.coach_id
-      WHERE ? = 0 OR (t.enabled = 1 AND c.enabled = 1) ORDER BY t.enabled DESC, t.rowid
+      FROM class_templates t
+      WHERE ? = 0 OR (t.enabled = 1 AND ${templateRoster.enabled}) ORDER BY t.enabled DESC, t.rowid
     `).all(Number(activeOnly)) as unknown as
-      (Omit<ManagedTemplate, 'weekdays' | 'startMinutes' | 'enabled' | 'startMinute'> &
-      { weekdays: string; startMinutes: string; enabled: number })[];
+      (Omit<ManagedTemplate, 'weekdays' | 'startMinutes' | 'enabled' | 'startMinute' | 'coachIds'> &
+      { coachIds: string; weekdays: string; startMinutes: string; enabled: number })[];
     return plans.map(plan => {
       const startMinutes = JSON.parse(plan.startMinutes) as number[];
-      return { ...plan, startMinutes, startMinute: startMinutes[0], weekdays: JSON.parse(plan.weekdays), enabled: !!plan.enabled };
+      return { ...plan, coachIds: JSON.parse(plan.coachIds), startMinutes, startMinute: startMinutes[0], weekdays: JSON.parse(plan.weekdays), enabled: !!plan.enabled };
     });
   }
 
   function reviseTemplate(id: string, plan: ClassPlan, enabled: boolean, actor: string, now: string) {
-    if (!db.prepare('SELECT 1 FROM class_templates WHERE id = ?').get(id)) {
+    const current = db.prepare(`
+      SELECT json_group_array(coach_id ORDER BY position) AS coachIds
+      FROM template_coach_assignments WHERE template_id = ? GROUP BY template_id
+    `).get(id);
+    if (!current) {
       throw new ApiError(404, 'NOT_FOUND', '未找到该排课模板');
     }
-    requireCoach(plan.coachId, enabled);
-    validateCourseCapacity(plan.courseTypeId ?? null, plan.capacity);
+    const coachIds = assignedCoaches(plan, JSON.parse(String(current.coachIds)));
+    for (const coachId of coachIds) requireCoach(coachId, enabled);
+    validateCourseCapacity(plan.courseTypeId ?? null, plan.capacity, coachIds.length);
     if (!plan.weekdays.length || plan.date > addDays(venueDate(now), 29)) {
       throw new ApiError(400, 'VALIDATION_ERROR', '请填写有效的周期及起始日期');
     }
@@ -171,7 +181,8 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
         duration = ?, capacity = ?, points = ?, course_type_id = ?, enabled = ? WHERE id = ?
     `).run(plan.coachId, plan.title, plan.venue, plan.date, JSON.stringify(plan.weekdays), JSON.stringify(plan.startMinutes),
       plan.duration, plan.capacity, plan.points, plan.courseTypeId ?? null, Number(enabled), id);
-    const count = enabled ? materialize(id, plan, now, true) : 0;
+    saveExtras(db, 'template', id, coachIds);
+    const count = enabled ? materialize(id, { ...plan, coachIds }, now, true) : 0;
     audit(db, actor, enabled ? 'TEMPLATE_UPDATED' : 'TEMPLATE_PAUSED', id, now);
     return { count };
   }
@@ -186,12 +197,13 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     transaction(db, () => {
       const now = clock().toISOString();
       const current = db.prepare(`
-        SELECT s.*, (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS booked
+        SELECT s.*, ${sessionRoster.ids} AS coachIds, (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS booked
         FROM class_sessions s WHERE s.id = ?
       `).get(id);
       if (!current) throw new ApiError(404, 'NOT_FOUND', '未找到该班次');
       requireFuture(String(current.starts_at), now);
-      requireCoach(draft.coachId, status === 'PUBLISHED');
+      const coachIds = assignedCoaches(draft, JSON.parse(String(current.coachIds)));
+      for (const coachId of coachIds) requireCoach(coachId, status === 'PUBLISHED');
       const startsAt = dateAt(draft.date, draft.startMinute);
       const endsAt = dateAt(draft.date, draft.startMinute + draft.duration);
       requireFuture(startsAt, now);
@@ -200,20 +212,21 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       }
       const existingTypeId = current.course_type_id as string | null;
       const courseTypeId = draft.courseTypeId === undefined ? existingTypeId : draft.courseTypeId;
-      validateCourseCapacity(courseTypeId, draft.capacity);
-      const changesDetails = draft.coachId !== current.coach_id || draft.venue !== current.venue ||
+      validateCourseCapacity(courseTypeId, draft.capacity, coachIds.length);
+      const changesDetails = JSON.stringify(coachIds) !== current.coachIds || draft.venue !== current.venue ||
         draft.title !== current.title || draft.points !== current.points || startsAt !== current.starts_at ||
         endsAt !== current.ends_at || courseTypeId !== existingTypeId;
       if (Number(current.booked) > 0 && (changesDetails || status === 'CLOSED')) {
         throw new ApiError(409, 'CLASS_HAS_BOOKINGS', '该班次已有预约，可调整容量。改课或停开前请先处理预约');
       }
-      if (status === 'PUBLISHED' && conflict(draft.coachId, startsAt, endsAt, id)) {
+      if (status === 'PUBLISHED' && coachIds.some(coachId => conflict(coachId, startsAt, endsAt, id))) {
         throw new ApiError(409, 'SCHEDULE_CONFLICT', '该教练已有课程、私教预约或停用时段');
       }
       db.prepare(`
         UPDATE class_sessions SET coach_id = ?, title = ?, venue = ?, starts_at = ?, ends_at = ?,
           points = ?, capacity = ?, status = ?, course_type_id = ? WHERE id = ?
       `).run(draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, status, courseTypeId, id);
+      saveExtras(db, 'class', id, coachIds);
       db.prepare('UPDATE template_occurrences SET manual_override = 1 WHERE class_id = ?').run(id);
       audit(db, actor, 'CLASS_UPDATED', id, now);
     });
