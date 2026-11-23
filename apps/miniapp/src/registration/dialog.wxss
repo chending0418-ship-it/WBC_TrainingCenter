@@ -4,7 +4,7 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  padding: 36rpx;
+  padding: 4.8vw;
   background: rgba(30, 23, 25, .45);
 }
 
@@ -13,17 +13,17 @@
   width: 100%;
   max-height: 90%;
   overflow: auto;
-  padding: 30rpx;
+  padding: 4vw;
   border-radius: 24rpx;
   background: #fff;
   text-align: left;
 }
 
-.registration-course { border: 1rpx solid #ded5d3; border-radius: 18rpx; padding: 19rpx 25rpx; margin: 20rpx 0; }
+.quote-dialog.registration-dialog { max-width: 400px; margin: 0 auto; padding: 18px; border-radius: 12px; }
+.registration-dialog .card-title { margin-bottom: 12px; font-size: 20px; font-weight: 700; line-height: 1.55; }
+.registration-course { border: 1px solid #ded5d3; border-radius: 10px; padding: 12px 14px; }
 .registration-course text { display: block; }
-
-.registration-dialog .quote-actions { display: flex; justify-content: flex-end; }
-.registration-dialog .quote-actions .button { width: auto; }
-.registration-dialog .card-title { font-size: 20px; font-weight: 650; }
-
-.registration-dialog .quote-actions { gap: 10px; margin-top: 16px; }
+.registration-course .row-name { font-size: 15px; line-height: 1.55; font-weight: 700; }
+.registration-dialog > .card-note { margin: 14px 0; color: #272327; font-size: 14px; line-height: 1.55; }
+.registration-dialog .quote-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.registration-dialog .quote-actions .button { flex: none; width: auto; margin: 0; }

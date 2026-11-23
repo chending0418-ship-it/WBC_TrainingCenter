@@ -1,4 +1,4 @@
-<view wx:if="{{activePath}}" class="tab-bar" aria-role="tablist">
+<view wx:if="{{activePath}}" class="tab-bar {{modalOpen ? 'covered' : ''}}" aria-role="tablist" aria-hidden="{{modalOpen}}">
   <view wx:for="{{tabs}}" wx:key="path" class="tab {{activePath === item.path ? 'current' : ''}}"
     data-path="{{item.path}}" bindtap="selectTab" hover-class="pressed"
     aria-role="tab" aria-selected="{{activePath === item.path}}">{{item.label}}</view>

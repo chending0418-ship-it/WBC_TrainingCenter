@@ -10,9 +10,9 @@
     </button>
   </view>
   <view class="section-actions review-tabs">
-    <button class="button {{period === 'today' ? '' : 'quiet'}}" data-period="today" bindtap="changePeriod"
+    <button size="mini" class="button {{period === 'today' ? '' : 'quiet'}}" data-period="today" bindtap="changePeriod"
       aria-pressed="{{period === 'today'}}" hover-class="press">今天</button>
-    <button class="button {{period === 'week' ? '' : 'quiet'}}" data-period="week" bindtap="changePeriod"
+    <button size="mini" class="button {{period === 'week' ? '' : 'quiet'}}" data-period="week" bindtap="changePeriod"
       aria-pressed="{{period === 'week'}}" hover-class="press">本周</button>
   </view>
   <view wx:if="{{loading}}" class="message">正在查询授课日程…</view>

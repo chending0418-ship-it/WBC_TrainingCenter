@@ -11,7 +11,7 @@
       <view class="en-sub">{{day.label}}</view>
       <view class="en-list"><view wx:for="{{day.rows}}" wx:key="userId" class="en-person" role="button" data-id="{{item.userId}}" bindtap="open" hover-class="press">
         <view><text class="en-person-name">{{item.child.name}}</text><text class="en-person-note">{{item.contact ? item.contact.name + ' · 手机尾号 ' + item.phoneTail : '未填写联系人'}}</text></view>
-        <text class="en-status">{{item.at}} {{processed ? item.statusLabel : '提交'}} ›</text>
+        <text class="en-status">{{item.at}} {{processed ? item.statusLabel : '提交'}}</text>
       </view></view>
     </view>
   </block>
@@ -21,14 +21,14 @@
     <view class="en-sub">退回原因</view>
     <textarea class="en-textarea" value="{{reason}}" bindinput="changeReason" maxlength="200" placeholder="填写需要补充的资料" disabled="{{busy}}" />
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view class="en-actions"><button class="button quiet" bindtap="back" disabled="{{busy}}">返回</button><button class="button" bindtap="review" disabled="{{busy || !reason}}" loading="{{busy}}">确认退回</button></view>
+    <view class="en-actions"><button size="mini" class="button quiet" bindtap="back" disabled="{{busy}}">返回</button><button size="mini" class="button" bindtap="review" disabled="{{busy || !reason}}" loading="{{busy}}">确认退回</button></view>
   </block>
   <block wx:else>
-    <view class="en-heading"><text>{{selected.child.name}}</text><text class="en-link">{{selected.statusLabel}}</text></view>
+    <view class="en-heading en-results"><text>{{selected.child.name}}</text><text class="en-link">{{selected.statusLabel}}</text></view>
     <view class="en-hint">{{selected.submittedLabel}} 提交</view>
     <view class="en-sub">申请资料</view><template is="registrationDetails" data="{{row: selected}}" />
     <view wx:if="{{selected.reason}}" class="en-hint">退回原因 · {{selected.reason}}</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-    <view wx:if="{{selected.status === 'PENDING'}}" class="en-actions"><button class="button quiet" bindtap="startReturn" disabled="{{busy}}">退回补充</button><button class="button" bindtap="review" disabled="{{busy}}" loading="{{busy}}">批准注册</button></view>
+    <view wx:if="{{selected.status === 'PENDING'}}" class="en-actions"><button size="mini" class="button quiet" bindtap="startReturn" disabled="{{busy}}">退回补充</button><button size="mini" class="button" bindtap="review" disabled="{{busy}}" loading="{{busy}}">批准注册</button></view>
   </block>
 </view>

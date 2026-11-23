@@ -72,6 +72,7 @@ Page({
     this.visible = authorized;
     if (authorized !== this.data.authorized) this.setData({ authorized });
     if (!authorized) return;
+    this.syncTabOverlay();
     this.pendingReminder = takeCourseReminder() ?? this.pendingReminder;
     if (!this.renderedVersion || this.renderedVersion !== readVersion(schedulePath) || this.pendingReminder) {
       void this.refresh();
@@ -232,11 +233,24 @@ Page({
     void this.book({ type: 'PRIVATE', coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt });
   },
 
+  syncTabOverlay() {
+    const tab = this.getTabBar();
+    const modalOpen = Boolean(this.data.confirmation || this.data.registrationPrompt);
+    if (tab && (tab.data as { modalOpen?: boolean }).modalOpen !== modalOpen) tab.setData({ modalOpen });
+  },
   dismissQuote() {
     this.quoteSequence++;
-    if (this.data.confirmation) this.setData({ confirmation: null });
+    if (this.data.confirmation) {
+      this.setData({ confirmation: null });
+      this.syncTabOverlay();
+    }
   },
-  dismissRegistration() { if (this.data.registrationPrompt) this.setData({ registrationPrompt: null }); },
+  dismissRegistration() {
+    if (this.data.registrationPrompt) {
+      this.setData({ registrationPrompt: null });
+      this.syncTabOverlay();
+    }
+  },
   openRegistration() {
     const course = this.data.registrationPrompt;
     if (!course) return;
@@ -252,6 +266,7 @@ Page({
   },
   async book(selection: BookingSelection, revision?: string) {
     if (this.data.booking) return;
+    const sequence = ++this.quoteSequence;
     this.setData({ booking: true });
     const storageKey = 'pending-booking:' + JSON.stringify(selection);
     try {
@@ -259,12 +274,14 @@ Page({
       let pending = typeof stored === 'string' ? { requestKey: stored } : stored;
       if (!pending?.requestKey) {
         if (!revision) {
-          const sequence = ++this.quoteSequence;
           const quote = await api<BookingQuote>('/api/bookings/quote', 'POST', selection);
-          if (sequence === this.quoteSequence) this.setData({ confirmation: {
-            selection, revision: quote.revision, title: quote.title, when: datetime(quote.startsAt) + '–' + time(quote.endsAt),
-            coach: coachLabel(quote.coachName), venue: quote.venue, points: quote.points, refundPoints: quote.refundPoints
-          } });
+          if (sequence === this.quoteSequence) {
+            this.setData({ confirmation: {
+              selection, revision: quote.revision, title: quote.title, when: datetime(quote.startsAt) + '–' + time(quote.endsAt),
+              coach: coachLabel(quote.coachName), venue: quote.venue, points: quote.points, refundPoints: quote.refundPoints
+            } });
+            this.syncTabOverlay();
+          }
           return;
         }
         pending = { requestKey: Date.now() + '-' + Math.random().toString(36).slice(2), expectedRevision: revision };
@@ -281,6 +298,7 @@ Page({
       }
       if (error instanceof RequestError && ['CHILD_PROFILE_REQUIRED', 'REGISTRATION_REQUIRED'].includes(error.code)) {
         invalidateRead('/api/me/registration');
+        if (sequence !== this.quoteSequence) return;
         const course = selection.type === 'GROUP' ? this.data.groups.flatMap(day => day.lessons).find(row => row.id === selection.classSessionId) : null;
         const startsAt = selection.type === 'PRIVATE' ? selection.startsAt : course?.startsAt;
         const endsAt = selection.type === 'PRIVATE' ? selection.endsAt : course?.endsAt;
@@ -291,6 +309,7 @@ Page({
             when: datetime(startsAt) + '–' + time(endsAt) + (coach ? ' · ' + coachLabel(coach) : ''),
             newPlayer: error.code === 'CHILD_PROFILE_REQUIRED'
           } });
+          this.syncTabOverlay();
         } else wx.navigateTo({ url: '/pages/child/index' });
       } else {
         wx.showToast({ title: errorMessage(error), icon: 'none', duration: 2500 });

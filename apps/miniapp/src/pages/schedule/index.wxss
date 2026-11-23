@@ -4,13 +4,13 @@
 .end-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12rpx;
-  margin-top: 10rpx;
+  gap: 1.6vw;
+  margin-top: 1.333vw;
 }
 
 .end-options .button {
   width: 100%;
-  padding: 14rpx 6rpx;
+  padding: 1.867vw 0.8vw;
 }
 
 .end-time, .end-price {
@@ -19,20 +19,20 @@
 }
 
 .end-price {
-  font-size: 24rpx;
+  font-size: 3.2vw;
   font-weight: 500;
 }
 
 .availability-day {
-  padding: 20rpx 0;
+  padding: 2.667vw 0;
   border-bottom: 1rpx solid #ded5d3;
 }
 
 .time-range {
-  margin-top: 10rpx;
-  padding: 0 20rpx;
+  margin-top: 1.333vw;
+  padding: 0 2.667vw;
   border: 1rpx solid #d5c4c5;
-  border-radius: 16rpx;
+  border-radius: 2.133vw;
   background: #fff;
 }
 
@@ -41,51 +41,51 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 16rpx 0;
+  padding: 2.133vw 0;
   border: 0;
   font-variant-numeric: tabular-nums;
 }
 
 .range-action {
-  font-size: 24rpx;
+  font-size: 3.2vw;
 }
 
 .range-detail {
-  padding: 12rpx 0 22rpx;
+  padding: 1.6vw 0 2.933vw;
   border-top: 1rpx solid #e6dfdc;
 }
 
 .start-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10rpx;
-  margin: 12rpx 0 18rpx;
+  gap: 1.333vw;
+  margin: 1.6vw 0 2.4vw;
 }
 
 .start-options .button {
   width: 100%;
-  padding: 12rpx 4rpx;
+  padding: 1.6vw 0.533vw;
 }
 
 .coach-strip {
   width: 100%;
-  margin: 18rpx 0;
+  margin: 2.4vw 0;
 }
 
 .coach-choices {
   display: inline-flex;
-  gap: 14rpx;
-  padding: 6rpx 4rpx;
+  gap: 1.867vw;
+  padding: 0.8vw 0.533vw;
 }
 
 .coach-choices .coach-choice {
   margin: 0;
   display: flex;
-  flex: 0 0 120rpx;
+  flex: 0 0 16vw;
   flex-direction: column;
   align-items: center;
-  width: 120rpx;
-  padding: 4rpx;
+  width: 16vw;
+  padding: 0.533vw;
   border: 0;
   background: transparent;
   color: #66595c;
@@ -97,16 +97,16 @@
 }
 
 .coach-choice.active .coach-face {
-  box-shadow: 0 0 0 3rpx #fff, 0 0 0 6rpx #761f32;
+  box-shadow: 0 0 0 0.4vw #fff, 0 0 0 0.8vw #761f32;
 }
 
 .coach-name {
   max-width: 100%;
-  margin-top: 12rpx;
+  margin-top: 1.6vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 24rpx;
+  font-size: 3.2vw;
 }
 
 .coach-choice.active .coach-name {
@@ -115,19 +115,19 @@
 }
 
 .coach-strip + .section-title {
-  margin-top: 20rpx;
+  margin-top: 2.667vw;
 }
 
 .quote-title {
-  margin: 18rpx 0 12rpx;
+  margin: 2.4vw 0 1.6vw;
   font-weight: 650;
 }
 
 .quote-details {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 8rpx 24rpx;
-  font-size: 28rpx;
+  gap: 1.067vw 3.2vw;
+  font-size: 3.733vw;
   overflow-wrap: anywhere;
 }
 
@@ -138,8 +138,8 @@
 .quote-actions {
   display: grid;
   grid-template-columns: 1fr 2fr;
-  gap: 14rpx;
-  margin-top: 26rpx;
+  gap: 1.867vw;
+  margin-top: 3.467vw;
 }
 
 .quote-actions .button {

@@ -1,4 +1,4 @@
-.family-choice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; margin: 12px 0; padding: 8px 12px; background: white; border: 1px solid #d5c4c5; border-radius: 8px; line-height: 1.5; }
+button.family-choice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; box-sizing: border-box; font-size: 14px; font-weight: 400; margin: 12px 0; padding: 8px 12px; background: white; border: 1px solid #d5c4c5; border-radius: 8px; line-height: 1.5; }
 .family-choice::after { border: 0; }
 .family-choice-name { margin-left: auto; font-size: 14px; font-weight: 650; color: #761f32; text-align: right; }
 .list-row > view:nth-child(2) { color: #761f32; margin: 5px 0 2px; font-size: 14px; }

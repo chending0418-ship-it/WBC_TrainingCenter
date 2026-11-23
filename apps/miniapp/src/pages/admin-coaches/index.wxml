@@ -4,10 +4,10 @@
     <button wx:if="{{!editor && !loading && !error}}" class="button row-action" bindtap="edit" disabled="{{busy}}" hover-class="press">新增教练</button>
   </view>
   <form wx:if="{{editor}}" class="lesson-card" bindsubmit="save">
-    <label class="form-field"><text>教练姓名</text><input class="field" value="{{editor.name}}" maxlength="40" data-field="name" bindinput="change" disabled="{{busy}}" /></label>
+    <label class="form-field first-field"><text>教练姓名</text><input class="field" value="{{editor.name}}" maxlength="40" data-field="name" bindinput="change" disabled="{{busy}}" /></label>
     <label class="form-field"><text>每 30 分钟所需私教积分</text><input class="field" type="number" value="{{editor.points}}" maxlength="5" data-field="points" bindinput="change" disabled="{{busy}}" /></label>
     <picker range="{{privateTypes}}" range-key="name" value="{{editor.privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">私教课程类型</text><text class="picker-value">{{privateTypes[editor.privateTypeIndex].name}}</text></view>
+      <view class="picker"><text class="picker-label">私教课程类型</text><text class="picker-value">{{privateTypes[editor.privateTypeIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
     </picker>
     <view class="muted">新增后可到「排课管理 → 私教时段」设置开放时间。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>

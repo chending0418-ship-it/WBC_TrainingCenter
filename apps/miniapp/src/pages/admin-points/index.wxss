@@ -20,7 +20,6 @@
   font-size: 14px;
   line-height: 1.45;
 }
-.page-shell picker .picker.points-picker::after { display: none; }
 .direction-options {
   display: flex;
   align-items: center;
