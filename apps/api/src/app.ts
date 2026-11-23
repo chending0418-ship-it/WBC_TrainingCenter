@@ -6,17 +6,22 @@ import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
 import { dateInput, expectedRevision, object, requiredText, selection } from './input.ts';
 import { readContact, saveContact } from './parent-contact.ts';
+import { readRegistration, submitRegistration } from './registration.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
 import { venueDate } from './time.ts';
+import { registerWebAdmin, webAdminUrl } from './web-admin.ts';
 import { wechatAuth } from './wechat-auth.ts';
 import type { WechatLoginConfig } from './wechat-login.ts';
 
 export function createApp(db: DatabaseSync, clock = () => new Date(),
-  { demo = true, wechat }: { demo?: boolean; wechat?: WechatLoginConfig } = {}
+  { demo = true, wechat, webAdminPassword }: { demo?: boolean; wechat?: WechatLoginConfig; webAdminPassword?: string } = {}
 ) {
-  const app = Fastify({ logger: false, bodyLimit: 4096 });
+  const app = Fastify({
+    logger: false, bodyLimit: 4096, trustProxy: '127.0.0.1',
+    rewriteUrl: request => webAdminUrl(request.url ?? '/')
+  });
   const service = bookingService(db, clock);
   const scheduling = staffSchedule(db, clock);
   if (demo && wechat) throw new Error('Demo sessions and WeChat login require separate environments.');
@@ -77,22 +82,16 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     });
   }
 
+  app.get('/api/public/schedule', async () => service.publicSchedule());
   app.get('/api/schedule', async request => service.schedule(user(request), object(request.query).view === 'week'));
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
     return service.listSlots(requiredText(object(request.params).id), dateInput(object(request.query).date));
   });
   app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
-  app.put('/api/me/child', async request => {
-    const profile = user(request);
-    const { name, birthMonth, gender } = object(request.body);
-    const month = requiredText(birthMonth, 7);
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < '1900-01' || month > venueDate(clock()).slice(0, 7)) {
-      throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的出生年月');
-    }
-    if (gender !== 'MALE' && gender !== 'FEMALE') throw new ApiError(400, 'VALIDATION_ERROR', '请选择性别');
-    return service.saveChild(profile, { name: requiredText(name, 40), birthMonth: month, gender });
-  });
+  app.put('/api/me/child', async request => submitRegistration(db, user(request), request.body, clock(), true).child);
+  app.get('/api/me/registration', async request => ({ registration: readRegistration(db, user(request)) }));
+  app.put('/api/me/registration', async request => submitRegistration(db, user(request), request.body, clock()));
   app.get('/api/me/contact', async request => ({ contact: readContact(db, user(request)) }));
   app.put('/api/me/contact', async request => saveContact(db, user(request), request.body));
   app.delete('/api/me/contact', async (request, reply) => {
@@ -113,7 +112,8 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     user(request);
     throw new ApiError(403, 'ADMIN_ONLY', '请线下联系管理员处理取消');
   });
-  registerStaffRoutes(app, db, clock, service, scheduling, demo, auth && (header => auth.authorize(header, 'ADMIN')));
+  const authorizeWeb = registerWebAdmin(app, clock, demo, webAdminPassword);
+  registerStaffRoutes(app, db, clock, service, scheduling, demo, auth && (header => auth.authorize(header, 'ADMIN')), authorizeWeb);
   registerCoachRoutes(app, db, clock, demo, auth && (header => auth.authorize(header, 'COACH')));
   return app;
 }

@@ -9,14 +9,29 @@ Page({
   data: {
     visible: false,
     wechatMode: config.mode === 'wechat',
+    demoRoles: false,
     accountId: '',
     allowedRoles: [] as { role: SessionRole; label: string }[],
     mode: '' as '' | 'COACH' | 'ADMIN',
     password: '', error: '', busy: false, loadingCoaches: false,
     coaches: [] as { profile: string; name: string }[]
   },
+  courseId: '',
+  onLoad(options) {
+    this.courseId = options.course?.slice(0, 100) ?? '';
+    if (options.login !== '1' || wechatIdentity()) return;
+    if (this.data.wechatMode) void this.loginWechat();
+    else this.setData({ demoRoles: true });
+  },
+  startLogin() {
+    if (this.data.wechatMode) void this.loginWechat();
+    else wx.navigateTo({ url: '/pages/entry/index?login=1' });
+  },
+  browseSchedule() {
+    if (!this.data.busy) wx.navigateTo({ url: '/pages/public-schedule/index' });
+  },
   onShow() {
-    this.setData({ visible: allowEntry() });
+    this.setData({ visible: allowEntry(this.courseId) });
     this.showWechatIdentity();
   },
   showWechatIdentity() {
@@ -43,7 +58,7 @@ Page({
     const role = event.currentTarget.dataset.role as SessionRole;
     this.setData({ busy: true, error: '' });
     try {
-      await selectWechatRole(role);
+      await selectWechatRole(role, this.courseId);
       this.setData({ visible: false });
     } catch (error) {
       this.showWechatIdentity();
@@ -92,7 +107,7 @@ Page({
     if (this.data.busy) return;
     this.setData({ busy: true, error: '' });
     try {
-      await signIn(role, credentials);
+      await signIn(role, credentials, this.courseId);
       this.setData({ visible: false, password: '' });
     } catch (error) {
       this.setData({ error: errorMessage(error) });

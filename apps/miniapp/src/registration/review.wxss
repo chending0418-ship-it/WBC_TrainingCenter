@@ -1,0 +1,28 @@
+.enrollment .page-title { margin-bottom: 34rpx; }
+.en-sub, .en-heading { font-size: 32rpx; font-weight: 650; line-height: 1.4; margin: 44rpx 0 17rpx; }
+.en-heading, .en-actions, .en-meta, .en-person, .en-tabs { display: flex; align-items: center; gap: 16rpx; }
+.en-heading, .en-meta, .en-person { justify-content: space-between; }
+.en-hint, .en-state-note, .en-person-note, .en-status { color: #66595c; font-size: 26rpx; }
+.en-hint { margin: 13rpx 0 29rpx; }
+.en-back { display: inline-flex; align-items: center; min-height: 70rpx; gap: 12rpx; color: #761f32; font-size: 27rpx; margin: 0 0 18rpx; }
+.en-back::before { content: ''; width: 13rpx; height: 13rpx; border: solid #761f32; border-width: 0 0 2rpx 2rpx; transform: rotate(45deg); }
+.en-summary, .en-course, .en-list, .en-textarea { border-radius: 17rpx; border: 1rpx solid #ded5d3; background: white; overflow: hidden; }
+.en-meta, .en-person { padding: 18rpx 24rpx; }
+.en-meta + .en-meta, .en-person + .en-person { border-top: 1rpx solid #e6dfdc; }
+.en-meta text:first-child { font-size: 26rpx; color: #66595c; }
+.en-meta text:last-child { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.en-actions { justify-content: flex-end; margin-top: 38rpx; }
+.en-state { background: #f0e4e5; padding: 27rpx 30rpx; border-radius: 16rpx; margin: 23rpx 0; }
+.en-state-title { color: #761f32; font-size: 36rpx; font-weight: 650; }
+.en-state-note { margin-top: 9rpx; }
+.en-course { padding: 19rpx 25rpx; }
+.en-course-title, .en-person-name { font-size: 30rpx; font-weight: 650; }
+.en-person-note { display: block; }
+.en-link { color: #761f32; font-size: 26rpx; }
+.en-tabs { gap: 42rpx; border-bottom: 1rpx solid #ded5d3; }
+.en-tabs text { padding: 15rpx 0; color: #66595c; }
+.en-tabs .on { border-bottom: 4rpx solid #761f32; color: #761f32; font-weight: 650; }
+.en-person { min-height: 82rpx; }
+.en-status { text-align: right; }
+.en-textarea { box-sizing: border-box; width: 100%; min-height: 210rpx; padding: 16rpx 24rpx; }
+.en-input { margin-bottom: 17rpx; }

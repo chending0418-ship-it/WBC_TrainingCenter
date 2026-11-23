@@ -1,6 +1,7 @@
 import { showParentTab } from '../../lib/session';
-import type { Account, Child } from '../../../../../packages/shared/contracts.js';
+import type { Account, Registration } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
+import { registrationLabels } from '../../lib/registration';
 import { datetime } from '../../lib/display';
 
 Page({
@@ -9,7 +10,7 @@ Page({
     balance: 0,
     reservedPoints: 0,
     ledger: [] as { id: number; reason: string; change: string; date: string }[],
-    childName: '',
+    registrationLabel: '注册队员',
     loading: true,
     error: ''
   },
@@ -25,7 +26,7 @@ Page({
     this.setData({ loading: true, error: '' });
     try {
       const [account, profile] = await Promise.all([
-        api<Account>('/api/me/account'), api<{ child: Child | null }>('/api/me/child')
+        api<Account>('/api/me/account'), api<{ registration: Registration | null }>('/api/me/registration')
       ]);
       const ledger = account.ledger.map(entry => ({
         id: entry.id,
@@ -34,7 +35,7 @@ Page({
         date: datetime(entry.createdAt)
       }));
       this.setData({ balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
-        ledger, childName: profile.child?.name ?? '' });
+        ledger, registrationLabel: profile.registration ? profile.registration.child.name + ' · ' + registrationLabels[profile.registration.status] : '注册队员' });
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {

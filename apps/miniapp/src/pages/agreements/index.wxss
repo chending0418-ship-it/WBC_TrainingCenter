@@ -1,0 +1,3 @@
+.message { margin: 0; padding: 0; color: #66595c; font-size: 13px; }
+.copy-row { padding-top: 12px; border-top: 1px solid #ded5d3; line-height: 1.75; }
+.copy-row > view + view { margin-top: 10px; }

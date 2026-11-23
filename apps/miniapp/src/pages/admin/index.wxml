@@ -15,6 +15,9 @@
     <view>统计更新失败。{{error}}</view>
     <button class="button quiet" bindtap="refresh" hover-class="press">重试</button>
   </view>
+  <navigator class="registration-shortcut" url="/pages/admin-registrations/index" hover-class="press">
+    <text>队员注册审核</text><text class="registration-pending">{{overview ? overview.pendingRegistrations + ' 个待审核' : '查看'}}</text><view class="chevron" aria-hidden="true"></view>
+  </navigator>
   <view class="shortcuts">
     <navigator wx:for="{{shortcuts}}" wx:key="page" class="shortcut" url="/pages/{{item.page}}/index" hover-class="press">
       <image class="shortcut-icon" src="/pages/admin/icons/{{item.icon}}.svg" mode="aspectFit" aria-hidden="true"/>

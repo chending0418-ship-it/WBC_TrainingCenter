@@ -80,3 +80,6 @@
   padding-right: 26rpx;
   padding-left: 26rpx;
 }
+
+.selection-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 3px; }
+.selection-grid .button { width: 100%; min-width: 0; padding: 6px 0; font-size: 12px; min-height: 33px; }

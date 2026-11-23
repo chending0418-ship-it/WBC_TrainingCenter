@@ -19,8 +19,8 @@
       <view wx:if="{{item.contact}}">{{item.contact.name}} · {{item.contact.phone}}</view>
       <view wx:else class="muted">未填写联系人。</view>
       <view class="utility-links">
-        <navigator url="/pages/admin-points/index?userId={{item.id}}&mode=credit" hover-class="press" aria-label="给{{item.childName || '该家庭'}}增加积分">增加积分</navigator>
-        <navigator url="/pages/admin-points/index?userId={{item.id}}&mode=adjust" hover-class="press" aria-label="调整{{item.childName || '该家庭'}}的积分">调整积分</navigator>
+        <navigator url="/pages/admin-points/index?userId={{item.id}}&mode=credit" hover-class="press" aria-label="给{{item.childName || '该家庭'}}增加积分">充值</navigator>
+        <navigator url="/pages/admin-points/index?userId={{item.id}}&mode=adjust" hover-class="press" aria-label="调整{{item.childName || '该家庭'}}的积分">调整</navigator>
       </view>
     </view>
   </block>

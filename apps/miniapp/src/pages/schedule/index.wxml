@@ -1,5 +1,6 @@
 <import src="../../calendar/week.wxml" />
-<page-meta page-style="{{confirmation ? 'overflow: hidden' : ''}}" />
+<import src="../../calendar/groups.wxml" />
+<page-meta page-style="{{confirmation || registrationPrompt ? 'overflow: hidden' : ''}}" />
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page calendar-page">
   <text class="page-title" role="heading" aria-level="1">课程表</text>
 
@@ -20,27 +21,7 @@
     <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, showDays: mode === 'GROUP', busy: booking}}" />
 
     <block wx:if="{{mode === 'GROUP'}}">
-      <view class="agenda-heading">
-        <text class="agenda-title" role="heading" aria-level="2">团课安排</text>
-        <text class="agenda-count">{{groups.length}} 天有课 · 共 {{total}} 节</text>
-      </view>
-      <view wx:if="{{!total}}" class="message">本周暂无团课，可切换周次查看。</view>
-      <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" id="agenda-{{day.date}}" class="agenda-day">
-        <view class="agenda-stamp {{day.date === today ? 'stamp-today' : ''}}">
-          <text class="stamp-number">{{day.day}}</text><text class="stamp-weekday">{{day.weekday}}</text>
-        </view>
-        <view>
-          <view wx:for="{{day.lessons}}" wx:key="id" class="agenda-card">
-            <view class="agenda-line"><text class="agenda-time">{{item.hours}}</text><text wx:if="{{item.unavailable}}" class="agenda-state">{{item.action}}</text></view>
-            <text class="agenda-name">{{item.title}}</text>
-            <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
-            <view class="agenda-bottom">
-              <text class="agenda-facts">{{item.points}} 积分 · 余 {{item.capacity - item.bookedCount}}/{{item.capacity}} 位</text>
-              <button wx:if="{{!item.unavailable}}" class="reserve" data-id="{{item.id}}" bindtap="bookGroup" disabled="{{booking}}" hover-class="press" aria-label="预约{{item.title}}">预约</button>
-            </view>
-          </view>
-        </view>
-      </view>
+      <template is="groups" data="{{groups, total, today, booking, showBooking: true}}" />
     </block>
 
     <block wx:else>
@@ -97,6 +78,14 @@
       </block>
     </block>
   </block>
+  <view wx:if="{{registrationPrompt}}" class="quote-overlay">
+    <view class="quote-dialog registration-dialog" aria-role="dialog" aria-label="队员注册">
+      <view class="card-title">{{registrationPrompt.newPlayer ? '预约前请先注册队员' : '查看队员注册进度'}}</view>
+      <view class="registration-course"><text class="row-name">{{registrationPrompt.title}}</text><text class="card-note">{{registrationPrompt.when}}</text></view>
+      <view class="card-note">{{registrationPrompt.newPlayer ? '填写队员资料，管理员批准后，就可以回来预约。' : '注册审核通过后，就可以回来预约。'}}</view>
+      <view class="quote-actions"><button class="button quiet" bindtap="dismissRegistration">继续看课</button><button class="button" bindtap="openRegistration">{{registrationPrompt.newPlayer ? '注册队员' : '查看申请'}}</button></view>
+    </view>
+  </view>
   <view wx:if="{{confirmation}}" class="quote-overlay">
     <view class="quote-dialog" aria-role="dialog" aria-label="提交预约申请">
       <view class="card-title">提交预约申请</view>

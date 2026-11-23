@@ -1,5 +1,8 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.id ? '编辑教练' : '新增教练') : '教练管理'}}</text>
+  <view class="{{!editor && !loading && !error ? 'screen-heading' : ''}}">
+    <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.id ? '编辑教练' : '新增教练') : '教练管理'}}</text>
+    <button wx:if="{{!editor && !loading && !error}}" class="button row-action" bindtap="edit" disabled="{{busy}}" hover-class="press">新增教练</button>
+  </view>
   <form wx:if="{{editor}}" class="lesson-card" bindsubmit="save">
     <label class="form-field"><text>教练姓名</text><input class="field" value="{{editor.name}}" maxlength="40" data-field="name" bindinput="change" disabled="{{busy}}" /></label>
     <label class="form-field"><text>每 30 分钟所需私教积分</text><input class="field" type="number" value="{{editor.points}}" maxlength="5" data-field="points" bindinput="change" disabled="{{busy}}" /></label>
@@ -18,7 +21,6 @@
     <view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
   </view>
   <block wx:else>
-    <button class="button row-action" bindtap="edit" disabled="{{busy}}" hover-class="press">新增教练</button>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
     <view wx:if="{{!coaches.length}}" class="message">还没有教练。</view>
     <view wx:for="{{coaches}}" wx:key="id" class="lesson-card">

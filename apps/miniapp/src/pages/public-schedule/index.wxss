@@ -1,0 +1,10 @@
+@import "../../calendar/week.wxss";
+@import "../../registration/dialog.wxss";
+.login-link { margin: 0; padding: 15rpx 0 15rpx 20rpx; color: #761f32; background: transparent; font-size: 28rpx; font-weight: 600; }
+.login-link::after { border: 0; }
+
+.agenda-card.public-course {
+  display: block; width: 100%; margin-left: 0; margin-right: 0;
+  text-align: left; color: inherit; font-size: inherit; line-height: inherit;
+}
+.public-course::after { border: 0; }

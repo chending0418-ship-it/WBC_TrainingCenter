@@ -6,3 +6,15 @@ location ^~ /wbc/training-miniapp/ {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_pass http://127.0.0.1:19310/;
 }
+
+location = /wbctraining/admin {
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_pass http://127.0.0.1:19310;
+}
+location ^~ /wbctraining/admin/ {
+    client_max_body_size 512k;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_pass http://127.0.0.1:19310;
+}

@@ -1,0 +1,9 @@
+<template name="registrationDetails">
+  <view class="en-summary">
+    <view class="en-meta"><text>队员姓名</text><text>{{row.child.name}}</text></view>
+    <view class="en-meta"><text>出生年月</text><text>{{row.child.birthMonth}}</text></view>
+    <view class="en-meta"><text>性别</text><text>{{row.genderLabel}}</text></view>
+    <view class="en-meta"><text>联系人</text><text>{{row.contact ? row.contact.name : '未填写'}}</text></view>
+    <view class="en-meta"><text>联系电话</text><text>{{row.phoneLabel}}</text></view>
+  </view>
+</template>

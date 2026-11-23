@@ -1,6 +1,9 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{adding ? '为家长代约' : '预约管理'}}</text>
-  <view wx:if="{{!adding}}" class="section-actions">
+  <view class="{{!adding && !loading && !loadError ? 'screen-heading' : ''}}">
+    <text class="page-title" role="heading" aria-level="1">{{adding ? '为家长代约' : '预约管理'}}</text>
+    <button wx:if="{{!adding && !loading && !loadError}}" class="button row-action" bindtap="startBooking" disabled="{{busy}}" hover-class="press">为家长代约</button>
+  </view>
+  <view wx:if="{{!adding}}" class="section-actions review-tabs">
     <button class="button {{pendingOnly ? '' : 'quiet'}}" data-view="pending" bindtap="changeView" hover-class="press">待确认</button>
     <button class="button {{pendingOnly ? 'quiet' : ''}}" data-view="date" bindtap="changeView" hover-class="press">按日期查看</button>
   </view>
@@ -9,14 +12,13 @@
   </picker>
 
   <block wx:if="{{adding}}">
-    <view class="section-actions">
+    <view class="section-actions review-tabs">
       <button class="button {{type === 'GROUP' ? '' : 'quiet'}}" data-type="GROUP" bindtap="changeType" aria-pressed="{{type === 'GROUP'}}" hover-class="press">团课</button>
       <button class="button {{type === 'PRIVATE' ? '' : 'quiet'}}" data-type="PRIVATE" bindtap="changeType" aria-pressed="{{type === 'PRIVATE'}}" hover-class="press">私教</button>
     </view>
-    <picker wx:if="{{users.length}}" class="filter-row" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text></view>
-    </picker>
-    <view wx:else class="message">没有已填写孩子姓名的家长账户。</view>
+    <button class="family-choice" bindtap="chooseFamily" disabled="{{busy}}" hover-class="press">
+      <text class="muted">家长账户</text><text class="family-choice-name">{{family ? family.label : '搜索并选择家长'}}</text><view class="chevron"></view>
+    </button>
     <picker wx:if="{{type === 'PRIVATE'}}" class="filter-row" range="{{privateTypes}}" range-key="name"
       value="{{privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">私教课程</text><text class="picker-value">{{privateTypes[privateTypeIndex].name}}</text></view>
@@ -38,7 +40,7 @@
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
     <view class="section-actions form-actions">
       <button class="button quiet" bindtap="closeForm" disabled="{{busy}}" hover-class="press">返回</button>
-      <button class="button" bindtap="book" loading="{{busy}}" disabled="{{busy || choicesLoading || !users.length || !(classes.length || slots.length)}}" hover-class="press">确认代约</button>
+      <button class="button" bindtap="book" loading="{{busy}}" disabled="{{busy || choicesLoading || !family || !(classes.length || slots.length)}}" hover-class="press">确认代约</button>
     </view>
   </block>
 
@@ -47,7 +49,6 @@
     <view>{{loadError}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
   </view>
   <block wx:else>
-    <button class="button row-action" bindtap="startBooking" disabled="{{busy}}" hover-class="press">为家长代约</button>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
     <view wx:if="{{!bookings.length}}" class="message">{{pendingOnly ? '没有待确认的申请。' : '这天还没有预约。'}}</view>
     <view wx:for="{{bookings}}" wx:key="id" class="list-row">

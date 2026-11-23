@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, Quote, Schedule } from '../../../packages/shared/contracts.js';
+import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, PublicSchedule, Quote, Schedule } from '../../../packages/shared/contracts.js';
 import { audit, maxPrivateMinutes, privateVenue, slotMinutes, transaction } from './database.ts';
 import { addDays, covers, dateAt, venueDate, weekday } from './time.ts';
 
@@ -15,10 +15,12 @@ export class ApiError extends Error {
   }
 }
 
-const classFields = `
+const publicClassFields = `
   s.id, s.title, c.name AS coachName, s.venue, s.starts_at AS startsAt,
-  s.ends_at AS endsAt, s.points, s.capacity,
-  t.name AS courseTypeName,
+  s.ends_at AS endsAt, t.name AS courseTypeName
+`;
+const classFields = `
+  ${publicClassFields}, s.points, s.capacity,
   (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS bookedCount,
   EXISTS (SELECT 1 FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED' AND b.user_id = ?) AS mine
 `;
@@ -62,15 +64,28 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return { now, today, lastDate: addDays(today, 29) };
   }
 
-  function schedule(user: string, includeWeekStart = false): Schedule {
+  function scheduleWindow(includeWeekStart: boolean) {
     const { today, lastDate } = horizon();
     const from = includeWeekStart ? addDays(today, -((weekday(today) + 6) % 7)) : today;
-    const rows = db.prepare(`
-      SELECT ${classFields} FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
-      LEFT JOIN course_types t ON t.id = s.course_type_id
-      WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
-      ORDER BY s.starts_at
-    `).all(user, dateAt(from), dateAt(addDays(lastDate, 1))) as unknown as ClassRow[];
+    return { today, lastDate, from: dateAt(from), until: dateAt(addDays(lastDate, 1)) };
+  }
+
+  const publishedClasses = `
+    FROM class_sessions s JOIN coaches c ON c.id = s.coach_id
+    LEFT JOIN course_types t ON t.id = s.course_type_id
+    WHERE s.status = 'PUBLISHED' AND c.enabled = 1 AND ${templateAllowsBooking} AND s.starts_at >= ? AND s.starts_at < ?
+    ORDER BY s.starts_at, s.id
+  `;
+
+  function publicSchedule(): PublicSchedule {
+    const { today, lastDate, from, until } = scheduleWindow(true);
+    const courses = db.prepare(`SELECT ${publicClassFields} ${publishedClasses}`).all(from, until) as unknown as PublicSchedule['courses'];
+    return { today, lastDate, courses };
+  }
+
+  function schedule(user: string, includeWeekStart = false): Schedule {
+    const { today, lastDate, from, until } = scheduleWindow(includeWeekStart);
+    const rows = db.prepare(`SELECT ${classFields} ${publishedClasses}`).all(user, from, until) as unknown as ClassRow[];
     const coaches = db.prepare('SELECT id, name, avatar_key AS avatarKey FROM coaches WHERE enabled = 1 ORDER BY id').all() as unknown as Coach[];
     return { today, lastDate, courses: rows.map(({ mine, ...course }) => ({ ...course, bookedByMe: mine === 1 })), coaches };
   }
@@ -79,12 +94,11 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return (db.prepare('SELECT name, birth_month AS birthMonth, gender FROM children WHERE guardian_id = ?').get(user) as Child | undefined) ?? null;
   }
 
-  function saveChild(user: string, profile: Child): Child {
-    db.prepare(`
-      INSERT INTO children (guardian_id, name, birth_month, gender) VALUES (?, ?, ?, ?)
-      ON CONFLICT (guardian_id) DO UPDATE SET name = excluded.name, birth_month = excluded.birth_month, gender = excluded.gender
-    `).run(user, profile.name, profile.birthMonth, profile.gender);
-    return profile;
+  function requireEligible(user: string) {
+    const row = db.prepare('SELECT status FROM registrations WHERE user_id = ?').get(user);
+    if (!row) throw new ApiError(409, 'CHILD_PROFILE_REQUIRED', '预约前请先注册队员');
+    if (row.status !== 'APPROVED') throw new ApiError(409, 'REGISTRATION_REQUIRED',
+      row.status === 'RETURNED' ? '请先补充注册资料' : '队员注册正在审核');
   }
 
   function balance(user: string): number {
@@ -207,6 +221,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
   }
 
   function quote(user: string, selection: BookingSelection): BookingQuote {
+    requireEligible(user);
     const details = resolve(user, selection);
     const { title, coachName, venue, startsAt, endsAt, points, refundPoints } = details;
     return { title, coachName, venue, startsAt, endsAt, points, refundPoints, revision: quoteRevision(details) };
@@ -239,8 +254,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
         return booking;
       }
 
-      const profile = child(user);
-      if (!profile?.birthMonth || !profile.gender) throw new ApiError(409, 'CHILD_PROFILE_REQUIRED', '请先补齐孩子资料');
+      requireEligible(user);
       const quote = resolve(user, selection);
       if (expectedRevision && expectedRevision !== quoteRevision(quote)) {
         throw new ApiError(409, 'QUOTE_CHANGED', '预约信息有变，请重新确认预约');
@@ -285,11 +299,14 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  function cancel(id: string, operator: string): void {
+  function cancel(id: string, operator: string, pendingOnly = false): void {
     transaction(db, () => {
       const booking = db.prepare('SELECT user_id, status, approval_pending, starts_at, title, refund_points FROM bookings WHERE id = ?')
         .get(id);
       if (!booking) throw new ApiError(404, 'NOT_FOUND', '未找到该预约');
+      if (pendingOnly && !booking.approval_pending) {
+        throw new ApiError(409, 'ALREADY_PROCESSED', '该预约已处理，请刷新后核对');
+      }
       if (booking.status === 'CANCELLED') return;
       const now = clock().toISOString();
       if (!booking.approval_pending && Date.parse(String(booking.starts_at)) - Date.parse(now) < cancellationLeadMs) {
@@ -307,5 +324,5 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  return { schedule, child, saveChild, account, listSlots, quote, bookings, book, approve, cancel };
+  return { publicSchedule, schedule, child, account, listSlots, quote, bookings, book, approve, cancel };
 }

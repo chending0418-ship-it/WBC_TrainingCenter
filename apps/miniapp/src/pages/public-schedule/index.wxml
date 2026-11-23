@@ -1,0 +1,27 @@
+<import src="../../calendar/week.wxml" />
+<import src="../../calendar/groups.wxml" />
+<page-meta page-style="{{selectedCourse ? 'overflow: hidden' : ''}}" />
+<view class="page-shell calendar-page">
+  <view class="calendar-heading public-heading">
+    <text class="page-title" role="heading" aria-level="1">课程表</text>
+    <button class="login-link" bindtap="login" hover-class="press">家长登录</button>
+  </view>
+  <view wx:if="{{loading}}" class="message">正在加载排课…</view>
+  <view wx:elif="{{error}}" class="message">
+    <view>{{error}}</view>
+    <button class="button quiet" bindtap="refresh" hover-class="press">重新加载</button>
+  </view>
+  <block wx:else>
+    <view class="calendar-tabs"><text class="calendar-tab active">团课</text></view>
+    <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, showDays: true}}" />
+    <template is="groups" data="{{groups, total, today, showBooking: false}}" />
+  </block>
+  <view wx:if="{{selectedCourse}}" class="quote-overlay">
+    <view class="quote-dialog registration-dialog" aria-role="dialog" aria-label="队员注册">
+      <view class="card-title">预约前请先注册队员</view>
+      <view class="registration-course"><text class="row-name">{{selectedCourse.title}}</text><text class="card-note">{{selectedCourse.when}}</text></view>
+      <view class="card-note">微信登录后填写队员资料。管理员批准后，就可以回来预约。</view>
+      <view class="quote-actions"><button class="button quiet" bindtap="dismissCourse">继续看课</button><button class="button" bindtap="registerForCourse">登录并注册队员</button></view>
+    </view>
+  </view>
+</view>
