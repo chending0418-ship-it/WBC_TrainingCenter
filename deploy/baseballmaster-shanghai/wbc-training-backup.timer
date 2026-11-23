@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily WBC training database backup at 03:00 Beijing time
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Shanghai
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=Back up and verify the WBC training production database
+RequiresMountsFor=/var/lib/wbc-training-miniapp /var/backups
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/wbc-training-miniapp/backup-sqlite.py /var/lib/wbc-training-miniapp/wbc.sqlite /var/backups/wbc-training-miniapp/daily
+UMask=0077
+ProtectSystem=strict
+ReadWritePaths=/var/backups/wbc-training-miniapp
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+Restart=on-failure
+RestartSec=15min
