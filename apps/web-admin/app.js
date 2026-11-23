@@ -1,13 +1,13 @@
 import { html, href, link, title, box, empty, monthDay, weekday, weekdays, datetime } from './ui.js';
 import { people, person, finance } from './people.js';
-import { schedule, newClass, classTable } from './schedule.js';
+import { schedule, newClass, classTable, classTemplates, classCoaches } from './schedule.js';
 import { registrations, bookings } from './reviews.js';
 
 const menu = [
   ['dashboard', '工作台', 'schedule'], ['people', '队员档案', 'parents'], ['finance', '积分调整', 'points'],
   ['schedule', '排课管理', 'schedule'], ['registrations', '队员注册审核', 'types'], ['bookings', '预约审核', 'bookings']
 ];
-const pages = { dashboard, people, person, finance, schedule, newClass, registrations, bookings };
+const pages = { dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, registrations, bookings };
 const workspace = document.querySelector('#workspace');
 const identity = document.querySelector('.admin-label');
 const sessionKey = 'wbc.web.admin.session';
@@ -177,7 +177,7 @@ async function render() {
   const page = Object.hasOwn(pages, requested) ? requested : 'dashboard';
   if (currentPage !== page) reads.clear();
   currentPage = page;
-  const section = ({ person: 'people', newClass: 'schedule' })[page] || page;
+  const section = ({ person: 'people', newClass: 'schedule', classTemplates: 'schedule', classCoaches: 'schedule' })[page] || page;
   const sectionName = menu.find(([id]) => id === section)[1];
   identity.hidden = false;
   shell(section, sectionName);
@@ -189,11 +189,12 @@ async function render() {
   let busy = false;
   const active = () => generation === version;
   const ctx = {
-    async api(path) {
+    async api(path, fresh = false) {
       // A user can navigate via the sidebar while a write is still on the wire.
       // Read after it settles so the destination shows the committed state.
       if (pendingWrite) await pendingWrite.catch(() => undefined);
       if (!active()) throw new Error('页面已切换');
+      if (fresh) reads.delete(path);
       return read(path);
     },
     async write(...args) {

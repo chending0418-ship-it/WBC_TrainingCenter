@@ -1,10 +1,11 @@
+import { coachLabel } from '../../lib/coach-avatar';
 import { allowPage, readVersion, hasFreshRead } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, CourseType, ManagedBooking, ManagedClass, PrivateSlot } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { cancellationRefundText, datetime, time, timeRange } from '../../lib/display';
 import { confirmAction, hasPendingStaffWrite, staffApi, staffContext, staffWrite } from '../../lib/staff';
 
-type ListRow = ManagedBooking & { hours: string; statusLabel: string };
+type ListRow = ManagedBooking & { coachLabel: string; hours: string; statusLabel: string };
 const statusLabels = { PENDING: '待确认', CONFIRMED: '已确认', REJECTED: '已拒绝', CANCELLED: '已取消' };
 type ClassOption = ManagedClass & { label: string };
 type SlotOption = PrivateSlot & { label: string };
@@ -55,7 +56,7 @@ Page({
       const bookings = await staffApi<ManagedBooking[]>(path);
       if (request === bookingRequest) {
         this.listVersion = readVersion('/api/admin' + path);
-        this.setData({ bookings: bookings.map(row => ({ ...row,
+        this.setData({ bookings: bookings.map(row => ({ ...row, coachLabel: coachLabel(row.coachName),
           hours: this.data.pendingOnly ? datetime(row.startsAt) + '–' + time(row.endsAt) : timeRange(row.startsAt, row.endsAt),
           statusLabel: row.status === 'PENDING' && !row.canApprove ? '已过期' : statusLabels[row.status] })) });
       }

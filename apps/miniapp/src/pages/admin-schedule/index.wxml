@@ -11,9 +11,15 @@
         value="{{editor.typeIndex}}" bindchange="changeCourseType" disabled="{{busy}}">
         <view class="picker"><text class="picker-label">课程类型</text><text class="picker-value">{{typeOptions[editor.typeIndex].label}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
       </picker>
-      <picker range="{{coaches}}" range-key="name" value="{{editor.coachIndex}}" bindchange="changeClassCoach" disabled="{{busy}}">
-        <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{editor.coachIndex < 0 ? editor.template.coachName + '（已停用）' : coaches[editor.coachIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
-      </picker>
+      <button size="mini" class="picker coach-picker" bindtap="toggleCoachPicker" disabled="{{busy}}" aria-expanded="{{editor.coachPickerOpen}}" hover-class="press">
+        <text class="picker-label">教练（可多选）</text><text class="picker-value">{{editor.coachSummary || '请选择'}}</text><view class="chevron {{editor.coachPickerOpen ? 'expanded' : ''}}" aria-hidden="true"></view>
+      </button>
+      <checkbox-group wx:if="{{editor.coachPickerOpen}}" bindchange="changeClassCoaches" class="coach-options" aria-label="团课教练">
+        <label wx:for="{{editor.coachOptions}}" wx:key="id" class="coach-option">
+          <checkbox value="{{item.id}}" checked="{{item.selected}}" disabled="{{busy || (!item.enabled && !item.selected)}}" color="#761f32" />
+          <text>{{item.name}}{{item.enabled ? '' : '（已停用）'}}</text>
+        </label>
+      </checkbox-group>
       <label class="form-field"><text>训练场地</text><input class="field" value="{{editor.venue}}" data-field="venue" bindinput="changeClassField" maxlength="50" disabled="{{busy}}" /></label>
     </view>
     <view class="lesson-card">
@@ -36,6 +42,7 @@
     </view>
     <view class="lesson-card">
       <label class="form-field"><text>容量（人）</text><input class="field" type="number" value="{{editor.capacity}}" data-field="capacity" bindinput="changeClassField" maxlength="3" disabled="{{busy}}" /></label>
+      <view wx:if="{{typeOptions[editor.typeIndex].id && editor.coachIds.length > 1}}" class="muted">已选 {{editor.coachIds.length}} 位教练，每位最多带 {{typeOptions[editor.typeIndex].maxStudents}} 人。</view>
       <label class="form-field"><text>所需积分</text><input class="field" type="number" value="{{editor.points}}" data-field="points" bindinput="changeClassField" maxlength="6" disabled="{{busy}}" /></label>
     </view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
@@ -89,7 +96,7 @@
       <view wx:for="{{templates}}" wx:key="id" class="lesson-card">
         <view class="card-head"><text class="card-title">{{item.title}}</text><text class="card-state">{{item.enabled ? '已启用' : '已停用'}}</text></view>
         <view class="card-time">{{item.timetable}}</view>
-        <view class="muted">{{item.coachName}}教练 · {{item.venue}} · {{item.points}} 积分</view>
+        <view class="muted">{{item.coachLabel}} · {{item.venue}} · {{item.points}} 积分</view>
         <view class="section-actions item-actions">
           <button class="button quiet" data-id="{{item.id}}" bindtap="editTemplate" disabled="{{busy}}" hover-class="press">编辑模板</button>
           <button class="button quiet" data-id="{{item.id}}" bindtap="toggleTemplate" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用模板' : '启用模板'}}</button>

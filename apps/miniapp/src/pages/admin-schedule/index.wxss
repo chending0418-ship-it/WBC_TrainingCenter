@@ -85,3 +85,11 @@
 .selection-grid .button { width: 100%; min-width: 0; padding: 6px 0; font-size: 12px; min-height: 33px; }
 
 .repeat-row { height: 26px; }
+
+.picker.coach-picker { width: 100%; margin: 6px 0; padding: 9px 12px; display: flex; font-weight: 400; line-height: 1.5; }
+.coach-picker::after { border: 0; }
+.coach-picker .picker-value { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.coach-picker .expanded { transform: rotate(135deg); }
+.coach-options { display: block; border: 1px solid #ded5d3; border-radius: 8px; }
+.coach-option { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; overflow-wrap: anywhere; font-size: 14px; }
+.coach-option + .coach-option { border-top: 1px solid #e6dfdc; }

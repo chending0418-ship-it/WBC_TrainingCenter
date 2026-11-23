@@ -323,6 +323,33 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 13;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 14) return;
+    db.exec(`
+      CREATE TABLE class_extra_coaches (
+        class_id TEXT NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+        coach_id TEXT NOT NULL REFERENCES coaches(id), position INTEGER NOT NULL CHECK (position > 0),
+        PRIMARY KEY (class_id, coach_id), UNIQUE (class_id, position)
+      ) STRICT;
+      CREATE INDEX IF NOT EXISTS classes_by_primary_coach ON class_sessions(coach_id);
+      CREATE INDEX class_extra_by_coach ON class_extra_coaches(coach_id, class_id);
+      CREATE TABLE template_extra_coaches (
+        template_id TEXT NOT NULL REFERENCES class_templates(id) ON DELETE CASCADE,
+        coach_id TEXT NOT NULL REFERENCES coaches(id), position INTEGER NOT NULL CHECK (position > 0),
+        PRIMARY KEY (template_id, coach_id), UNIQUE (template_id, position)
+      ) STRICT;
+      CREATE VIEW class_coach_assignments AS
+        SELECT id AS class_id, coach_id, 0 AS position FROM class_sessions
+        UNION ALL SELECT class_id, coach_id, position FROM class_extra_coaches;
+      CREATE VIEW template_coach_assignments AS
+        SELECT id AS template_id, coach_id, 0 AS position FROM class_templates
+        UNION ALL SELECT template_id, coach_id, position FROM template_extra_coaches;
+      ALTER TABLE bookings ADD COLUMN group_coach_names TEXT;
+      UPDATE bookings SET group_coach_names = (SELECT name FROM coaches WHERE id = bookings.coach_id)
+        WHERE type = 'GROUP';
+      PRAGMA user_version = 14;
+    `);
+  });
   return db;
 }
 

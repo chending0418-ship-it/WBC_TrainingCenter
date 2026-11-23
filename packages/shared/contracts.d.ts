@@ -100,6 +100,7 @@ export interface ApiFailure {
 export type ClassStatus = 'PUBLISHED' | 'CLOSED';
 
 export interface ClassDraft {
+  coachIds?: string[];
   courseTypeId?: string | null;
   title: string;
   coachId: string;
@@ -117,12 +118,14 @@ export interface ClassPlan extends ClassDraft {
 }
 
 export interface ManagedTemplate extends ClassPlan {
+  coachIds: string[];
   id: string;
   coachName: string;
   enabled: boolean;
 }
 
 export interface ManagedClass extends ClassDraft {
+  coachIds: string[];
   courseTypeId: string | null;
   courseTypeName: string | null;
   id: string;

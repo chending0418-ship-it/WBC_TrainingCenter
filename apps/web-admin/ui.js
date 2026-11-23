@@ -65,7 +65,7 @@ export const hours = row => time(row.startsAt) + '–' + time(row.endsAt);
 export const accountUrl = id => '/accounts/' + encodeURIComponent(id);
 export const phoneTail = contact => contact ? contact.name + ' · ' + contact.phone.replace(/\D/g, '').slice(-4) : '—';
 export const maskedPhone = phone => phone ? phone.slice(0, 3) + ' **** ' + phone.replace(/\D/g, '').slice(-4) : '—';
-export const coach = name => name.endsWith('教练') ? name : name + '教练';
+export const coach = name => name.split('、').map(part => part.endsWith('教练') ? part : part + '教练').join('、');
 
 export function confirmAction(label, message, reasonLabel = '') {
   const dialog = document.createElement('dialog');

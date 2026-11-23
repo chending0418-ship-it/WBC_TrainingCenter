@@ -1,9 +1,10 @@
+import { coachLabel } from '../../lib/coach-avatar';
 import { invalidateRead, readVersion, showParentTab } from '../../lib/session';
 import type { Booking } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { datetime, time } from '../../lib/display';
 
-type Row = Booking & { hours: string; label: string };
+type Row = Booking & { coachLabel: string; hours: string; label: string };
 
 const path = '/api/me/bookings';
 
@@ -47,7 +48,7 @@ Page({
       for (const booking of bookings) {
         const isUpcoming = (booking.status === 'CONFIRMED' || booking.status === 'PENDING') && booking.startsAt > now;
         const row = {
-          ...booking,
+          ...booking, coachLabel: coachLabel(booking.coachName),
           hours: datetime(booking.startsAt) + '–' + time(booking.endsAt),
           label: booking.status === 'CANCELLED' ? '已取消' : booking.status === 'REJECTED' ? '未获确认' :
             booking.status === 'PENDING' ? (isUpcoming ? '待确认' : '已过期') : (isUpcoming ? '已确认' : '已开课')

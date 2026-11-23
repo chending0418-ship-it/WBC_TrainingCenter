@@ -1,5 +1,6 @@
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 import { coachLabel } from '../../lib/coach-avatar';
+import { assignedCoachIds, changeClassCoaches, classCoachEditor } from '../../lib/class-coaches';
 import { allowPage, hasFreshRead } from '../../lib/session';
 import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
@@ -8,14 +9,14 @@ import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
 type ClassRow = ManagedClass & { timeLabel: string; coachLabel: string; names: string; editable: boolean };
-type TemplateRow = ManagedTemplate & { timetable: string };
+type TemplateRow = ManagedTemplate & { timetable: string; coachLabel: string };
 type WeeklyHours = { weekday: number; label: string; windows: CoachHours['windows']; summary: string };
 type TypeOption = { id: string | null; label: string; maxStudents: number };
 const untyped: TypeOption = { id: null, label: '未指定类型', maxStudents: 500 };
 
-type Editor = {
+type Editor = ReturnType<typeof classCoachEditor> & {
   id: string; title: string; venue: string; date: string; time: string; duration: string;
-  capacity: string; points: string; status: ClassStatus; coachIndex: number; typeIndex: number; repeat: boolean;
+  capacity: string; points: string; status: ClassStatus; typeIndex: number; repeat: boolean;
   template?: ManagedTemplate;
 };
 let request = 0;
@@ -88,7 +89,7 @@ Page({
         for (const row of classes) {
           const day = byDate.get(row.date) ?? [];
           day.push({ ...row, timeLabel: timeRange(row.startsAt, row.endsAt), coachLabel: coachLabel(row.coachName),
-            editable: row.startsAt > now && coaches.some(coach => coach.id === row.coachId),
+            editable: row.startsAt > now,
             names: row.attendees.map(attendee => attendee.childName).join('、') });
           byDate.set(row.date, day);
         }
@@ -96,7 +97,7 @@ Page({
       } else if (mode === 'templates') {
         const templates = await staffApi<ManagedTemplate[]>(path);
         if (current === request) this.setData({ templates: templates.map(template => ({
-          ...template, timetable: template.weekdays.map(day => weekdays[day]).join('、') + ' · ' +
+          ...template, coachLabel: coachLabel(template.coachName), timetable: template.weekdays.map(day => weekdays[day]).join('、') + ' · ' +
             template.startMinutes.map(minuteString).join('、')
         })) });
       } else {
@@ -165,7 +166,7 @@ Page({
     this.setData({
       editor: { id: '', title: '', venue: '训练室 A', date: repeat ? this.data.today : this.data.date,
         time: '17:30', duration: '60', capacity: '6', points: '40',
-        status: 'PUBLISHED', coachIndex: 0, typeIndex: 0, repeat },
+        status: 'PUBLISHED', ...classCoachEditor(this.data.coaches), typeIndex: 0, repeat },
       days: weekdays.map((label, index) => ({ label, index, active: false })), saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
@@ -177,7 +178,7 @@ Page({
       editor: { id: row.id, template: row, title: row.title, venue: row.venue, date: row.date,
         time: row.startMinutes.map(minuteString).join('，'), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: 'PUBLISHED', repeat: true,
-        coachIndex: this.data.coaches.findIndex(coach => coach.id === row.coachId),
+        ...classCoachEditor(this.data.coaches, row),
         typeIndex: Math.max(0, this.data.typeOptions.findIndex(type => type.id === row.courseTypeId)) },
       days: weekdays.map((label, index) => ({ label, index, active: row.weekdays.includes(index) })), saveError: ''
     });
@@ -191,7 +192,7 @@ Page({
     try {
       if (!await confirmAction(action + '？', row.enabled ? '移除未来未被预约的自动班次。已预约和单独调整的班次保留。' :
         '从未来日期开始生成班次。', action)) return;
-      await staffWrite('/class-templates/' + row.id, { ...row, enabled: !row.enabled }, undefined, 'PUT');
+      await staffWrite('/class-templates/' + row.id, { ...row, coachIds: assignedCoachIds(row), enabled: !row.enabled }, undefined, 'PUT');
       await this.refresh();
       wx.showToast({ title: row.enabled ? '模板已停用' : '模板已启用', icon: 'none' });
     } catch (error) {
@@ -207,7 +208,7 @@ Page({
       editor: { id: row.id, title: row.title, venue: row.venue, date: row.date,
         time: minuteString(row.startMinute), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: row.status,
-        coachIndex: this.data.coaches.findIndex(coach => coach.id === row.coachId),
+        ...classCoachEditor(this.data.coaches, row),
         typeIndex: Math.max(0, this.data.typeOptions.findIndex(type => type.id === row.courseTypeId)), repeat: false }, saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
@@ -221,8 +222,14 @@ Page({
   changeClassDate(event: WechatMiniprogram.PickerChange) {
     this.setData({ 'editor.date': String(event.detail.value) });
   },
-  changeClassCoach(event: WechatMiniprogram.PickerChange) {
-    this.setData({ 'editor.coachIndex': Number(event.detail.value) });
+  toggleCoachPicker() {
+    const editor = this.data.editor;
+    if (editor && !this.data.busy) this.setData({ 'editor.coachPickerOpen': !editor.coachPickerOpen });
+  },
+  changeClassCoaches(event: WechatMiniprogram.CheckboxGroupChange) {
+    const editor = this.data.editor;
+    if (!editor || this.data.busy) return;
+    this.setData({ editor: { ...editor, ...changeClassCoaches(editor, event.detail.value) }, saveError: '' });
   },
   changeCourseType(event: WechatMiniprogram.PickerChange) {
     const typeIndex = Number(event.detail.value);
@@ -246,17 +253,28 @@ Page({
     if (this.data.busy || !editor) return;
     this.setData({ busy: true, saveError: '' });
     try {
-      const coachId = this.data.coaches[editor.coachIndex]?.id ?? editor.template?.coachId;
+      const [coachId] = editor.coachIds;
+      if (!coachId) throw new Error('请至少选择一位团课教练。');
+      const published = editor.template ? editor.template.enabled : editor.status === 'PUBLISHED';
+      if (published && editor.coachOptions.some(option => option.selected && !option.enabled)) {
+        throw new Error('请移除或更换已停用的教练。');
+      }
+      const type = this.data.typeOptions[editor.typeIndex];
+      const capacity = Number(editor.capacity);
+      const maxCapacity = Math.min(500, type.maxStudents * editor.coachIds.length);
+      if (!Number.isInteger(capacity) || capacity < 1 || capacity > maxCapacity) {
+        throw new Error('当前班次容量须为 1 至 ' + maxCapacity + ' 人。');
+      }
       const days = this.data.days.filter(day => day.active).map(day => day.index);
       const startMinutes = editor.time.trim().split(/[、,，\s]+/).filter(Boolean).map(parseMinutes);
-      if (!editor.title.trim() || !editor.venue.trim() || !coachId || !startMinutes.length ||
+      if (!editor.title.trim() || !editor.venue.trim() || !startMinutes.length ||
           (editor.repeat ? !days.length : startMinutes.length !== 1)) {
         throw new Error('请填写课程、训练场地、教练和有效时段。周期排课需要选择星期。');
       }
       const draft: ClassDraft = {
-        courseTypeId: this.data.typeOptions[editor.typeIndex].id,
-        title: editor.title, venue: editor.venue, coachId, date: editor.date, startMinute: startMinutes[0],
-        duration: Number(editor.duration), capacity: Number(editor.capacity), points: Number(editor.points)
+        courseTypeId: type.id,
+        title: editor.title, venue: editor.venue, coachId, coachIds: editor.coachIds, date: editor.date, startMinute: startMinutes[0],
+        duration: Number(editor.duration), capacity, points: Number(editor.points)
       };
       let message = '班次已保存';
       if (editor.template) {
@@ -287,7 +305,7 @@ Page({
       if (!await confirmAction(closing ? '停开此班次？' : '恢复此班次？', row.title + ' · ' + row.timeLabel, '确认')) return;
       const { title, venue, coachId, date, startMinute, duration, capacity, points } = row;
       await staffApi('/class-sessions/' + row.id, 'PUT', {
-        title, venue, coachId, date, startMinute, duration, capacity, points, status: closing ? 'CLOSED' : 'PUBLISHED'
+        title, venue, coachId, coachIds: assignedCoachIds(row), date, startMinute, duration, capacity, points, status: closing ? 'CLOSED' : 'PUBLISHED'
       });
       await this.refresh();
       wx.showToast({ title: closing ? '班次已停开' : '班次已恢复', icon: 'none' });

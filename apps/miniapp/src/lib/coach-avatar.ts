@@ -1,7 +1,8 @@
 import { config } from './config';
 
 export function coachLabel(name: string) {
-  return name.endsWith('教练') ? name : name + '教练';
+  return name.split('、').map(part => part.trim()).filter(Boolean)
+    .map(part => part.endsWith('教练') ? part : part + '教练').join('、');
 }
 
 export function coachIdentity(name: string, key?: string | null) {

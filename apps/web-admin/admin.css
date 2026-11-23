@@ -547,3 +547,11 @@ dialog .w-field { margin-top: 16px; }
   .login-card { width: min(390px, calc(100vw - 32px)); }
   .signin { min-height: calc(100vh - 55px); }
 }
+.coach-field { min-width: 0; margin: 0 0 11px; padding: 0; border: 0; }
+.coach-field legend { padding: 0; font-size: 13px; color: var(--muted); }
+.coach-options { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; margin-top: 4px; padding: 3px 10px; min-height: 39px; border: 1px solid #d6cbca; border-radius: 6px; background: white; }
+.coach-options label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; overflow-wrap: anywhere; cursor: pointer; }
+.coach-options input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--wine); }
+
+.capacity-field { min-width: 0; }
+.capacity-field small:not([hidden]) { display: block; margin: -6px 0 11px; }

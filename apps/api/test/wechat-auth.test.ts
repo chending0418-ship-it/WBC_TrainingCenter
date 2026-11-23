@@ -153,3 +153,44 @@ test('wechat upstream errors do not create users and login sessions expire', asy
   time = new Date(now.getTime() + 8 * 60 * 60 * 1000);
   assert.equal((await app.inject({ url: '/api/me/account', headers: headers(parent.token) })).statusCode, 401);
 });
+
+test('不同微信管理员和 Web 后台共享已保存的教练、课型和排课', async context => {
+  const db = openDatabase(':memory:');
+  const wechat = wechatLoginConfig(appId, secret, async input => {
+    assert.ok(input instanceof URL);
+    return Response.json({ openid: input.searchParams.get('js_code') });
+  });
+  const app = createApp(db, () => now, { demo: false, wechat, webAdminPassword: 'integration-test' });
+  context.after(() => app.close());
+  const staff: ReturnType<typeof headers>[] = [];
+  for (const code of ['admin-one', 'admin-two']) {
+    const identity = await login(app, code);
+    changeWechatRole(db, appId, identity.accountId, 'grant-admin', undefined, now.toISOString());
+    staff.push(headers((await select(app, identity.token, 'ADMIN')).token));
+  }
+  const base = '/wbctraining/admin/api';
+  const webLogin = await app.inject({ method: 'POST', url: base + '/session', payload: { password: 'integration-test' } });
+  const web = headers(webLogin.json().token);
+  const coach = await app.inject({ method: 'POST', url: '/api/admin/coaches', headers: staff[0],
+    payload: { name: '共享教练', pointsPerSlot: 40, points90: 55, points120: 68, requestKey: 'shared-coach' } });
+  const type = await app.inject({ method: 'POST', url: '/api/admin/course-types', headers: staff[0],
+    payload: { name: '共享课型', maxStudents: 6, refundPercent: 50, requestKey: 'shared-type' } });
+  assert.equal(coach.statusCode, 200);
+  assert.equal(type.statusCode, 200);
+  const coachId = coach.json().id;
+  const courseTypeId = type.json().id;
+  const date = '2026-11-18';
+  const added = await app.inject({ method: 'POST', url: '/api/admin/classes', headers: staff[1],
+    payload: { title: '联合训练', venue: '训练场地 A', date, startMinute: 900, duration: 60, capacity: 5,
+      points: 20, coachIds: [coachId], courseTypeId, requestKey: 'shared-class' } });
+  assert.equal(added.statusCode, 200);
+
+  for (const identity of [...staff, web]) {
+    const path = identity === web ? base : '/api/admin';
+    const types = await app.inject({ url: path + '/course-types', headers: identity });
+    assert.deepEqual(types.json(), [type.json()]);
+    const classes = await app.inject({ url: path + '/classes?date=' + date, headers: identity });
+    const [lesson] = classes.json();
+    assert.deepEqual([lesson.title, lesson.courseTypeId, lesson.coachIds], ['联合训练', courseTypeId, [coachId]]);
+  }
+});
