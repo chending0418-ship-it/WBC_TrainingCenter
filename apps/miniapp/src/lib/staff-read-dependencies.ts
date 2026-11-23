@@ -14,19 +14,20 @@ export function staffReadAffected(writePath: string, readPath: string): boolean 
     case 'accounts':
       return field === 'ledger' && (['parents', 'users'].includes(resource) ||
         (resource === 'accounts' && readId === id && !readField));
+    case 'schedule':
     case 'bookings':
-      return id !== 'quote' && (['overview', 'bookings', 'accounts', 'users', 'parents', 'classes'].includes(resource) ||
+      return id !== 'quote' && (['overview', 'bookings', 'accounts', 'users', 'parents', 'classes', 'schedule'].includes(resource) ||
         (resource === 'coaches' && readField === 'slots'));
     case 'classes':
     case 'class-sessions':
     case 'class-templates':
-      return ['classes', 'class-templates', 'overview'].includes(resource) ||
+      return ['classes', 'schedule', 'class-templates', 'overview'].includes(resource) ||
         (resource === 'coaches' && readField === 'slots');
     case 'coaches':
       if (field === 'hours' || field === 'exceptions') {
         return resource === 'coaches' && readId === id && (readField === 'hours' || readField === 'slots');
       }
-      return ['context', 'class-templates', 'classes', 'bookings', 'overview'].includes(resource) ||
+      return ['context', 'class-templates', 'classes', 'schedule', 'bookings', 'overview'].includes(resource) ||
         (resource === 'accounts' && readField === 'bookings') ||
         (resource === 'coaches' && (!readId || readId === id));
     default:

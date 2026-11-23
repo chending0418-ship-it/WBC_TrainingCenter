@@ -350,6 +350,10 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 14;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 15) return;
+    db.exec('ALTER TABLE class_sessions ADD COLUMN deleted_at TEXT; PRAGMA user_version = 15');
+  });
   return db;
 }
 

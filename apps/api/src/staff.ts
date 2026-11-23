@@ -180,6 +180,17 @@ export function registerStaffRoutes(
         return { id, ...draft };
       });
     });
+    routes.get('/schedule', async request => {
+      const query = object(request.query);
+      return schedule.lessons(dateInput(query.date), query.view === 'week' ? 7 : 1);
+    });
+    routes.delete('/schedule/:type/:id', async (request, reply) => {
+      const { type, id } = object(request.params);
+      if (type !== 'GROUP' && type !== 'PRIVATE') throw new ApiError(400, 'VALIDATION_ERROR', '无效的课程类型');
+      const { startsAt, bookedCount } = object(request.body);
+      booking.deleteLesson(type, requiredText(id), actor(request), requiredText(startsAt), integer(bookedCount, 0, 500));
+      return reply.code(204).send();
+    });
     routes.get('/classes', async request => {
       const query = object(request.query);
       return schedule.list(dateInput(query.date), query.view === 'week' ? 7 : 1);

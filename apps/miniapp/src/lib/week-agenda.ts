@@ -30,7 +30,7 @@ export function adjacentWeek(date: string, step: number, today: string, last: st
   return start < today ? today : start;
 }
 
-export function goToAgendaDay(date: string, count: number) {
+export function goToAgendaDay(date: string, count: number, emptyLabel = '暂无团课') {
   if (count) wx.pageScrollTo({ selector: '#agenda-' + date, duration: 220 });
-  else wx.showToast({ title: dateLabel(date) + '暂无团课', icon: 'none' });
+  else wx.showToast({ title: dateLabel(date) + emptyLabel, icon: 'none' });
 }

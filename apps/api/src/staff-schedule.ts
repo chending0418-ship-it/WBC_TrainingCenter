@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { ClassDraft, ClassPlan, ClassStatus, CoachHours, ManagedClass, ManagedTemplate, MinuteWindow } from '../../../packages/shared/contracts.js';
+import type { ClassDraft, ClassPlan, ClassStatus, CoachHours, ManagedClass, ManagedLesson, ManagedTemplate, MinuteWindow } from '../../../packages/shared/contracts.js';
 import { ApiError, templateAllowsBooking } from './booking.ts';
 import { assignedCoaches, saveExtras, sessionRoster, templateRoster } from './class-coaches.ts';
 import { audit, transaction } from './database.ts';
@@ -48,12 +48,12 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
         (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS bookedCount
       FROM class_sessions s
       LEFT JOIN course_types t ON t.id = s.course_type_id
-      WHERE s.starts_at >= ? AND s.starts_at < ?
+      WHERE s.deleted_at IS NULL AND s.starts_at >= ? AND s.starts_at < ?
       ORDER BY s.starts_at, s.title
     `).all(dateAt(firstDate), dateAt(addDays(firstDate, days))) as unknown as StoredOccurrence[];
     const attendees = db.prepare(`
       SELECT b.user_id AS userId, c.name AS childName FROM bookings b
-      JOIN children c ON c.guardian_id = b.user_id WHERE b.class_id = ? AND b.status = 'CONFIRMED'
+      JOIN children c ON c.guardian_id = b.user_id WHERE b.class_id = ? AND b.status = 'CONFIRMED' AND b.approval_pending = 0
       ORDER BY b.created_at
     `);
     return rows.map(row => {
@@ -62,6 +62,19 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       return { ...row, coachIds: JSON.parse(row.coachIds), date, startMinute, duration: minuteOfDay(row.endsAt, date) - startMinute, bookable: !!row.bookable,
         attendees: attendees.all(row.id) as ManagedClass['attendees'] };
     });
+  }
+
+  function lessons(firstDate: string, days: number): ManagedLesson[] {
+    const groups = list(firstDate, days).map(row => ({ ...row, type: 'GROUP' as const }));
+    const privateLessons = db.prepare(`
+      SELECT 'PRIVATE' AS type, b.id, b.title, b.venue, b.coach_id AS coachId, c.name AS coachName,
+        b.starts_at AS startsAt, b.ends_at AS endsAt, child.name AS childName
+      FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.guardian_id = b.user_id
+      WHERE b.type = 'PRIVATE' AND b.status = 'CONFIRMED' AND b.approval_pending = 0
+        AND b.starts_at >= ? AND b.starts_at < ? ORDER BY b.starts_at, b.id
+    `).all(dateAt(firstDate), dateAt(addDays(firstDate, days))) as unknown as Omit<Extract<ManagedLesson, { type: 'PRIVATE' }>, 'date'>[];
+    return [...groups, ...privateLessons.map(row => ({ ...row, date: venueDate(row.startsAt) }))]
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   }
 
   function requireFuture(startsAt: string, now: string) {
@@ -198,7 +211,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       const now = clock().toISOString();
       const current = db.prepare(`
         SELECT s.*, ${sessionRoster.ids} AS coachIds, (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS booked
-        FROM class_sessions s WHERE s.id = ?
+        FROM class_sessions s WHERE s.id = ? AND s.deleted_at IS NULL
       `).get(id);
       if (!current) throw new ApiError(404, 'NOT_FOUND', '未找到该班次');
       requireFuture(String(current.starts_at), now);
@@ -236,7 +249,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       if (current.booked) {
         // Active bookings, including pending approvals, follow the class and keep their original financial terms.
         db.prepare(`
-          UPDATE bookings SET coach_id = ?, group_coach_names = (SELECT ${sessionRoster.names} FROM class_sessions s WHERE s.id = ?),
+          UPDATE bookings SET coach_id = ?, group_coach_names = (SELECT ${sessionRoster.names} FROM class_sessions s WHERE s.id = ? AND s.deleted_at IS NULL),
             title = ?, venue = ?, starts_at = ?, ends_at = ? WHERE class_id = ? AND status = 'CONFIRMED'
         `).run(draft.coachId, id, draft.title, draft.venue, startsAt, endsAt, id);
       }
@@ -307,5 +320,5 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  return { list, add, update, templates, reviseTemplate, roll, hours, saveHours, block, unblock };
+  return { list, lessons, add, update, templates, reviseTemplate, roll, hours, saveHours, block, unblock };
 }

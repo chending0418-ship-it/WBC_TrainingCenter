@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
-import type { Account, Booking, BookingSelection, ManagedCoach, PrivateSlot, PublicSchedule, Registration, Schedule } from '../../../packages/shared/contracts.js';
+import type { Account, Booking, BookingSelection, ManagedLesson, ManagedCoach, PrivateSlot, PublicSchedule, Registration, Schedule } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
 import { openDatabase, seedDemo } from '../src/database.ts';
 import { addDays, dateAt } from '../src/time.ts';
@@ -157,6 +157,78 @@ test('另一个家长看到四人团课的实际占位，确认私教不影响�
   await checkSeats(1);
 });
 
+test('管理员课程日程只显示已确认队员，保留待审占位并隔离家长权限', async context => {
+  const { app } = fixture(context, ':memory:', () => new Date(dateAt(date)));
+  const parent = await login(app);
+  const admin = await adminSession(app);
+  const path = '/api/admin/schedule?date=' + date + '&view=week';
+  assert.ok([401, 403].includes((await app.inject({ url: path, headers: parent })).statusCode));
+  async function schedule() {
+    const response = await app.inject({ url: path, headers: admin });
+    assert.equal(response.statusCode, 200);
+    return response.json<ManagedLesson[]>();
+  }
+  const groupBooking = (await book(app, parent, group, 'group-roster')).json<Booking>();
+  const privateBooking = (await book(app, parent, privateTraining(1050, 1110), 'private-roster')).json<Booking>();
+  async function check(occupied: number, confirmed: boolean) {
+    const lessons = await schedule();
+    const lesson = lessons.find(row => row.id === group.classSessionId);
+    assert.ok(lesson?.type === 'GROUP');
+    assert.equal(lesson.bookedCount, occupied);
+    assert.deepEqual(lesson.attendees.map(person => person.childName), confirmed ? ['陈同学'] : []);
+    const personal = lessons.find(row => row.id === privateBooking.id);
+    if (confirmed) {
+      assert.ok(personal?.type === 'PRIVATE');
+      assert.equal(personal.childName, '陈同学');
+    } else assert.equal(personal, undefined);
+  }
+  await check(1, false);
+  for (const booking of [groupBooking, privateBooking]) {
+    assert.equal((await app.inject({ method: 'POST', headers: admin, url: '/api/admin/bookings/' + booking.id + '/approve' })).statusCode, 204);
+  }
+  await check(1, true);
+  for (const booking of [groupBooking, privateBooking]) {
+    assert.equal((await app.inject({ method: 'DELETE', headers: admin, url: '/api/admin/bookings/' + booking.id })).statusCode, 204);
+  }
+  await check(0, false);
+});
+
+test('删除单节周期团课会在一次事务中全退已扣积分、释放预留，重试或补排不会重复处理', async context => {
+  const { app, db } = fixture(context);
+  const admin = await adminSession(app);
+  const parent = await login(app);
+  const other = await login(app, 'other-parent');
+  const plan = { title: '测试周期课', venue: '训练场地', date, coachId: 'li', weekdays: [2],
+    startMinutes: [540], startMinute: 540, duration: 30, capacity: 4, points: 12, requestKey: 'weekly' };
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/classes', headers: admin, payload: plan })).statusCode, 200);
+  const classes = async () => (await app.inject({ url: '/api/admin/schedule?date=' + date, headers: admin })).json<ManagedLesson[]>();
+  const lesson = (await classes()).find(row => row.title === plan.title)!;
+  const selection = { type: 'GROUP', classSessionId: lesson.id } as const;
+  const pending = await book(app, parent, selection, 'held');
+  assert.equal(pending.statusCode, 200);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
+    payload: { ...selection, userId: 'other-parent', requestKey: 'paid' } })).statusCode, 200);
+  assert.equal((await account(app, other)).balance, 308);
+  const del = (bookedCount: number, headers = admin) => app.inject({ method: 'DELETE', url: '/api/admin/schedule/GROUP/' + lesson.id,
+    headers, payload: { startsAt: lesson.startsAt, bookedCount } });
+  assert.ok([401, 403].includes((await del(2, parent)).statusCode));
+  assert.equal((await del(1)).statusCode, 409);
+  assert.equal((await account(app, parent)).reservedPoints, 12);
+  for (let attempt = 0; attempt < 2; attempt++) assert.equal((await del(2)).statusCode, 204);
+  assert.equal((await account(app, other)).balance, 320);
+  assert.equal((await account(app, parent)).reservedPoints, 0);
+  assert.equal((await account(app, parent)).balance, 320);
+  assert.deepEqual(db.prepare("SELECT delta FROM ledger WHERE source = 'BOOKING_REFUND'").all().map(row => row.delta), [12]);
+  for (const headers of [parent, other]) {
+    const bookings = (await app.inject({ url: '/api/me/bookings', headers })).json<Booking[]>();
+    assert.deepEqual(bookings.map(row => [row.status, row.refundPoints]), [['CANCELLED', headers === parent ? 0 : 12]]);
+  }
+  assert.ok(!(await classes()).some(row => row.id === lesson.id));
+  assert.equal((await book(app, parent, selection, 'late')).statusCode, 404);
+  const nextWeek = (await app.inject({ url: '/api/admin/schedule?date=' + addDays(date, 7), headers: admin })).json<ManagedLesson[]>();
+  assert.equal(nextWeek.filter(row => row.title === plan.title).length, 1);
+});
+
 test('两端同时审核时，拒绝操作不会取消已被另一端确认的预约', async context => {
   const { app } = fixture(context);
   const parent = await login(app);
@@ -283,6 +355,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
     ALTER TABLE bookings DROP COLUMN group_coach_names;
     ALTER TABLE coaches DROP COLUMN points_90;
     ALTER TABLE coaches DROP COLUMN points_120;
+    ALTER TABLE class_sessions DROP COLUMN deleted_at;
     PRAGMA user_version = 12;
   `);
   old.prepare(`INSERT INTO bookings (id, user_id, type, coach_id, title, venue, starts_at, ends_at, points,
@@ -301,7 +374,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   first.close();
 
   const { app, db } = fixture(context, path);
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 14);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 15);
   const admin = await adminSession(app);
   const parent = await login(app);
   const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();
@@ -497,6 +570,7 @@ test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
     ALTER TABLE bookings DROP COLUMN group_coach_names;
     ALTER TABLE coaches DROP COLUMN points_90;
     ALTER TABLE coaches DROP COLUMN points_120;
+    ALTER TABLE class_sessions DROP COLUMN deleted_at;
     PRAGMA user_version = 10;
     INSERT INTO users VALUES ('legacy'), ('incomplete');
     INSERT INTO children (guardian_id,name,birth_month,gender) VALUES ('legacy','队员','2015-06','MALE'),('incomplete','待补全',NULL,NULL);

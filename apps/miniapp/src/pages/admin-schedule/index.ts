@@ -1,14 +1,14 @@
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 import { coachLabel } from '../../lib/coach-avatar';
 import { assignedCoachIds, changeClassCoaches, classCoachEditor } from '../../lib/class-coaches';
-import { allowPage, hasFreshRead } from '../../lib/session';
-import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedClass, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
+import { allowPage, hasFreshRead, invalidateRead } from '../../lib/session';
+import type { ClassDraft, ClassStatus, Coach, CoachHours, CourseType, ManagedLesson, ManagedTemplate } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { mondayOfWeek } from '../../lib/private-availability';
 import { timeRange } from '../../lib/display';
 import { confirmAction, dayOfWeek, minuteString, parseMinutes, staffApi, staffContext, staffWrite, weekdays } from '../../lib/staff';
 
-type ClassRow = ManagedClass & { timeLabel: string; coachLabel: string; names: string; editable: boolean };
+type ClassRow = ManagedLesson & { timeLabel: string; coachLabel: string; names: string; editable: boolean };
 type TemplateRow = ManagedTemplate & { timetable: string; coachLabel: string };
 type WeeklyHours = { weekday: number; label: string; windows: CoachHours['windows']; summary: string };
 type TypeOption = { id: string | null; label: string; maxStudents: number };
@@ -50,6 +50,7 @@ Page({
     const firstShow = !this.data.authorized;
     this.setData({ authorized });
     if (authorized && firstShow) void this.load();
+    else if (authorized && this.data.mode === 'classes' && !this.data.editor) void this.refresh(true);
   },
   async load() {
     this.setData({ loading: true, loadError: '' });
@@ -65,24 +66,25 @@ Page({
       }
       this.initialCoachId = '';
       this.setData({ today, lastDate, coaches, coachIndex, date: this.data.date || today, typeOptions: [untyped, ...options] });
-      await this.refresh();
+      await this.refresh(true);
     } catch (error) {
       this.setData({ loading: false, loadError: errorMessage(error) });
     }
   },
   shownPath: '',
-  async refresh() {
+  async refresh(fresh = false) {
     const current = ++request;
     const { date, mode, coaches, coachIndex } = this.data;
     if (!date) return;
     const coach = coaches[coachIndex];
     const monday = mondayOfWeek(date);
-    const path = mode === 'classes' ? '/classes?date=' + monday + '&view=week'
+    const path = mode === 'classes' ? '/schedule?date=' + monday + '&view=week'
       : mode === 'templates' ? '/class-templates' : coach ? '/coaches/' + coach.id + '/hours?date=' + monday + '&view=week' : '';
+    if (fresh && mode === 'classes') invalidateRead('/api/admin' + path);
     this.setData({ loading: Boolean(path && path !== this.shownPath && !hasFreshRead('/api/admin' + path)), loadError: '', dayLabel: weekdays[dayOfWeek(date)] });
     try {
       if (mode === 'classes') {
-        const classes = await staffApi<ManagedClass[]>(path);
+        const classes = await staffApi<ManagedLesson[]>(path);
         const now = new Date().toISOString();
         if (current !== request) return;
         const byDate = new Map<string, ClassRow[]>();
@@ -90,7 +92,7 @@ Page({
           const day = byDate.get(row.date) ?? [];
           day.push({ ...row, timeLabel: timeRange(row.startsAt, row.endsAt), coachLabel: coachLabel(row.coachName),
             editable: row.startsAt > now,
-            names: row.attendees.map(attendee => attendee.childName).join('、') });
+            names: row.type === 'PRIVATE' ? row.childName : row.attendees.map(attendee => attendee.childName).join('、') });
           byDate.set(row.date, day);
         }
         this.setData(weekAgenda(date, this.data.today, this.data.lastDate, byDate));
@@ -142,14 +144,15 @@ Page({
     const day = this.data.dates.find(item => item.date === event.currentTarget.dataset.date);
     if (!day || day.outside || this.data.busy) return;
     if (day.date >= this.data.today) this.setData({ date: day.date });
-    goToAgendaDay(day.date, day.count);
+    goToAgendaDay(day.date, day.count, '暂无课程');
   },
   toggleDetails(event: WechatMiniprogram.TouchEvent) {
     const id = String(event.currentTarget.dataset.id);
     if (!this.data.busy) this.setData({ expandedId: this.data.expandedId === id ? '' : id });
   },
   findClass(id: string) {
-    return this.data.groups.flatMap(day => day.lessons).find(item => item.id === id);
+    const row = this.data.groups.flatMap(day => day.lessons).find(item => item.id === id);
+    return row?.type === 'GROUP' ? row : undefined;
   },
   changeDate(event: WechatMiniprogram.PickerChange) {
     if (this.data.date === String(event.detail.value)) return;
@@ -294,6 +297,25 @@ Page({
       this.setData({ saveError: error instanceof Error ? error.message : errorMessage(error) });
     } finally {
       this.setData({ busy: false });
+    }
+  },
+  async deleteLesson(event: WechatMiniprogram.TouchEvent) {
+    const id = String(event.currentTarget.dataset.id);
+    const row = this.data.groups.flatMap(day => day.lessons).find(item => item.id === id);
+    if (this.data.busy || !row) return;
+    const bookedCount = row.type === 'PRIVATE' ? 1 : row.bookedCount;
+    this.setData({ busy: true, saveError: '' });
+    try {
+      const message = row.title + ' · ' + row.date + ' ' + row.timeLabel + '。将取消 ' + bookedCount + ' 笔预约，已扣积分全额退回。';
+      if (!await confirmAction('删除这节课？', message, '删除课程')) return;
+      await staffApi('/schedule/' + row.type + '/' + row.id, 'DELETE', { startsAt: row.startsAt, bookedCount });
+      wx.showToast({ title: '课程已删除', icon: 'none' });
+      this.setData({ expandedId: '' });
+    } catch (error) {
+      this.setData({ saveError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+      await this.refresh(true);
     }
   },
   async toggleClass(event: WechatMiniprogram.TouchEvent) {

@@ -52,7 +52,7 @@ export function notifyRegistration(db: DatabaseSync, row: Registration, now: str
 }
 
 export function notifyBooking(db: DatabaseSync, id: string, kind: BookingEvent, now: string) {
-  if (kind === 'BOOKING_CONFIRMED' || kind === 'BOOKING_REJECTED') supersede(db, 'BOOKING_SUBMITTED:' + id, now);
+  if (kind !== 'BOOKING_SUBMITTED') supersede(db, 'BOOKING_SUBMITTED:' + id, now);
   if (kind === 'BOOKING_CANCELLED') supersede(db, 'BOOKING_CONFIRMED:' + id, now);
   const row = db.prepare(`
     SELECT b.user_id AS userId, c.name AS childName, b.title, b.venue, b.starts_at AS startsAt
