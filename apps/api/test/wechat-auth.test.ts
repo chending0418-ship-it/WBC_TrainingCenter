@@ -89,9 +89,18 @@ test('wechat login uses server config, binds existing identities and issues role
     INSERT INTO class_sessions (id, coach_id, title, venue, starts_at, ends_at, points, capacity)
     VALUES ('real-login-class', ?, '棒球课', '训练室 A', ?, ?, 10, 4)
   `).run(coachId, dateAt('2026-11-18', 960), dateAt('2026-11-18', 990));
+  const reviewPath = '/api/admin/registrations/' + first.accountId + '/review';
+  const { registration } = (await app.inject({ url: '/api/me/registration', headers: headers(parent.token) })).json();
+  assert.equal(registration.status, 'PENDING');
+  const approve = { decision: 'APPROVE', revision: registration.revision };
+  const staffBooking = { type: 'GROUP', classSessionId: 'real-login-class', userId: first.accountId, requestKey: 'same-account-booking' };
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: headers(admin.token), payload: staffBooking })).json().code,
+    'REGISTRATION_REQUIRED');
+  assert.equal((await app.inject({ method: 'POST', url: reviewPath, headers: headers(parent.token), payload: approve })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: reviewPath, headers: headers(admin.token), payload: approve })).json().status, 'APPROVED');
   const ownBooking = await app.inject({
     method: 'POST', url: '/api/admin/bookings', headers: headers(admin.token),
-    payload: { type: 'GROUP', classSessionId: 'real-login-class', userId: first.accountId, requestKey: 'same-account-booking' }
+    payload: staffBooking
   });
   assert.equal(ownBooking.statusCode, 200);
   assert.equal(ownBooking.json().status, 'CONFIRMED');

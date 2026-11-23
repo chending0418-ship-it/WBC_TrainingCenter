@@ -12,7 +12,7 @@
       <view wx:if="{{reservedPoints}}">{{reservedPoints}} 积分为待确认预约预留</view>
     </view>
     <navigator class="picker profile" url="/pages/child/index" hover-class="press">
-      <text>孩子资料</text><text class="accent">{{childName ? childName + ' · 编辑' : '填写资料'}}</text>
+      <text>队员注册</text><text class="accent">{{registrationLabel}}</text>
     </navigator>
     <navigator class="picker profile" url="/pages/contact/index" hover-class="press">
       <text>联系人资料</text><text class="accent">查看与编辑</text>

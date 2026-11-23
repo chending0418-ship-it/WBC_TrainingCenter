@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
-import type { Account, Booking, BookingSelection, PrivateSlot, Schedule } from '../../../packages/shared/contracts.js';
+import type { Account, Booking, BookingSelection, PrivateSlot, PublicSchedule, Registration, Schedule } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
 import { openDatabase } from '../src/database.ts';
 import { addDays, dateAt } from '../src/time.ts';
@@ -46,6 +46,35 @@ async function account(app: FastifyInstance, headers: Awaited<ReturnType<typeof 
   assert.equal(response.statusCode, 200);
   return response.json<Account>();
 }
+
+test('游客只看到已发布的团课安排，报名满员和私教预约不改变公开结果', async context => {
+  const { app, db } = fixture(context);
+  db.prepare('UPDATE class_sessions SET capacity = 1 WHERE id = ?').run(group.classSessionId);
+  const readPublic = async () => {
+    const response = await app.inject({ url: '/api/public/schedule' });
+    assert.equal(response.statusCode, 200);
+    return response.json<PublicSchedule>();
+  };
+  const before = await readPublic();
+  assert.deepEqual(Object.keys(before).sort(), ['courses', 'lastDate', 'today']);
+  assert.ok(before.courses.some(course => course.id === group.classSessionId));
+  for (const course of before.courses) {
+    assert.deepEqual(Object.keys(course).sort(), ['coachName', 'courseTypeName', 'endsAt', 'id', 'startsAt', 'title', 'venue']);
+  }
+
+  const parent = await login(app);
+  assert.equal((await book(app, parent, group, 'full-group')).statusCode, 200);
+  assert.equal((await book(app, parent, privateTraining(1050, 1110), 'private-lesson')).statusCode, 200);
+  assert.deepEqual(await readPublic(), before);
+  for (const url of ['/api/schedule?view=week', '/api/coaches/li/slots?date=' + date, '/api/me/bookings']) {
+    assert.equal((await app.inject({ url })).statusCode, 401);
+  }
+  for (const url of ['/api/bookings/quote', '/api/bookings']) {
+    assert.equal((await app.inject({ method: 'POST', url, payload: group })).statusCode, 401);
+  }
+  db.prepare("UPDATE class_sessions SET status = 'CLOSED' WHERE id = ?").run(group.classSessionId);
+  assert.ok(!(await readPublic()).courses.some(course => course.id === group.classSessionId));
+});
 
 test('团课申请保留积分，管理员确认才扣分，重试不会重复扣分', async context => {
   const directory = mkdtempSync(join(tmpdir(), 'wbc-booking-'));
@@ -126,6 +155,19 @@ test('另一个家长看到四人团课的实际占位，确认私教不影响�
   await checkSeats(0);
   await applyAndDecide(group, 'second-group', 'approve', 1);
   await checkSeats(1);
+});
+
+test('两端同时审核时，拒绝操作不会取消已被另一端确认的预约', async context => {
+  const { app } = fixture(context);
+  const parent = await login(app);
+  const admin = await adminSession(app);
+  const reservation = await book(app, parent, { ...group, classSessionId: addDays(date, 1) + '-strength' }, 'review-race');
+  assert.equal(reservation.statusCode, 200);
+  const path = '/api/admin/bookings/' + reservation.json<Booking>().id;
+  assert.equal((await app.inject({ method: 'POST', url: path + '/approve', headers: admin })).statusCode, 204);
+  assert.equal((await app.inject({ method: 'POST', url: path + '/reject', headers: admin })).statusCode, 409);
+  const history = await app.inject({ url: '/api/me/bookings', headers: parent });
+  assert.equal(history.json<Booking[]>()[0].status, 'CONFIRMED');
 });
 
 test('多个请求争抢最后一个团课名额，仅一笔可以预留', async context => {
@@ -242,6 +284,12 @@ test('资料和积分校验失败无占用，账户读取与孩子资料按会�
   }
   assert.deepEqual((await app.inject({ url: profileUrl, headers: other })).json(), { child: { name: '张同学', birthMonth: '2017-03', gender: 'FEMALE' } });
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM children WHERE guardian_id = 'new-parent'").get()?.count, 1);
+  const admin = await adminSession(app);
+  const queue = (await app.inject({ url: '/api/admin/registrations', headers: admin })).json<Registration[]>();
+  assert.equal(queue.length, 1);
+  const reviewUrl = '/api/admin/registrations/new-parent/review';
+  const approved = await app.inject({ method: 'POST', url: reviewUrl, headers: admin, payload: { decision: 'APPROVE', revision: queue[0].revision } });
+  assert.equal(approved.statusCode, 200);
   db.prepare(`
     INSERT INTO ledger (user_id, source, delta, reason, created_at)
     VALUES ('new-parent', 'TEST', -270, '测试余额', ?)
@@ -257,6 +305,68 @@ test('资料和积分校验失败无占用，账户读取与孩子资料按会�
   const available = await account(app, parent);
   assert.ok([0, 10].includes(available.balance - available.reservedPoints));
   assert.equal((await account(app, other)).balance, 320);
+});
+
+test('注册退回、重新提交和重复审核保持同一申请版本及预约资格', async context => {
+  const { app, db } = fixture(context);
+  const parent = await login(app, 'new-parent');
+  const admin = await adminSession(app);
+  const url = '/api/me/registration';
+  const reviewUrl = '/api/admin/registrations/new-parent/review';
+  const child = { name: '小禾', birthMonth: '2016-08', gender: 'MALE' };
+  const contact = { name: '林女士', phone: '13800000021' };
+  const submit = (payload: object) => app.inject({ method: 'PUT', url, headers: parent, payload });
+  const review = (payload: object) => app.inject({ method: 'POST', url: reviewUrl, headers: admin, payload });
+  const search = async (status: string) => (await app.inject({ url: '/api/admin/parents?q=0021&status=' + status, headers: admin })).json();
+  assert.equal((await app.inject({ url: '/api/admin/registrations', headers: parent })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'PUT', url, payload: { child } })).statusCode, 401);
+  const draft = { child, contact };
+  const pending = (await submit(draft)).json<Registration>();
+  assert.equal(pending.status, 'PENDING');
+  assert.equal((await submit(draft)).json().revision, pending.revision);
+  assert.equal((await search('APPROVED')).length, 0);
+  assert.equal((await search('PENDING'))[0].reservedPoints, 0);
+  for (const selection of [group, privateTraining(1050, 1110)]) {
+    assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/quote', headers: parent, payload: selection })).json().code, 'REGISTRATION_REQUIRED');
+    assert.equal((await book(app, parent, selection, 'needs-review')).json().code, 'REGISTRATION_REQUIRED');
+  }
+  const returned = { decision: 'RETURN', reason: '请核对出生年月', revision: pending.revision };
+  assert.equal((await review({ ...returned, reason: ' ' })).statusCode, 400);
+  const firstReview = (await review(returned)).json<Registration>();
+  assert.equal(firstReview.reason, returned.reason);
+  assert.equal((await review(returned)).json().revision, firstReview.revision);
+  assert.equal((await review({ decision: 'APPROVE', revision: pending.revision })).statusCode, 409);
+  assert.equal((await submit({ ...draft, revision: pending.revision })).statusCode, 409);
+  const correction = { ...draft, child: { ...child, birthMonth: '2016-09' }, revision: firstReview.revision };
+  const updated = (await submit(correction)).json<Registration>();
+  assert.equal(updated.status, 'PENDING');
+  assert.notEqual(updated.revision, pending.revision);
+  assert.equal((await review(returned)).statusCode, 409);
+  const approved = (await review({ decision: 'APPROVE', revision: updated.revision })).json<Registration>();
+  assert.equal(approved.child.birthMonth, '2016-09');
+  assert.equal((await search('APPROVED'))[0].registrationStatus, 'APPROVED');
+  assert.equal((await book(app, parent, group, 'approved')).statusCode, 200);
+  assert.equal((await search('APPROVED'))[0].reservedPoints, 40);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM audit_logs WHERE entity_id = 'new-parent' AND action LIKE 'REGISTRATION_%'").get()?.n, 4);
+});
+
+test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
+  const directory = mkdtempSync(join(tmpdir(), 'wbc-registration-'));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, 'old.sqlite');
+  const previous = openDatabase(path);
+  previous.exec(`
+    DROP TABLE registrations;
+    PRAGMA user_version = 10;
+    INSERT INTO users VALUES ('legacy'), ('incomplete');
+    INSERT INTO children (guardian_id,name,birth_month,gender) VALUES ('legacy','队员','2015-06','MALE'),('incomplete','待补全',NULL,NULL);
+  `);
+  previous.close();
+  const upgraded = openDatabase(path);
+  try {
+    assert.deepEqual([...upgraded.prepare('SELECT user_id, status FROM registrations').all()].map(row => ({ ...row })),
+      [{ user_id: 'legacy', status: 'APPROVED' }]);
+  } finally { upgraded.close(); }
 });
 
 test('上海日期滚动后补齐第 30 天，已开课或停开的班次无法预约', async context => {
@@ -299,7 +409,7 @@ test('待确认的申请到开课时释放预留积分，之后不能确认或�
   assert.deepEqual(result.ledger.map(entry => entry.delta), [320]);
 });
 
-test('生产模式健康检查可用，业务需要登录，不注册演示入口或生成种子数据', async context => {
+test('生产模式开放公开课表，角色课表需要登录，不注册演示入口或生成种子数据', async context => {
   let current = now();
   const db = openDatabase(':memory:');
   const app = createApp(db, () => current, { demo: false });
@@ -312,6 +422,9 @@ test('生产模式健康检查可用，业务需要登录，不注册演示入�
     assert.equal((await app.inject({ method: 'POST', url, payload })).statusCode, 404);
   }
   assert.equal((await app.inject({ url: '/api/dev/coach-profiles' })).statusCode, 404);
+  const publicSchedule = await app.inject({ url: '/api/public/schedule' });
+  assert.equal(publicSchedule.statusCode, 200);
+  assert.deepEqual(publicSchedule.json(), { today: date, lastDate: addDays(date, 29), courses: [] });
   for (const url of ['/api/schedule', '/api/admin/overview', '/api/coach/me/schedule']) {
     assert.equal((await app.inject({ url })).statusCode, 401);
   }

@@ -36,7 +36,7 @@
   border-radius: 20rpx;
 }
 .week-head { display: flex; align-items: center; justify-content: space-between; padding-left: 12rpx; }
-.week-caption { font-size: 36rpx; line-height: 1.3; font-weight: 650; }
+.week-caption { font-size: 19px; line-height: 1.3; font-weight: 650; }
 .week-picker { display: flex; align-items: center; gap: 12rpx; min-height: 70rpx; }
 .picker-caret { width: 0; height: 0; border: 8rpx solid transparent; border-bottom: 0; border-top-color: #f0e4e5; }
 .week-nav { display: flex; }
@@ -60,7 +60,7 @@
 .stamp-number { font-size: 42rpx; font-weight: 650; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .stamp-weekday { color: #66595c; font-size: 23rpx; }
 .stamp-today .stamp-number, .stamp-today .stamp-weekday { color: #761f32; }
-.agenda-card { box-sizing: border-box; min-width: 0; background: #fff; border: 1rpx solid #ded5d3; border-left: 5rpx solid #c79eaa; border-radius: 12rpx; padding: 13rpx 18rpx; }
+.agenda-card { box-sizing: border-box; min-width: 0; background: #fff; border: 1rpx solid #ded5d3; border-left: 1px solid #d5c4c5; border-radius: 12rpx; padding: 13rpx 18rpx; }
 .agenda-card + .agenda-card { margin-top: 9rpx; }
 .agenda-time { color: #761f32; font-size: 26rpx; line-height: 1.4; font-weight: 650; font-variant-numeric: tabular-nums; }
 .agenda-name { display: block; margin: 3rpx 0; font-size: 31rpx; line-height: 1.35; font-weight: 650; overflow-wrap: anywhere; }
@@ -77,3 +77,5 @@
 .agenda-details .item-actions { margin: 12rpx 0 0; }
 .agenda-closed { background: #f0eae8; border-left-color: #d5c4c5; }
 .calendar-page .new-class[disabled] { color: #6c6063; background: #ede7e5; }
+
+.calendar-page .calendar-heading { margin-bottom: 8px; }

@@ -1,19 +1,21 @@
 .balance {
-  padding: 32rpx;
-  border-radius: 24rpx;
+  padding: 15px 17px;
+  border-radius: 11px;
   background: #761f32;
   color: #fff;
 }
 
 .balance-number {
   display: block;
-  margin-top: 4rpx;
-  font-size: 72rpx;
+  margin: 2px 0 5px;
+  font-size: 36px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 
 .profile {
-  margin-top: 24rpx;
+  margin-top: 9px;
 }
+
+.balance > view:last-child:not(:first-child) { font-size: 13px; color: #f8e9ec; }

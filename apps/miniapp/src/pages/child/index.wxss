@@ -1,0 +1,8 @@
+@import "../../registration/review.wxss";
+
+.enrollment .form-field text, .enrollment .form-field input { display: block; }
+.enrollment .form-field input { width: 100%; }
+.registration-pickers { border: 1px solid #ded5d3; border-radius: 10px; overflow: hidden; background: white; }
+.registration-pickers .picker { border: 0; border-radius: 0; margin: 0; }
+.registration-pickers picker + picker .picker { border-top: 1px solid #e6dfdc; }
+.registration-pickers picker > .picker::after { display: none; }

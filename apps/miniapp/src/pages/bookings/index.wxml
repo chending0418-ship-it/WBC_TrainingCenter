@@ -1,7 +1,7 @@
 <template name="bookingCard">
   <view class="lesson-card">
-    <view class="card-head"><text class="card-title">{{item.title}}</text><text class="card-state">{{item.label}}</text></view>
-    <view class="card-time">{{item.hours}}</view>
+    <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state">{{item.label}}</text></view>
+        <view class="card-head"><text class="card-title">{{item.title}}</text></view>
     <view class="card-note">{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.coachName}}教练 · {{item.venue}}</view>
     <view class="card-footer">{{item.points}} 积分</view>
     <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="card-note">已退回 {{item.refundPoints}} 积分</view>

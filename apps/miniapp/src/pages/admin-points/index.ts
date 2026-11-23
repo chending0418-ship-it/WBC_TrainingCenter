@@ -7,9 +7,9 @@ import { confirmAction, staffApi, staffWrite } from '../../lib/staff';
 type Entry = StaffAccount['ledger'][number] & { dateLabel: string; deltaLabel: string; bookingLabel: string; canReverse: boolean };
 
 const operations = {
-  OFFLINE_CREDIT: { action: '确认入账', success: '积分已入账' },
+  OFFLINE_CREDIT: { action: '确认充值', success: '积分已充值' },
   ADJUSTMENT: { action: '确认调整', success: '积分已调整' },
-  REVERSAL: { action: '确认冲正', success: '流水已冲正' }
+  REVERSAL: { action: '确认撤销', success: '记录已撤销' }
 };
 const emptyForm = { points: '', reason: '', reference: '', saveError: '', bookingIndex: 0, direction: 1, original: null };
 let request = 0;
@@ -19,6 +19,7 @@ Page({
     authorized: false,
     ...emptyForm,
     original: null as Entry | null,
+    reversalReason: '', reversalError: '',
     users: [] as (ManagedUser & { label: string })[],
     targetUserId: '',
     userIndex: 0,
@@ -27,7 +28,7 @@ Page({
     error: '',
     balance: 0,
     reservedPoints: 0,
-    source: 'OFFLINE_CREDIT' as StaffLedgerSource,
+    source: 'OFFLINE_CREDIT' as Exclude<StaffLedgerSource, 'REVERSAL'>,
     action: operations.OFFLINE_CREDIT.action,
     bookings: [] as { id: string; label: string }[],
     ledger: [] as Entry[]
@@ -112,11 +113,31 @@ Page({
   startReversal(event: WechatMiniprogram.TouchEvent) {
     const entry = this.data.ledger.find(row => row.id === Number(event.currentTarget.dataset.id));
     if (this.data.busy || !entry?.canReverse) return;
-    this.setData({ ...emptyForm, source: 'REVERSAL', action: operations.REVERSAL.action, original: entry });
-    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+    this.setData({ original: entry, reversalReason: '', reversalError: '' });
   },
   closeReversal() {
-    if (!this.data.busy) this.setData({ ...emptyForm, source: 'OFFLINE_CREDIT', action: operations.OFFLINE_CREDIT.action });
+    if (!this.data.busy) this.setData({ original: null, reversalReason: '', reversalError: '' });
+  },
+  changeReversalReason(event: WechatMiniprogram.Input) {
+    this.setData({ reversalReason: event.detail.value, reversalError: '' });
+  },
+  async reverse() {
+    const { original, users, userIndex, busy, reversalReason } = this.data;
+    const user = users[userIndex];
+    if (busy || !original || !user) return;
+    const reason = reversalReason.trim();
+    if (!reason) return this.setData({ reversalError: '请填写撤销原因。' });
+    this.setData({ busy: true, reversalError: '' });
+    try {
+      await staffWrite('/accounts/' + user.id + '/ledger', { source: 'REVERSAL', reason, reference: '', reversalOf: original.id });
+      this.setData({ original: null, reversalReason: '' });
+      await this.refreshAccount();
+      wx.showToast({ title: operations.REVERSAL.success, icon: 'success' });
+    } catch (error) {
+      this.setData({ reversalError: errorMessage(error) });
+    } finally {
+      this.setData({ busy: false });
+    }
   },
   changeField(event: WechatMiniprogram.Input) {
     const field = event.currentTarget.dataset.field as 'points' | 'reason' | 'reference';
@@ -125,16 +146,16 @@ Page({
   async save() {
     const user = this.data.users[this.data.userIndex];
     const { source, original, action } = this.data;
-    if (this.data.busy || !user || (source === 'REVERSAL' && !original)) return;
+    if (this.data.busy || !user || original) return;
     const points = Number(this.data.points);
     const reason = this.data.reason.trim();
     const reference = this.data.reference.trim();
-    if (source !== 'REVERSAL' && (!Number.isInteger(points) || points < 1 || points > 100000)) {
+    if (!Number.isInteger(points) || points < 1 || points > 100000) {
       this.setData({ saveError: '请填写 1 至 100000 的整数积分。' });
       return;
     }
     if (!reason || (source === 'OFFLINE_CREDIT' && !reference)) {
-      this.setData({ saveError: source === 'OFFLINE_CREDIT' ? '请填写入账原因和凭证号或备注。' : '请填写操作原因。' });
+      this.setData({ saveError: source === 'OFFLINE_CREDIT' ? '请填写充值说明和凭证号或备注。' : '请填写操作原因。' });
       return;
     }
 
@@ -146,15 +167,11 @@ Page({
         delta = points * this.data.direction;
         const bookingId = this.data.bookings[this.data.bookingIndex]?.id;
         details = { delta, bookingId };
-      } else if (original) {
-        delta = -original.delta;
-        details = { reversalOf: original.id };
       }
       const message = user.label + '\n' + (delta > 0 ? '增加 ' : '扣减 ') + Math.abs(delta) + ' 积分';
       if (!await confirmAction(action, message, action)) return;
       await staffWrite('/accounts/' + user.id + '/ledger', { source, reason, reference, ...details });
-      const next = source === 'REVERSAL' ? 'OFFLINE_CREDIT' : source;
-      this.setData({ ...emptyForm, source: next, action: operations[next].action });
+      this.setData({ ...emptyForm });
       if (this.data.targetUserId && getCurrentPages().length > 1) {
         wx.navigateBack({ success: () => wx.showToast({ title: operations[source].success, icon: 'success' }) });
         return;

@@ -230,6 +230,25 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 10;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 11) return;
+    db.exec(`
+      CREATE TABLE registrations (
+        user_id TEXT PRIMARY KEY REFERENCES children(guardian_id),
+        status TEXT NOT NULL CHECK (status IN ('PENDING', 'APPROVED', 'RETURNED')),
+        submitted_at TEXT NOT NULL, reviewed_at TEXT, reason TEXT,
+        contact_name TEXT, contact_phone TEXT,
+        revision TEXT NOT NULL, reviewed_revision TEXT
+      ) STRICT;
+      CREATE INDEX registration_queue ON registrations(status, submitted_at);
+      INSERT INTO registrations (user_id, status, submitted_at, reviewed_at, contact_name, contact_phone, revision)
+        SELECT c.guardian_id, 'APPROVED', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+          p.name, p.phone, lower(hex(randomblob(16))) FROM children c
+        LEFT JOIN parent_contacts p ON p.user_id = c.guardian_id
+        WHERE c.birth_month IS NOT NULL AND c.gender IS NOT NULL;
+      PRAGMA user_version = 11;
+    `);
+  });
   return db;
 }
 
@@ -261,6 +280,14 @@ export function seedDemo(db: DatabaseSync, now: Date): void {
     }
     child.run('parent', '陈同学', '2016-08', 'MALE');
     child.run('other-parent', '张同学', '2017-03', 'FEMALE');
+
+    const seedRegistration = db.prepare(`
+      INSERT OR IGNORE INTO registrations (user_id, status, submitted_at, reviewed_at, revision)
+      VALUES (?, 'APPROVED', ?, ?, lower(hex(randomblob(16))))
+    `);
+    for (const userId of ['parent', 'other-parent']) {
+      seedRegistration.run(userId, now.toISOString(), now.toISOString());
+    }
 
     // TODO: product decision — 线下实收换算与课程积分定价，以下均为种子数据。
     // Seed weekly hours once. An empty day can be an intentional staff edit.

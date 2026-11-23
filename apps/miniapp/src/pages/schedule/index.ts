@@ -5,6 +5,8 @@ import { api, errorMessage, RequestError } from '../../lib/client';
 import { availableRanges } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
 
+import { saveReminder, takeCourseReminder } from '../../lib/registration';
+import type { CourseReminder } from '../../lib/registration';
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
 type VisibleCourse = Course & { hours: string; coachLabel: string; action: string; unavailable: boolean };
@@ -42,11 +44,13 @@ Page({
     slotLoading: false,
     slotError: '',
     confirmation: null as Confirmation | null,
+    registrationPrompt: null as (CourseReminder & { newPlayer: boolean }) | null,
     booking: false
   },
 
   quoteSequence: 0,
   onHide() {
+    this.dismissRegistration();
     this.dismissQuote();
   },
   onUnload() {
@@ -79,11 +83,18 @@ Page({
         if (daily) daily.push(course);
         else coursesByDate.set(day, [course]);
       }
-      const date = this.data.date >= schedule.today && this.data.date <= schedule.lastDate ? this.data.date : schedule.today;
-      const coachId = this.data.coaches[this.data.coachIndex]?.id;
+      const reminder = takeCourseReminder();
+      const preferred = reminder?.date ?? this.data.date;
+      const date = preferred >= schedule.today && preferred <= schedule.lastDate ? preferred : schedule.today;
+      const coachId = reminder?.selection.type === 'PRIVATE' ? reminder.selection.coachId : this.data.coaches[this.data.coachIndex]?.id;
+      if (reminder) this.setData({ mode: reminder.selection.type });
       const coachIndex = Math.max(0, schedule.coaches.findIndex(coach => coach.id === coachId));
       this.setData({ today: schedule.today, lastDate: schedule.lastDate, coaches: schedule.coaches.map(c => ({ ...c, ...coachIdentity(c.name, c.avatarKey) })), coachIndex });
       this.selectDate(date);
+      if (reminder?.selection.type === 'GROUP' && date === reminder.date) {
+        const id = reminder.selection.classSessionId;
+        if (schedule.courses.some(course => course.id === id)) wx.nextTick(() => wx.pageScrollTo({ selector: '#agenda-' + date, duration: 200 }));
+      }
     } catch (error) {
       if (request === scheduleRequest) this.setData({ error: errorMessage(error) });
     } finally {
@@ -179,6 +190,14 @@ Page({
     this.quoteSequence++;
     if (this.data.confirmation) this.setData({ confirmation: null });
   },
+  dismissRegistration() { this.setData({ registrationPrompt: null }); },
+  openRegistration() {
+    const course = this.data.registrationPrompt;
+    if (!course) return;
+    saveReminder(course);
+    this.dismissRegistration();
+    wx.navigateTo({ url: '/pages/child/index' });
+  },
   submitQuote() {
     const quote = this.data.confirmation;
     if (!quote || this.data.booking) return;
@@ -214,14 +233,18 @@ Page({
       if (error instanceof RequestError && error.status >= 400 && error.status < 500) {
         wx.removeStorageSync(storageKey);
       }
-      if (error instanceof RequestError && error.code === 'CHILD_PROFILE_REQUIRED') {
-        wx.showModal({
-          title: '请先填写孩子资料',
-          content: '填写姓名或昵称、出生年月和性别后即可提交预约。',
-          confirmText: '去填写',
-          confirmColor: '#761F32',
-          success: result => { if (result.confirm) wx.navigateTo({ url: '/pages/child/index' }); }
-        });
+      if (error instanceof RequestError && ['CHILD_PROFILE_REQUIRED', 'REGISTRATION_REQUIRED'].includes(error.code)) {
+        const course = selection.type === 'GROUP' ? this.data.groups.flatMap(day => day.lessons).find(row => row.id === selection.classSessionId) : null;
+        const startsAt = selection.type === 'PRIVATE' ? selection.startsAt : course?.startsAt;
+        const endsAt = selection.type === 'PRIVATE' ? selection.endsAt : course?.endsAt;
+        if (startsAt && endsAt) {
+          const coach = selection.type === 'PRIVATE' ? this.data.coaches.find(row => row.id === selection.coachId)?.name : course?.coachName;
+          this.setData({ registrationPrompt: {
+            selection, date: localTimestamp(startsAt).slice(0, 10), title: course?.title ?? '一对一训练',
+            when: datetime(startsAt) + '–' + time(endsAt) + (coach ? ' · ' + coachLabel(coach) : ''),
+            newPlayer: error.code === 'CHILD_PROFILE_REQUIRED'
+          } });
+        } else wx.navigateTo({ url: '/pages/child/index' });
       } else {
         wx.showToast({ title: errorMessage(error), icon: 'none', duration: 2500 });
         if (error instanceof RequestError && ['FULL', 'SLOT_TAKEN', 'ALREADY_BOOKED', 'QUOTE_CHANGED'].includes(error.code)) {

@@ -1,0 +1,29 @@
+.quote-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  padding: 36rpx;
+  background: rgba(30, 23, 25, .45);
+}
+
+.quote-dialog {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 90%;
+  overflow: auto;
+  padding: 30rpx;
+  border-radius: 24rpx;
+  background: #fff;
+  text-align: left;
+}
+
+.registration-course { border: 1rpx solid #ded5d3; border-radius: 18rpx; padding: 19rpx 25rpx; margin: 20rpx 0; }
+.registration-course text { display: block; }
+
+.registration-dialog .quote-actions { display: flex; justify-content: flex-end; }
+.registration-dialog .quote-actions .button { width: auto; }
+.registration-dialog .card-title { font-size: 20px; font-weight: 650; }
+
+.registration-dialog .quote-actions { gap: 10px; margin-top: 16px; }

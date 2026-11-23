@@ -1,0 +1,34 @@
+<import src="../../registration/details.wxml" />
+<view wx:if="{{authorized}}" class="page-shell enrollment">
+  <view class="en-back" bindtap="back" role="button">{{returning ? '注册申请' : (selected ? '队员审核' : '管理首页')}}</view>
+  <text role="heading" aria-level="1" class="page-title">{{returning ? '退回补充' : (selected ? '注册申请' : '队员审核')}}</text>
+  <view wx:if="{{loading}}" class="message">正在查询注册申请…</view>
+  <view wx:elif="{{error}}" class="message">{{error}}<button class="button quiet" bindtap="refresh">重新查询</button></view>
+  <block wx:elif="{{!selected}}">
+    <view class="en-tabs"><text role="button" class="{{!processed ? 'on' : ''}}" data-view="pending" bindtap="tab">待审核（{{pendingCount}}）</text><text role="button" class="{{processed ? 'on' : ''}}" data-view="processed" bindtap="tab">已处理</text></view>
+    <view wx:if="{{!groups.length}}" class="message">{{processed ? '暂无已处理申请' : '暂无待审核申请'}}</view>
+    <view wx:for="{{groups}}" wx:key="date" wx:for-item="day">
+      <view class="en-sub">{{day.label}}</view>
+      <view class="en-list"><view wx:for="{{day.rows}}" wx:key="userId" class="en-person" role="button" data-id="{{item.userId}}" bindtap="open" hover-class="press">
+        <view><text class="en-person-name">{{item.child.name}}</text><text class="en-person-note">{{item.contact ? item.contact.name + ' · 手机尾号 ' + item.phoneTail : '未填写联系人'}}</text></view>
+        <text class="en-status">{{item.at}} {{processed ? item.statusLabel : '提交'}} ›</text>
+      </view></view>
+    </view>
+  </block>
+  <block wx:elif="{{returning}}">
+    <view class="en-hint">告诉家长要改哪项资料。家长修改后可以重新提交。</view>
+    <view class="en-summary"><view class="en-meta"><text>队员</text><text>{{selected.child.name}}</text></view></view>
+    <view class="en-sub">退回原因</view>
+    <textarea class="en-textarea" value="{{reason}}" bindinput="changeReason" maxlength="200" placeholder="填写需要补充的资料" disabled="{{busy}}" />
+    <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+    <view class="en-actions"><button class="button quiet" bindtap="back" disabled="{{busy}}">返回</button><button class="button" bindtap="review" disabled="{{busy || !reason}}" loading="{{busy}}">确认退回</button></view>
+  </block>
+  <block wx:else>
+    <view class="en-heading"><text>{{selected.child.name}}</text><text class="en-link">{{selected.statusLabel}}</text></view>
+    <view class="en-hint">{{selected.submittedLabel}} 提交</view>
+    <view class="en-sub">申请资料</view><template is="registrationDetails" data="{{row: selected}}" />
+    <view wx:if="{{selected.reason}}" class="en-hint">退回原因 · {{selected.reason}}</view>
+    <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
+    <view wx:if="{{selected.status === 'PENDING'}}" class="en-actions"><button class="button quiet" bindtap="startReturn" disabled="{{busy}}">退回补充</button><button class="button" bindtap="review" disabled="{{busy}}" loading="{{busy}}">批准注册</button></view>
+  </block>
+</view>

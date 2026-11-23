@@ -15,16 +15,23 @@ const endpoint = {
 };
 
 const entry = '/pages/entry/index';
+let demoProfile = '';
+export function parentAccountId() {
+  return wechat?.accountId ?? demoProfile;
+}
 let active: RoleSession | undefined;
 let wechat: WechatLogin | undefined;
 
-function openCurrentHome() {
-  wx.reLaunch({ url: active ? home[active.role] : entry });
+function openCurrentHome(courseId?: string) {
+  const url = courseId && active?.role === 'PARENT'
+    ? '/pages/child/index?course=' + encodeURIComponent(courseId)
+    : active ? home[active.role] : entry;
+  wx.reLaunch({ url });
 }
 
-export function allowEntry(): boolean {
+export function allowEntry(courseId?: string): boolean {
   if (!active) return true;
-  openCurrentHome();
+  openCurrentHome(courseId);
   return false;
 }
 
@@ -42,12 +49,13 @@ export function showParentTab(page: Pick<WechatMiniprogram.Page.TrivialInstance,
   return authorized;
 }
 
-export async function signIn(role: SessionRole, data: object) {
+export async function signIn(role: SessionRole, data: object, courseId?: string) {
   if (active) throw new RequestError('ALREADY_SIGNED_IN', '请先退出当前身份', 409);
   const session = await send<RoleSession>(endpoint[role], 'POST', data);
   if (session.role !== role || !session.token) throw new RequestError('INVALID_SESSION', '登录会话无效，请重试', 500);
+  demoProfile = role === 'PARENT' && 'profile' in data ? String(data.profile) : '';
   active = session;
-  openCurrentHome();
+  openCurrentHome(courseId);
 }
 
 export function wechatIdentity(): WechatLogin | undefined {
@@ -63,13 +71,13 @@ export async function signInWechat(): Promise<WechatLogin> {
   return wechat;
 }
 
-export async function selectWechatRole(role: SessionRole) {
+export async function selectWechatRole(role: SessionRole, courseId?: string) {
   if (!wechat) throw new RequestError('NOT_AUTHORIZED', '请先使用微信登录', 401);
   try {
     const session = await send<RoleSession>('/api/auth/role', 'POST', { role }, wechat.token);
     wechat = { ...wechat, token: session.token };
     active = session;
-    openCurrentHome();
+    openCurrentHome(courseId);
   } catch (error) {
     if (error instanceof RequestError && (error.status === 401 || error.status === 403)) wechat = undefined;
     throw error;

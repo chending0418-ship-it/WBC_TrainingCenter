@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/entry/index",
+    "pages/public-schedule/index",
     "pages/schedule/index",
     "pages/bookings/index",
     "pages/account/index",
@@ -8,11 +9,13 @@
     "pages/contact/index",
     "pages/agreements/index",
     "pages/admin/index",
+    "pages/admin-registrations/index",
     "pages/admin-schedule/index",
     "pages/admin-course-types/index",
     "pages/admin-coaches/index",
     "pages/admin-parents/index",
     "pages/admin-bookings/index",
+    "pages/admin-family-picker/index",
     "pages/admin-points/index",
     "pages/coach/index"
   ],

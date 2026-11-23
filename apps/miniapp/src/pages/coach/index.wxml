@@ -9,7 +9,7 @@
       <view><view class="row-name">{{identity.label}}</view><view class="card-note">{{uploading ? '保存中…' : '更换头像'}}</view></view>
     </button>
   </view>
-  <view class="section-actions">
+  <view class="section-actions review-tabs">
     <button class="button {{period === 'today' ? '' : 'quiet'}}" data-period="today" bindtap="changePeriod"
       aria-pressed="{{period === 'today'}}" hover-class="press">今天</button>
     <button class="button {{period === 'week' ? '' : 'quiet'}}" data-period="week" bindtap="changePeriod"
@@ -26,11 +26,8 @@
     <view wx:for="{{days}}" wx:key="date" wx:for-item="day">
       <view wx:if="{{period === 'week'}}" class="section-title" role="heading" aria-level="2">{{day.label}}</view>
       <view wx:for="{{day.lessons}}" wx:key="key" class="lesson-card">
-        <view class="card-head">
-          <text class="card-title">{{item.title}}</text>
-          <text class="card-state">{{item.type === 'GROUP' ? '团课' : '私教'}}</text>
-        </view>
-        <view class="card-time">{{item.hours}}</view>
+        <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state">{{item.type === 'GROUP' ? '团课' : '私教'}}</text></view>
+        <view class="card-head"><text class="card-title">{{item.title}}</text></view>
         <view class="card-note">{{item.venue}}</view>
         <view class="card-footer">已预约 {{item.bookedCount}} 人</view>
         <view wx:if="{{item.names}}" class="details">{{item.names}}</view>

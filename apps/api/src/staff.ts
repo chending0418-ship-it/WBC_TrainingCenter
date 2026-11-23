@@ -7,6 +7,7 @@ import type { bookingService } from './booking.ts';
 import { audit, transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
 import { searchParents } from './parent-contact.ts';
+import { registrations, reviewRegistration } from './registration.ts';
 import { roleSessions } from './role-session.ts';
 import { addCoach, coachDraft, listCoaches, updateCoach } from './staff-coaches.ts';
 import { ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
@@ -51,7 +52,8 @@ function windowInput(input: unknown): MinuteWindow {
 
 export function registerStaffRoutes(
   app: FastifyInstance, db: DatabaseSync, clock: () => Date,
-  booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>, demo: boolean, authorizeWechat?: Authorize
+  booking: ReturnType<typeof bookingService>, schedule: ReturnType<typeof staffSchedule>, demo: boolean, authorizeWechat?: Authorize,
+  authorizeWeb?: (header: string | undefined) => { subject: string } | undefined
 ) {
   const sessions = roleSessions('ADMIN', clock, '请先登录管理端');
   if (demo) {
@@ -97,7 +99,8 @@ export function registerStaffRoutes(
   }
 
   function actor(request: FastifyRequest) {
-    return (authorizeWechat ?? sessions.authorize)(request.headers.authorization).subject;
+    const header = request.headers.authorization;
+    return (authorizeWeb?.(header) ?? (authorizeWechat ?? sessions.authorize)(header)).subject;
   }
 
   void app.register(async routes => {
@@ -128,7 +131,8 @@ export function registerStaffRoutes(
         SELECT COUNT(*) AS total FROM bookings WHERE status = 'CONFIRMED' AND approval_pending = 0
           AND starts_at >= ? AND starts_at < ?
       `).get(starts, ends);
-      return { pending: Number(pending?.total), todayClasses: Number(classes?.total), todayAppointments: Number(appointments?.total) };
+      const pendingRegistrations = Number(db.prepare("SELECT count(*) AS n FROM registrations WHERE status = 'PENDING'").get()?.n);
+      return { pendingRegistrations, pending: Number(pending?.total), todayClasses: Number(classes?.total), todayAppointments: Number(appointments?.total) };
     });
     routes.get('/coaches', async () => listCoaches(db));
     routes.post('/coaches', async request => {
@@ -229,9 +233,12 @@ export function registerStaffRoutes(
       return reply.code(204).send();
     });
     routes.get('/users', async () => users());
+    routes.get('/registrations', async request => registrations(db, object(request.query).view));
+    routes.post('/registrations/:id/review', async request => reviewRegistration(db, requiredText(object(request.params).id),
+      request.body, actor(request), clock()));
     routes.get('/parents', async request => {
       const query = object(request.query).q;
-      return searchParents(db, query === undefined || query === '' ? '' : requiredText(query, 50));
+      return searchParents(db, query === undefined || query === '' ? '' : requiredText(query, 50), clock().toISOString(), object(request.query).status);
     });
     routes.get('/accounts/:id', async request => {
       const userId = requiredText(object(request.params).id);
@@ -293,6 +300,10 @@ export function registerStaffRoutes(
     });
     routes.post('/bookings/:id/approve', async (request, reply) => {
       booking.approve(requiredText(object(request.params).id), actor(request));
+      return reply.code(204).send();
+    });
+    routes.post('/bookings/:id/reject', async (request, reply) => {
+      booking.cancel(requiredText(object(request.params).id), actor(request), true);
       return reply.code(204).send();
     });
     routes.delete('/bookings/:id', async (request, reply) => {

@@ -1,5 +1,5 @@
 import { allowPage } from '../../lib/session';
-import type { Booking, BookingQuote, BookingSelection, Coach, CourseType, ManagedBooking, ManagedClass, ManagedUser, PrivateSlot } from '../../../../../packages/shared/contracts.js';
+import type { Booking, BookingQuote, BookingSelection, Coach, CourseType, ManagedBooking, ManagedClass, PrivateSlot } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { cancellationRefundText, datetime, time, timeRange } from '../../lib/display';
 import { confirmAction, hasPendingStaffWrite, staffApi, staffContext, staffWrite } from '../../lib/staff';
@@ -17,9 +17,9 @@ Page({
     authorized: false,
     pendingOnly: false,
     today: '', lastDate: '', date: '', loading: true, busy: false, loadError: '', saveError: '',
-    bookings: [] as ListRow[], users: [] as { id: string; label: string }[], coaches: [] as Coach[],
+    bookings: [] as ListRow[], family: null as { id: string; label: string } | null, coaches: [] as Coach[],
     adding: false, type: 'GROUP' as BookingSelection['type'],
-    userIndex: 0, coachIndex: 0, optionIndex: 0, choicesLoading: false, choicesError: '',
+    coachIndex: 0, optionIndex: 0, choicesLoading: false, choicesError: '',
     privateTypeIndex: 0, privateTypes: [defaultPrivateType],
     classes: [] as ClassOption[], slots: [] as SlotOption[]
   },
@@ -35,13 +35,12 @@ Page({
   async load() {
     this.setData({ loading: true, loadError: '' });
     try {
-      const [context, users, types] = await Promise.all([
-        staffContext(), staffApi<ManagedUser[]>('/users'), staffApi<CourseType[]>('/course-types')
+      const [context, types] = await Promise.all([
+        staffContext(), staffApi<CourseType[]>('/course-types')
       ]);
       this.setData({
         ...context, date: this.data.date || context.today,
-        privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)],
-        users: users.flatMap(user => user.childName ? [{ id: user.id, label: user.childName }] : [])
+        privateTypes: [defaultPrivateType, ...types.filter(type => type.maxStudents === 1)]
       });
       await this.refresh();
     } catch (error) {
@@ -77,7 +76,7 @@ Page({
   },
   startBooking() {
     const { date, today } = this.data;
-    this.setData({ adding: true, type: 'GROUP', privateTypeIndex: 0, date: date < today ? today : date, saveError: '' });
+    this.setData({ adding: true, family: null, type: 'GROUP', privateTypeIndex: 0, date: date < today ? today : date, saveError: '' });
     void this.refreshChoices();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
@@ -91,8 +90,12 @@ Page({
     this.setData({ type: event.currentTarget.dataset.type as BookingSelection['type'], saveError: '' });
     void this.refreshChoices();
   },
-  changeUser(event: WechatMiniprogram.PickerChange) {
-    this.setData({ userIndex: Number(event.detail.value), saveError: '' });
+  chooseFamily() {
+    if (this.data.busy) return;
+    wx.navigateTo({
+      url: '/pages/admin-family-picker/index',
+      events: { familySelected: (family: { id: string; label: string }) => this.setData({ family, saveError: '' }) }
+    });
   },
   changeCoach(event: WechatMiniprogram.PickerChange) {
     this.setData({ coachIndex: Number(event.detail.value), saveError: '' });
@@ -133,8 +136,7 @@ Page({
     }
   },
   async book() {
-    const { type, userIndex, coachIndex, optionIndex, users, coaches, classes, slots } = this.data;
-    const user = users[userIndex];
+    const { type, coachIndex, optionIndex, family: user, coaches, classes, slots } = this.data;
     if (this.data.busy || !user) return;
     const course = classes[optionIndex];
     const slot = slots[optionIndex];
@@ -182,8 +184,9 @@ Page({
       const detail = booking.childName + ' · ' + booking.title + '\n' + (approving ? '确认后扣除 ' + booking.points + ' 积分。' :
         rejecting ? '释放名额和预留积分，不扣分。' : cancellationRefundText(booking.refundPoints));
       if (!await confirmAction(title + '？', detail, title)) return;
-      if (approving) await staffApi('/bookings/' + booking.id + '/approve', 'POST', {});
-      else await staffApi('/bookings/' + booking.id, 'DELETE');
+      const path = '/bookings/' + booking.id;
+      if (approving || rejecting) await staffApi(path + (approving ? '/approve' : '/reject'), 'POST', {});
+      else await staffApi(path, 'DELETE');
       await this.refresh();
       wx.showToast({ title: approving ? '预约已确认' : rejecting ? '申请已拒绝' : '预约已取消', icon: 'none' });
     } catch (error) {

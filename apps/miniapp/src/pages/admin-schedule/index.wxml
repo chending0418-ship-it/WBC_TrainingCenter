@@ -1,7 +1,7 @@
 <import src="../../calendar/week.wxml" />
 <view wx:if="{{authorized}}" class="page-shell calendar-page">
   <view class="calendar-heading">
-    <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.template ? '编辑周期模板' : (editor.id ? '编辑班次' : '新增团课')) : '排课管理'}}</text>
+    <text class="page-title" role="heading" aria-level="1">{{editor ? (editor.template ? '编辑周期模板' : (editor.id ? '编辑班次' : (editor.repeat ? '新增周期模板' : '新增团课'))) : '排课管理'}}</text>
     <button wx:if="{{!editor && mode === 'classes' && !loading && !loadError}}" class="new-class" bindtap="newClass" disabled="{{busy || !coaches.length}}" hover-class="press">＋ 新增团课</button>
   </view>
   <form wx:if="{{editor}}" bindsubmit="saveClass">

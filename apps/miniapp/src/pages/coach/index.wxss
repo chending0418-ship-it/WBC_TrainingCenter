@@ -20,3 +20,5 @@
 .profile-avatar::after {
   border: 0;
 }
+
+.coach-toolbar + .review-tabs { margin-top: 8px; }

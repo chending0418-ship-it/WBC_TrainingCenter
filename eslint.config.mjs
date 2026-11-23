@@ -6,5 +6,6 @@ export default tseslint.config(
   { ignores: ['apps/miniapp/dist/**'] },
   js.configs.recommended,
   tseslint.configs.recommended,
-  { languageOptions: { globals: globals.node } }
+  { languageOptions: { globals: globals.node } },
+  { files: ['apps/web-admin/**/*.js'], languageOptions: { globals: globals.browser } }
 );

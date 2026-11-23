@@ -17,23 +17,30 @@ export interface CourseType {
   refundPercent: number;
 }
 
-export interface Course {
+export interface PublicCourse {
   id: string;
   title: string;
   coachName: string;
   venue: string;
   startsAt: string;
   endsAt: string;
+  courseTypeName: string | null;
+}
+
+export interface Course extends PublicCourse {
   points: number;
   capacity: number;
   bookedCount: number;
   bookedByMe: boolean;
-  courseTypeName: string | null;
 }
 
-export interface Schedule {
+export interface PublicSchedule {
   today: string;
   lastDate: string;
+  courses: PublicCourse[];
+}
+
+export interface Schedule extends PublicSchedule {
   courses: Course[];
   coaches: Coach[];
 }
@@ -141,6 +148,8 @@ export interface ManagedUser {
 }
 
 export interface ManagedParent extends ManagedUser {
+  registrationStatus: RegistrationStatus | null;
+  reservedPoints: number;
   contact: ParentContact | null;
   child: Child | null;
 }
@@ -198,4 +207,18 @@ export interface WechatLogin {
   accountId: string;
   roles: SessionRole[];
   token: string;
+}
+
+
+export type RegistrationStatus = 'PENDING' | 'APPROVED' | 'RETURNED';
+
+export interface Registration {
+  userId: string;
+  child: Child;
+  contact: ParentContact | null;
+  status: RegistrationStatus;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reason: string | null;
+  revision: string;
 }
