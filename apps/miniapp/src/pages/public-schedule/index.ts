@@ -7,7 +7,7 @@ import { errorMessage } from '../../lib/request';
 import { publicRead, publicReadVersion, invalidatePublicRead, publicSchedulePath } from '../../lib/public-read';
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
-type Lesson = PublicCourse & { hours: string; coachLabel: string };
+type Lesson = PublicCourse & { hours: string; coachLabel: string; hasStarted: boolean };
 
 Page({
   data: {
@@ -18,10 +18,12 @@ Page({
     total: 0, weekLabel: '', hasPrevious: false, hasNext: false
   },
   lessons: new Map<string, Lesson[]>(),
+  nextCourseStart: Infinity,
   requestNumber: 0,
   renderedVersion: 0,
   onShow() {
-    if (!this.renderedVersion || this.renderedVersion !== publicReadVersion(publicSchedulePath)) void this.refresh();
+    if (!this.renderedVersion || this.renderedVersion !== publicReadVersion(publicSchedulePath) ||
+      Date.now() >= this.nextCourseStart) void this.refresh();
   },
   onUnload() { this.requestNumber++; },
   async onPullDownRefresh() {
@@ -36,10 +38,15 @@ Page({
       if (request !== this.requestNumber) return;
       this.renderedVersion = publicReadVersion(publicSchedulePath);
       const lessons = new Map<string, Lesson[]>();
+      const now = Date.now();
+      this.nextCourseStart = Infinity;
       for (const course of schedule.courses) {
         const date = localTimestamp(course.startsAt).slice(0, 10);
         const day = lessons.get(date) ?? [];
-        day.push({ ...course, hours: timeRange(course.startsAt, course.endsAt), coachLabel: coachLabel(course.coachName) });
+        const startsAt = Date.parse(course.startsAt);
+        if (startsAt > now) this.nextCourseStart = Math.min(this.nextCourseStart, startsAt);
+        day.push({ ...course, hasStarted: startsAt <= now,
+          hours: timeRange(course.startsAt, course.endsAt), coachLabel: coachLabel(course.coachName) });
         lessons.set(date, day);
       }
       this.lessons = lessons;
@@ -63,7 +70,12 @@ Page({
   },
   openCourse(event: WechatMiniprogram.TouchEvent) {
     const course = this.data.groups.flatMap(day => day.lessons).find(row => row.id === event.currentTarget.dataset.id);
-    if (course) this.setData({ selectedCourse: groupReminder(course) });
+    if (!course) return;
+    if (Date.parse(course.startsAt) <= Date.now()) {
+      void this.refresh();
+      return;
+    }
+    this.setData({ selectedCourse: groupReminder(course) });
   },
   dismissCourse() { this.setData({ selectedCourse: null }); },
   registerForCourse() {

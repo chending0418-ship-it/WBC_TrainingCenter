@@ -1,5 +1,5 @@
 <template name="courseSummary">
-  <view class="agenda-line"><text class="agenda-time">{{item.hours}}</text><text wx:if="{{showBooking && item.unavailable}}" class="agenda-state">{{item.action}}</text></view>
+  <view class="agenda-line"><text class="agenda-time">{{item.hours}}</text><text wx:if="{{showBooking && item.unavailable}}" class="agenda-state">{{item.action}}</text><text wx:elif="{{item.hasStarted}}" class="agenda-state">已开课</text></view>
   <text class="agenda-name">{{item.title}}</text>
   <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
 </template>
@@ -16,9 +16,11 @@
     </view>
     <view>
       <block wx:for="{{day.lessons}}" wx:key="id">
-        <button wx:if="{{!showBooking}}" class="agenda-card public-course" aria-label="{{'查看' + item.title + '，' + item.hours + '，' + item.venue + '，' + item.coachLabel}}" data-id="{{item.id}}" bindtap="openCourse" hover-class="press">
+        <button wx:if="{{!showBooking && !item.hasStarted}}" class="agenda-card public-course" aria-label="{{'预约' + item.title + '，' + item.hours + '，' + item.venue + '，' + item.coachLabel}}" data-id="{{item.id}}" bindtap="openCourse" hover-class="press">
           <template is="courseSummary" data="{{item}}" />
+          <view class="agenda-bottom public-actions"><text class="reserve">预约</text></view>
         </button>
+        <view wx:elif="{{!showBooking}}" class="agenda-card"><template is="courseSummary" data="{{item}}" /></view>
         <view wx:else class="agenda-card">
           <template is="courseSummary" data="{{item, showBooking}}" />
           <view class="agenda-bottom">

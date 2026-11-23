@@ -4,7 +4,7 @@
     <button wx:if="{{!editing && !loading && !error}}" class="button row-action" bindtap="start" disabled="{{busy}}" hover-class="press">新增课程类型</button>
   </view>
   <form wx:if="{{editing}}" bindsubmit="save">
-    <label class="form-field">
+    <label class="form-field first-field">
       <text>类型名称</text>
       <input class="field" value="{{name}}" maxlength="50" placeholder="例如 小班体能" data-field="name"
         bindinput="changeField" disabled="{{busy}}" />
@@ -18,7 +18,7 @@
     <view class="section-title" role="heading" aria-level="2">取消退还</view>
     <view class="row-line refund-toggle">
       <text>可全额退还</text>
-      <switch color="#761F32" checked="{{fullRefund}}" bindchange="changeRefundMode"
+      <switch class="compact-switch" color="#761F32" checked="{{fullRefund}}" bindchange="changeRefundMode"
         disabled="{{busy}}" aria-label="可全额退还" />
     </view>
     <label wx:if="{{!fullRefund}}" class="form-field">

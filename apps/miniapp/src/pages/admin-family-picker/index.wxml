@@ -1,10 +1,10 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <button class="back-link" bindtap="back" hover-class="press"><view class="back-chevron"></view>为家长代约</button>
+  <button size="mini" class="back-link" bindtap="back" hover-class="press"><view class="back-chevron"></view>为家长代约</button>
   <text class="page-title" role="heading" aria-level="1">选择家长</text>
   <view class="family-search">
     <view class="search-glass"></view>
     <input value="{{query}}" bindinput="changeQuery" bindconfirm="retry" maxlength="50" confirm-type="search" aria-label="搜索家庭" placeholder="队员姓名、联系人或手机尾号" />
-    <button wx:if="{{query}}" class="text-link" bindtap="clear" hover-class="press">清除</button>
+    <button wx:if="{{query}}" size="mini" class="text-link" bindtap="clear" hover-class="press">清除</button>
   </view>
   <view wx:if="{{loading}}" class="message">正在查询家庭…</view>
   <view wx:elif="{{error}}" class="message">
@@ -13,7 +13,7 @@
   <block wx:elif="{{hasKeyword}}">
     <view class="results-heading"><text class="section-title">搜索结果</text><text class="muted">{{matches.length === 50 ? '最多显示 50' : matches.length}} 个家庭</text></view>
     <view wx:if="{{matches.length}}" class="family-list">
-      <button wx:for="{{matches}}" wx:key="id" class="family-row" data-id="{{item.id}}" bindtap="choose" hover-class="press">
+      <button wx:for="{{matches}}" wx:key="id" size="mini" class="family-row" data-id="{{item.id}}" bindtap="choose" hover-class="press">
         <view><view class="row-name">{{item.name}}</view><view class="muted">{{item.contact}}</view></view>
         <view class="family-birth muted">{{item.birthMonth}}生 <view class="chevron"></view></view>
       </button>

@@ -354,9 +354,9 @@ button.button.row-action.save-profile {
 
 .page-title + .section-title { margin-top: 0; }
 .form-field > text { font-weight: 620; }
-form > .form-field:first-child, .lesson-card > .form-field:first-child { margin-top: 0; }
+form > .form-field:first-child, .form-field.first-field, .lesson-card > .form-field:first-child { margin-top: 0; }
 .lesson-card > .form-field:last-child { margin-bottom: 0; }
-picker:not([disabled]) > .picker::after, .chevron {
+.chevron {
   content: "";
   flex: none;
   width: 6px;
@@ -383,6 +383,9 @@ picker:not([disabled]) > .picker::after, .chevron {
 .screen-heading button.button { margin: 0; width: auto; min-height: 34px; font-size: 13px; padding: 7px 10px; }
 .review-tabs { align-items: center; border-bottom: 1px solid #ded5d3; gap: 19px; margin: 12px 0; }
 .review-tabs .button, .review-tabs .button.quiet {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
   width: auto;
   flex: none;
   border: 0;
@@ -395,3 +398,5 @@ picker:not([disabled]) > .picker::after, .chevron {
 .review-tabs .button.quiet { border-bottom-color: transparent; color: #66595c; font-weight: 500; }
 .review-time-line { gap: 8px; margin-bottom: 3px; }
 .review-time-line .card-time { margin: 0; }
+
+.compact-switch { transform: scale(.78); transform-origin: right center; }

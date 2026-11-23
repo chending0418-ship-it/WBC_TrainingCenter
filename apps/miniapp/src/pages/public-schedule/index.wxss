@@ -1,10 +1,22 @@
 @import "../../calendar/week.wxss";
 @import "../../registration/dialog.wxss";
-.login-link { margin: 0; padding: 15rpx 0 15rpx 20rpx; color: #761f32; background: transparent; font-size: 28rpx; font-weight: 600; }
+.calendar-heading.public-heading { min-height: 0; }
+.public-heading .login-link {
+  width: auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 0 0 10px;
+  background: transparent;
+  color: #761f32;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 32px;
+}
 .login-link::after { border: 0; }
 
 .agenda-card.public-course {
   display: block; width: 100%; margin-left: 0; margin-right: 0;
-  text-align: left; color: inherit; font-size: inherit; line-height: inherit;
+  text-align: left; color: inherit; font-size: inherit; font-weight: inherit; line-height: inherit;
 }
 .public-course::after { border: 0; }
+.public-course .public-actions { justify-content: flex-end; }

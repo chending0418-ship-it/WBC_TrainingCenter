@@ -4,37 +4,37 @@
     <button wx:if="{{!adding && !loading && !loadError}}" class="button row-action" bindtap="startBooking" disabled="{{busy}}" hover-class="press">为家长代约</button>
   </view>
   <view wx:if="{{!adding}}" class="section-actions review-tabs">
-    <button class="button {{pendingOnly ? '' : 'quiet'}}" data-view="pending" bindtap="changeView" hover-class="press">待确认</button>
-    <button class="button {{pendingOnly ? 'quiet' : ''}}" data-view="date" bindtap="changeView" hover-class="press">按日期查看</button>
+    <button size="mini" class="button {{pendingOnly ? '' : 'quiet'}}" data-view="pending" bindtap="changeView" hover-class="press">待确认</button>
+    <button size="mini" class="button {{pendingOnly ? 'quiet' : ''}}" data-view="date" bindtap="changeView" hover-class="press">按日期查看</button>
   </view>
   <picker wx:if="{{date && (adding || !pendingOnly)}}" mode="date" start="{{adding ? today : ''}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy}}">
-    <view class="picker"><text class="picker-label">预约日期</text><text class="picker-value">{{date}}</text></view>
+    <view class="picker"><text class="picker-label">预约日期</text><text class="picker-value">{{date}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
   </picker>
 
   <block wx:if="{{adding}}">
     <view class="section-actions review-tabs">
-      <button class="button {{type === 'GROUP' ? '' : 'quiet'}}" data-type="GROUP" bindtap="changeType" aria-pressed="{{type === 'GROUP'}}" hover-class="press">团课</button>
-      <button class="button {{type === 'PRIVATE' ? '' : 'quiet'}}" data-type="PRIVATE" bindtap="changeType" aria-pressed="{{type === 'PRIVATE'}}" hover-class="press">私教</button>
+      <button size="mini" class="button {{type === 'GROUP' ? '' : 'quiet'}}" data-type="GROUP" bindtap="changeType" aria-pressed="{{type === 'GROUP'}}" hover-class="press">团课</button>
+      <button size="mini" class="button {{type === 'PRIVATE' ? '' : 'quiet'}}" data-type="PRIVATE" bindtap="changeType" aria-pressed="{{type === 'PRIVATE'}}" hover-class="press">私教</button>
     </view>
-    <button class="family-choice" bindtap="chooseFamily" disabled="{{busy}}" hover-class="press">
+    <button size="mini" class="family-choice" bindtap="chooseFamily" disabled="{{busy}}" hover-class="press">
       <text class="muted">家长账户</text><text class="family-choice-name">{{family ? family.label : '搜索并选择家长'}}</text><view class="chevron"></view>
     </button>
     <picker wx:if="{{type === 'PRIVATE'}}" class="filter-row" range="{{privateTypes}}" range-key="name"
       value="{{privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">私教课程</text><text class="picker-value">{{privateTypes[privateTypeIndex].name}}</text></view>
+      <view class="picker"><text class="picker-label">私教课程</text><text class="picker-value">{{privateTypes[privateTypeIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
     </picker>
     <picker wx:if="{{type === 'PRIVATE' && coaches.length}}" class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="changeCoach" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}</text></view>
+      <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
     </picker>
     <view wx:if="{{choicesLoading}}" class="message">正在查询可约课程…</view>
     <view wx:elif="{{choicesError}}" class="message">
       <view>{{choicesError}}</view><button class="button quiet" bindtap="refreshChoices" hover-class="press">重新查询</button>
     </view>
     <picker wx:elif="{{type === 'GROUP' && classes.length}}" class="filter-row" range="{{classes}}" range-key="label" value="{{optionIndex}}" bindchange="changeOption" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">团课</text><text class="picker-value">{{classes[optionIndex].label}}</text></view>
+      <view class="picker"><text class="picker-label">团课</text><text class="picker-value">{{classes[optionIndex].label}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
     </picker>
     <picker wx:elif="{{type === 'PRIVATE' && slots.length}}" class="filter-row" range="{{slots}}" range-key="label" value="{{optionIndex}}" bindchange="changeOption" disabled="{{busy}}">
-      <view class="picker"><text class="picker-label">时段</text><text class="picker-value">{{slots[optionIndex].label}}</text></view>
+      <view class="picker"><text class="picker-label">时段</text><text class="picker-value">{{slots[optionIndex].label}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
     </picker>
     <view wx:else class="message">没有可约课程或时段，试试其他日期。</view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>

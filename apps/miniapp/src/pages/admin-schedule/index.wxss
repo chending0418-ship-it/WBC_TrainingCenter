@@ -1,11 +1,11 @@
 @import "../../calendar/week.wxss";
 
 .lesson-card.weekly-hours {
-  padding: 0 22rpx;
+  padding: 0 2.9333vw;
 }
 
 .weekday-row {
-  padding: 4rpx 0;
+  padding: 0.5333vw 0;
 }
 
 .weekday-row + .weekday-row {
@@ -15,11 +15,11 @@
 .weekday-summary, .hours-actions {
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  gap: 1.8667vw;
 }
 
 .weekday-summary {
-  min-height: 64rpx;
+  min-height: 8.5333vw;
 }
 
 .weekday-summary .row-name {
@@ -29,16 +29,16 @@
 .weekday-times {
   color: #761f32;
   font-variant-numeric: tabular-nums;
-  font-size: 28rpx;
+  font-size: 3.7333vw;
 }
 
 .weekly-hours .button {
   flex-shrink: 0;
   width: auto;
-  min-height: 60rpx;
+  min-height: 8vw;
   margin: 0;
-  padding: 8rpx 14rpx;
-  font-size: 26rpx;
+  padding: 1.0667vw 1.8667vw;
+  font-size: 3.4667vw;
 }
 
 .weekly-hours .edit-day, .weekly-hours .hours-link {
@@ -54,21 +54,21 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 8rpx;
+  gap: 1.6vw;
+  margin-bottom: 1.0667vw;
 }
 
 .window-editor .field {
   width: 100%;
-  min-height: 64rpx;
-  height: 64rpx;
-  padding: 0 14rpx;
+  min-height: 8.5333vw;
+  height: 8.5333vw;
+  padding: 0 1.8667vw;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
 .hours-actions {
-  padding: 8rpx 0;
+  padding: 1.0667vw 0;
 }
 
 .hours-actions .add-window {
@@ -77,9 +77,11 @@
 }
 
 .hours-actions .save-hours {
-  padding-right: 26rpx;
-  padding-left: 26rpx;
+  padding-right: 3.4667vw;
+  padding-left: 3.4667vw;
 }
 
 .selection-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 3px; }
 .selection-grid .button { width: 100%; min-width: 0; padding: 6px 0; font-size: 12px; min-height: 33px; }
+
+.repeat-row { height: 26px; }

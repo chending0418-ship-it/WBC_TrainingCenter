@@ -1,11 +1,13 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">家长资料</text>
   <form bindsubmit="search">
-    <label class="form-field">
-      <text>搜索家长账户</text>
-      <input class="field" value="{{query}}" bindinput="changeQuery" maxlength="50" placeholder="孩子姓名、联系人或电话" disabled="{{loading}}" />
-    </label>
-    <button class="button row-action" form-type="submit" disabled="{{loading}}" hover-class="press">搜索</button>
+    <view class="parent-search">
+      <label class="form-field">
+        <text>搜索家长账户</text>
+        <input class="field" value="{{query}}" bindinput="changeQuery" maxlength="50" placeholder="孩子姓名、联系人或电话" disabled="{{loading}}" />
+      </label>
+      <button class="button row-action" form-type="submit" disabled="{{loading}}" hover-class="press">搜索</button>
+    </view>
   </form>
   <view wx:if="{{loading}}" class="message">正在查询家长资料…</view>
   <view wx:elif="{{error}}" class="form-error">{{error}}</view>

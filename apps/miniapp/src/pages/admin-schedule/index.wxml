@@ -9,18 +9,18 @@
       <label class="form-field"><text>课程名称</text><input class="field" value="{{editor.title}}" data-field="title" bindinput="changeClassField" maxlength="50" placeholder="输入课程名称" disabled="{{busy}}" /></label>
       <picker wx:if="{{typeOptions.length > 1}}" class="filter-row" range="{{typeOptions}}" range-key="label"
         value="{{editor.typeIndex}}" bindchange="changeCourseType" disabled="{{busy}}">
-        <view class="picker"><text class="picker-label">课程类型</text><text class="picker-value">{{typeOptions[editor.typeIndex].label}}</text></view>
+        <view class="picker"><text class="picker-label">课程类型</text><text class="picker-value">{{typeOptions[editor.typeIndex].label}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
       </picker>
       <picker range="{{coaches}}" range-key="name" value="{{editor.coachIndex}}" bindchange="changeClassCoach" disabled="{{busy}}">
-        <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{editor.coachIndex < 0 ? editor.template.coachName + '（已停用）' : coaches[editor.coachIndex].name}}</text></view>
+        <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{editor.coachIndex < 0 ? editor.template.coachName + '（已停用）' : coaches[editor.coachIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
       </picker>
       <label class="form-field"><text>场地</text><input class="field" value="{{editor.venue}}" data-field="venue" bindinput="changeClassField" maxlength="50" disabled="{{busy}}" /></label>
     </view>
     <view class="lesson-card">
       <picker mode="date" start="{{editor.date < today ? editor.date : today}}" end="{{lastDate}}" value="{{editor.date}}" bindchange="changeClassDate" disabled="{{busy}}">
-        <view class="picker"><text class="picker-label">{{editor.repeat ? '起始日期' : '开课日期'}}</text><text class="picker-value">{{editor.date}}</text></view>
+        <view class="picker"><text class="picker-label">{{editor.repeat ? '起始日期' : '开课日期'}}</text><text class="picker-value">{{editor.date}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
       </picker>
-      <view wx:if="{{!editor.id && mode !== 'templates'}}" class="row-line filter-row"><text>按周重复</text><switch color="#761F32" checked="{{editor.repeat}}" bindchange="changeRepeat" disabled="{{busy}}" /></view>
+      <view wx:if="{{!editor.id && mode !== 'templates'}}" class="row-line filter-row repeat-row"><text>按周重复</text><switch class="compact-switch" color="#761F32" checked="{{editor.repeat}}" bindchange="changeRepeat" disabled="{{busy}}" /></view>
       <view wx:if="{{editor.repeat}}">
         <view class="subheading">选择重复日期</view>
         <view class="selection-grid">
@@ -98,7 +98,7 @@
     </block>
     <block wx:elif="{{coaches.length}}">
       <picker class="filter-row" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="changeHoursCoach" disabled="{{busy || editingWeekday >= 0}}">
-        <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text></view>
+        <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{coaches[coachIndex].name}}教练</text><view wx:if="{{!(busy || editingWeekday >= 0)}}" class="chevron" aria-hidden="true"></view></view>
       </picker>
       <view class="section-title" role="heading" aria-level="2">每周固定开放时间</view>
       <view class="lesson-card weekly-hours">
@@ -129,7 +129,7 @@
       <block wx:if="{{editingWeekday < 0}}">
         <view class="section-title" role="heading" aria-level="2">指定日期停用</view>
         <picker mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="changeDate" disabled="{{busy || editingWeekday >= 0}}">
-          <view class="picker"><text class="picker-label">日期</text><text class="picker-value">{{date}} · {{dayLabel}}</text></view>
+          <view class="picker"><text class="picker-label">日期</text><text class="picker-value">{{date}} · {{dayLabel}}</text><view wx:if="{{!(busy || editingWeekday >= 0)}}" class="chevron" aria-hidden="true"></view></view>
         </picker>
         <view wx:if="{{!exceptions.length}}" class="muted">当天没有停用记录。</view>
         <view wx:for="{{exceptions}}" wx:key="id" class="lesson-card">
@@ -139,7 +139,7 @@
         </view>
         <button wx:if="{{!blocking}}" class="button quiet row-action" bindtap="startBlock" disabled="{{busy}}" hover-class="press">新增停用时段</button>
         <form wx:else class="lesson-card" bindsubmit="saveBlock">
-          <label class="form-field"><text>开始</text><input class="field" value="{{blockStart}}" data-field="blockStart" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
+          <label class="form-field first-field"><text>开始</text><input class="field" value="{{blockStart}}" data-field="blockStart" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
           <label class="form-field"><text>结束</text><input class="field" value="{{blockEnd}}" data-field="blockEnd" maxlength="5" bindinput="changeBlock" disabled="{{busy}}" /></label>
           <label class="form-field"><text>停用原因</text><input class="field" value="{{blockReason}}" data-field="blockReason" maxlength="100" bindinput="changeBlock" disabled="{{busy}}" /></label>
           <view class="section-actions form-actions">

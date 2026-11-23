@@ -3,6 +3,10 @@
 .enrollment .form-field text, .enrollment .form-field input { display: block; }
 .enrollment .form-field input { width: 100%; }
 .registration-pickers { border: 1px solid #ded5d3; border-radius: 10px; overflow: hidden; background: white; }
-.registration-pickers .picker { border: 0; border-radius: 0; margin: 0; }
+.registration-pickers .picker { min-height: 0; gap: 12px; padding: 10px 13px; border: 0; border-radius: 0; margin: 0; line-height: 1.55; }
+.registration-pickers .picker-label { font-size: 14px; }
+.registration-pickers .picker-value { font-size: 15px; font-weight: 700; }
 .registration-pickers picker + picker .picker { border-top: 1px solid #e6dfdc; }
-.registration-pickers picker > .picker::after { display: none; }
+.registration-pickers .chevron, .registration-pickers picker > .picker::after { display: none; }
+.approved-editor .page-title { margin-bottom: 19px; }
+.approved-editor .en-actions { margin-top: 12px; }

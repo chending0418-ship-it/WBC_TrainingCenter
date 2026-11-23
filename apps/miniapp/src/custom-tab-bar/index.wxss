@@ -10,6 +10,17 @@
   background: #fff;
 }
 
+.tab-bar.covered::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 23, 25, .45);
+}
+
+.tab-bar.covered .tab {
+  pointer-events: none;
+}
+
 .tab {
   flex: 1;
   display: flex;
