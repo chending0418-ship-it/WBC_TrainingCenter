@@ -314,31 +314,59 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  function cancel(id: string, operator: string, pendingOnly = false): void {
+  function cancelBooking(id: string, operator: string, now: string, pendingOnly: boolean, lessonDeleted: boolean) {
+    const booking = db.prepare('SELECT user_id, status, approval_pending, starts_at, title, refund_points FROM bookings WHERE id = ?')
+      .get(id);
+    if (!booking) throw new ApiError(404, 'NOT_FOUND', '未找到该预约');
+    if (pendingOnly && !booking.approval_pending) {
+      throw new ApiError(409, 'ALREADY_PROCESSED', '该预约已处理，请刷新后核对');
+    }
+    if (booking.status === 'CANCELLED') return;
+    if (!lessonDeleted && !booking.approval_pending && Date.parse(String(booking.starts_at)) - Date.parse(now) < cancellationLeadMs) {
+      throw new ApiError(409, 'CANCEL_NOT_ALLOWED', '已确认的预约最晚可在开课前 6 小时取消');
+    }
+    const refundPoints = lessonDeleted
+      ? Number(db.prepare("SELECT -delta AS paid FROM ledger WHERE booking_id = ? AND source = 'BOOKING'").get(id)?.paid ?? 0)
+      : Number(booking.refund_points);
+    const rejected = Boolean(booking.approval_pending) && !lessonDeleted;
+    db.prepare("UPDATE bookings SET status = 'CANCELLED', approval_pending = ?, cancelled_at = ?, refund_points = ? WHERE id = ?")
+      .run(Number(rejected), now, refundPoints, id);
+    if (!booking.approval_pending && refundPoints > 0) {
+      db.prepare(`
+        INSERT INTO ledger (user_id, booking_id, source, delta, reason, created_at, operator)
+        VALUES (?, ?, 'BOOKING_REFUND', ?, ?, ?, ?)
+      `).run(booking.user_id, id, refundPoints, '取消预约退积分 · ' + booking.title, now, operator);
+    }
+    audit(db, operator, rejected ? 'BOOKING_REJECTED' : 'BOOKING_CANCELLED', id, now);
+    notifyBooking(db, id, rejected ? 'BOOKING_REJECTED' : 'BOOKING_CANCELLED', now);
+  }
+
+  function cancel(id: string, operator: string, pendingOnly = false) {
+    transaction(db, () => cancelBooking(id, operator, clock().toISOString(), pendingOnly, false));
+  }
+
+  function deleteLesson(type: 'PRIVATE' | 'GROUP', id: string, operator: string, startsAt: string, count: number) {
     transaction(db, () => {
-      const booking = db.prepare('SELECT user_id, status, approval_pending, starts_at, title, refund_points FROM bookings WHERE id = ?')
-        .get(id);
-      if (!booking) throw new ApiError(404, 'NOT_FOUND', '未找到该预约');
-      if (pendingOnly && !booking.approval_pending) {
-        throw new ApiError(409, 'ALREADY_PROCESSED', '该预约已处理，请刷新后核对');
-      }
-      if (booking.status === 'CANCELLED') return;
       const now = clock().toISOString();
-      if (!booking.approval_pending && Date.parse(String(booking.starts_at)) - Date.parse(now) < cancellationLeadMs) {
-        throw new ApiError(409, 'CANCEL_NOT_ALLOWED', '已确认的预约最晚可在开课前 6 小时取消');
+      const lesson = type === 'GROUP'
+        ? db.prepare('SELECT starts_at, deleted_at AS deleted FROM class_sessions WHERE id = ?').get(id)
+        : db.prepare("SELECT starts_at, cancelled_at AS deleted FROM bookings WHERE id = ? AND type = 'PRIVATE' AND approval_pending = 0").get(id);
+      if (!lesson) throw new ApiError(404, 'NOT_FOUND', '未找到该课程');
+      if (lesson.deleted) return;
+      if (String(lesson.starts_at) <= now) throw new ApiError(409, 'LESSON_STARTED', '课程已经开始，无法删除');
+      const bookings = type === 'GROUP'
+        ? db.prepare("SELECT id FROM bookings WHERE class_id = ? AND status = 'CONFIRMED'").all(id) : [{ id }];
+      if (lesson.starts_at !== startsAt || bookings.length !== count) {
+        throw new ApiError(409, 'SCHEDULE_CHANGED', '课程时间或预约人数已变动，请刷新日程后重新确认');
       }
-      db.prepare("UPDATE bookings SET status = 'CANCELLED', cancelled_at = ? WHERE id = ?").run(now, id);
-      const refundPoints = Number(booking.refund_points);
-      if (!booking.approval_pending && refundPoints > 0) {
-        db.prepare(`
-          INSERT INTO ledger (user_id, booking_id, source, delta, reason, created_at, operator)
-          VALUES (?, ?, 'BOOKING_REFUND', ?, ?, ?, ?)
-        `).run(booking.user_id, id, refundPoints, '取消预约退积分 · ' + booking.title, now, operator);
+      for (const row of bookings) cancelBooking(String(row.id), operator, now, false, true);
+      if (type === 'GROUP') {
+        db.prepare("UPDATE class_sessions SET status = 'CLOSED', deleted_at = ? WHERE id = ?").run(now, id);
+        db.prepare('UPDATE template_occurrences SET manual_override = 1 WHERE class_id = ?').run(id);
       }
-      audit(db, operator, booking.approval_pending ? 'BOOKING_REJECTED' : 'BOOKING_CANCELLED', id, now);
-      notifyBooking(db, id, booking.approval_pending ? 'BOOKING_REJECTED' : 'BOOKING_CANCELLED', now);
+      audit(db, operator, 'LESSON_DELETED', id, now);
     });
   }
 
-  return { publicSchedule, schedule, scheduleContext, child, account, listSlots, quote, bookings, book, approve, cancel };
+  return { publicSchedule, schedule, scheduleContext, child, account, listSlots, quote, bookings, book, approve, cancel, deleteLesson };
 }

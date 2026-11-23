@@ -138,7 +138,7 @@ function login() {
 async function dashboard(ctx) {
   const { today } = await ctx.api('/context');
   const [classes, applications, pending] = await Promise.all([
-    ctx.api('/classes?date=' + today), ctx.api('/registrations?view=pending'), ctx.api('/bookings?pending=1')
+    ctx.api('/schedule?date=' + today), ctx.api('/registrations?view=pending'), ctx.api('/bookings?pending=1')
   ]);
   const live = classes.filter(row => row.bookable);
   const first = applications.map(r => r.submittedAt).sort()[0];
@@ -147,7 +147,7 @@ async function dashboard(ctx) {
   ctx.show(html`${title('工作台', link('＋ 新增团课', 'newClass', {}, 'wb'))}
     <div class="summary-band"><div><small>今日训练</small><h2>${monthDay(today)} <span>${weekdays[weekday(today)]}</span></h2></div>
     <div><small>团课班次</small><b>${live.length}</b></div><div><small>团课已占名额</small><b>${live.reduce((n, row) => n + row.bookedCount, 0)}</b></div></div>
-    ${box('今日排课', classTable(live), link('查看周课表', 'schedule'))}
+    ${box('今日排课', classTable(classes.filter(row => row.bookable || row.type === 'PRIVATE')), link('查看周课表', 'schedule'))}
     <div class="split equal">${task('队员注册审核', applications.length + ' 个待审核申请', 'registrations', '去审核', first ? '最早提交于 ' + datetime(first) : '暂无待审核申请')}
     ${task('预约审核', pending.length + ' 笔预约待确认', 'bookings', '去确认', pending.length ? '下一节课于 ' + datetime(pending[0].startsAt) + ' 开始' : '暂无待确认预约')}</div>`);
 }
@@ -235,7 +235,7 @@ async function render() {
       catch (error) {
         if (active()) {
           notice(error.message);
-          if (['REGISTRATION_CHANGED', 'ALREADY_PROCESSED', 'ALREADY_CANCELLED', 'TOO_LATE', 'ALREADY_REVERSED'].includes(error.code)) {
+          if (['SCHEDULE_CHANGED', 'REGISTRATION_CHANGED', 'ALREADY_PROCESSED', 'ALREADY_CANCELLED', 'TOO_LATE', 'ALREADY_REVERSED'].includes(error.code)) {
             render();
           }
         }

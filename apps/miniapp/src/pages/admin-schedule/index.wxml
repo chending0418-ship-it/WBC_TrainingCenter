@@ -54,7 +54,7 @@
 
   <block wx:else>
     <view class="calendar-tabs">
-      <button class="calendar-tab {{mode === 'classes' ? 'active' : ''}}" data-mode="classes" bindtap="changeMode" aria-pressed="{{mode === 'classes'}}" hover-class="press">团课</button>
+      <button class="calendar-tab {{mode === 'classes' ? 'active' : ''}}" data-mode="classes" bindtap="changeMode" aria-pressed="{{mode === 'classes'}}" hover-class="press">课程日程</button>
       <button class="calendar-tab {{mode === 'templates' ? 'active' : ''}}" data-mode="templates" bindtap="changeMode" aria-pressed="{{mode === 'templates'}}" hover-class="press">周期模板</button>
       <button class="calendar-tab {{mode === 'hours' ? 'active' : ''}}" data-mode="hours" bindtap="changeMode" aria-pressed="{{mode === 'hours'}}" hover-class="press">私教时段</button>
     </view>
@@ -66,23 +66,25 @@
       <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, lastDate, date, canPick: true, showDays: true, busy}}" />
       <view class="agenda-heading"><text class="agenda-title" role="heading" aria-level="2">班次安排</text><text class="agenda-count">{{groups.length}} 天有课 · 共 {{total}} 节</text></view>
       <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
-      <view wx:if="{{!total}}" class="message">本周暂无团课，可在右上角新增。</view>
+      <view wx:if="{{!total}}" class="message">本周暂无课程。</view>
       <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" id="agenda-{{day.date}}" class="agenda-day">
         <view class="agenda-stamp {{day.date === today ? 'stamp-today' : ''}}"><text class="stamp-number">{{day.day}}</text><text class="stamp-weekday">{{day.weekday}}</text></view>
         <view>
           <view wx:for="{{day.lessons}}" wx:key="id" class="agenda-card {{item.status === 'CLOSED' ? 'agenda-closed' : ''}}">
-            <view class="agenda-line"><text class="agenda-time">{{item.timeLabel}}</text><text class="agenda-state">{{item.status === 'CLOSED' ? '已停开' : '已发布'}}</text></view>
+            <view class="agenda-line"><text class="agenda-time">{{item.timeLabel}}</text><text class="agenda-state">{{item.type === 'PRIVATE' ? '私教' : (item.status === 'CLOSED' ? '已停开' : '团课')}}</text></view>
             <text class="agenda-name">{{item.title}}</text>
             <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
+            <view class="agenda-note">{{item.names ? '已确认队员 · ' + item.names : '暂无已确认队员'}}</view>
             <view class="agenda-bottom">
-              <text class="agenda-facts">已占 {{item.bookedCount}}/{{item.capacity}} 位 · {{item.points}} 积分</text>
+              <text wx:if="{{item.type === 'GROUP'}}" class="agenda-facts">已占 {{item.bookedCount}}/{{item.capacity}} 位 · {{item.points}} 积分</text>
               <button class="manage-toggle" data-id="{{item.id}}" bindtap="toggleDetails" aria-expanded="{{expandedId === item.id}}" disabled="{{busy}}" hover-class="press">{{expandedId === item.id ? '收起' : '详情'}}</button>
             </view>
             <view wx:if="{{expandedId === item.id}}" class="agenda-details">
-              <view class="agenda-note">{{item.names ? '已预约：' + item.names : '暂无预约'}} · 余 {{item.capacity - item.bookedCount}} 位</view>
+              <view wx:if="{{item.type === 'GROUP'}}" class="agenda-note">余 {{item.capacity - item.bookedCount}} 位</view>
               <view wx:if="{{item.editable}}" class="section-actions item-actions">
-                <button class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>
-                <button class="button quiet" data-id="{{item.id}}" bindtap="toggleClass" disabled="{{busy}}" hover-class="press">{{item.status === 'CLOSED' ? '恢复班次' : '停开班次'}}</button>
+                <button wx:if="{{item.type === 'GROUP'}}" class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>
+                <button class="button quiet" data-id="{{item.id}}" bindtap="deleteLesson" disabled="{{busy}}" hover-class="press">删除课程</button>
+                <button wx:if="{{item.type === 'GROUP'}}" class="button quiet" data-id="{{item.id}}" bindtap="toggleClass" disabled="{{busy}}" hover-class="press">{{item.status === 'CLOSED' ? '恢复班次' : '停开班次'}}</button>
               </view>
             </view>
           </view>

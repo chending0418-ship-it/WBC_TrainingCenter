@@ -6,12 +6,16 @@ function assignedCoaches(row) {
 }
 
 export function classTable(classes, editDate) {
-  return table(['时段', '团课', '教练', '训练场地', '已占 / 容量'], classes.map(row => {
+  return table(['时段', '课程', '教练', '训练场地', '已占 / 容量', '已确认队员', ...(editDate ? ['操作'] : [])], classes.map(row => {
     const label = coach(row.coachName);
-    const editable = editDate && Date.parse(row.startsAt) > Date.now();
+    const privateLesson = row.type === 'PRIVATE';
+    const editable = !privateLesson && editDate && Date.parse(row.startsAt) > Date.now();
     const cell = editable ? html`${label} ${link('编辑班次', 'classCoaches', { date: editDate, id: row.id })}` : label;
-    return [hours(row), row.title + (row.bookable ? '' : '（已停开）'), cell, row.venue, row.bookedCount + ' / ' + row.capacity];
-  }), '当天暂无团课');
+    const names = privateLesson ? row.childName : row.attendees.map(person => person.childName).join('、');
+    return [hours(row), row.title + (privateLesson || row.bookable ? '' : '（已停开）'), cell, row.venue,
+      privateLesson ? '1 / 1' : row.bookedCount + ' / ' + row.capacity, names || '暂无已确认队员', ...(editDate ? [Date.parse(row.startsAt) > Date.now()
+        ? html`<button type="button" class="txt" data-delete="${row.id}">删除课程</button>` : '—'] : [])];
+  }), '当天暂无课程');
 }
 
 function coachChoices(choices, selected) {
@@ -55,7 +59,7 @@ export async function schedule(ctx) {
   const date = validDate(ctx.query.get('date')) ? ctx.query.get('date') : context.today;
   const first = addDays(date, -((weekday(date) + 6) % 7));
   const days = Array.from({ length: 7 }, (_, i) => addDays(first, i));
-  const all = await ctx.api('/classes?view=week&date=' + first);
+  const all = await ctx.api('/schedule?view=week&date=' + first, true);
   const selectedCoach = ctx.query.get('coach') || '';
   const classes = all.filter(row => !selectedCoach || assignedCoaches(row).includes(selectedCoach));
   const dayUrl = target => href('schedule', { date: target, coach: selectedCoach });
@@ -65,7 +69,7 @@ export async function schedule(ctx) {
     const lessons = classes.filter(row => row.date === day);
     return html`<div class="${day === date ? 'current' : ''}"><a class="cal-day" href="${dayUrl(day)}" aria-label="查看${monthDay(day)}排课">
       ${lessons.length ? lessons.map(row => html`<article><time>${hours(row)}</time><strong>${row.title}</strong>
-        <small>${coach(row.coachName)} · ${row.bookedCount} / ${row.capacity} 人${row.bookable ? '' : ' · 已停开'}</small></article>`) : html`<span class="dash">—</span>`}</a></div>`;
+        <small>${coach(row.coachName)} · ${row.type === 'PRIVATE' ? '私教' : row.bookedCount + ' / ' + row.capacity + ' 人' + (row.bookable ? '' : ' · 已停开')}</small></article>`) : html`<span class="dash">—</span>`}</a></div>`;
   });
   const duration = first.slice(0, 7) === days[6].slice(0, 7) ? Number(days[6].slice(8)) + '日' : monthDay(days[6]);
   const root = ctx.show(html`${title('排课管理', buttons(link('私教时段', 'privateHours', { date, coach: selectedCoach }, 'wb outline'), link('周期模板', 'classTemplates', { date }, 'wb outline'), link('＋ 新增团课', 'newClass', { date }, 'wb')))}
@@ -76,7 +80,15 @@ export async function schedule(ctx) {
       ${filter('教练', 'coach', [['', '全部'], ...context.coaches.map(c => [c.id, coach(c.name)])], selectedCoach)}</div>
     <div class="cal"><div class="calhead">${heads}</div><div class="calbody">${cells}</div></div>
     ${box(monthDay(date) + ' · ' + weekdays[weekday(date)], classTable(classes.filter(row => row.date === date), date))}`);
-  if (root) root.querySelector('[name=coach]').onchange = event => ctx.navigate('schedule', { date, coach: event.target.value });
+  if (!root) return;
+  for (const button of root.querySelectorAll('[data-delete]')) button.onclick = () => ctx.perform(async () => {
+    const row = classes.find(item => item.id === button.dataset.delete);
+    const bookedCount = row.type === 'PRIVATE' ? 1 : row.bookedCount;
+    if (!await confirmAction('删除课程', row.title + ' · ' + row.date + ' ' + hours(row) + '。将取消 ' + bookedCount + ' 笔预约，已扣积分全额退回。')) return;
+    await ctx.write('/schedule/' + row.type + '/' + encodeURIComponent(row.id), 'DELETE', { startsAt: row.startsAt, bookedCount });
+    if (ctx.active()) { ctx.notice('课程已删除'); ctx.refresh(); }
+  });
+  root.querySelector('[name=coach]').onchange = event => ctx.navigate('schedule', { date, coach: event.target.value });
 }
 
 function minuteTime(minute) {

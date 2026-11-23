@@ -138,6 +138,19 @@ export interface ManagedClass extends ClassDraft {
   attendees: { userId: string; childName: string }[];
 }
 
+export type ManagedLesson = (ManagedClass & { type: 'GROUP' }) | {
+  type: 'PRIVATE';
+  id: string;
+  date: string;
+  title: string;
+  venue: string;
+  coachId: string;
+  coachName: string;
+  startsAt: string;
+  endsAt: string;
+  childName: string;
+};
+
 export interface ManagedBooking extends Booking {
   userId: string;
   childName: string;
