@@ -526,9 +526,16 @@ test('注册退回、重新提交和重复审核保持同一申请版本及预�
   assert.deepEqual((await app.inject({ url, headers: parent })).json(), { registration: null, draft: { child: null, contact: null } });
   assert.equal((await app.inject({ url: '/api/me/contact', method: 'PUT', headers: parent, payload: contact })).statusCode, 200);
   assert.deepEqual((await app.inject({ url, headers: parent })).json().draft.contact, contact);
+  const directory = async (profile: string) => (await app.inject({
+    url: '/api/admin/parents?q=0021&profile=' + profile, headers: admin
+  })).json<{ id: string }[]>().map(row => row.id);
+  assert.deepEqual(await directory('submitted'), []);
+  assert.deepEqual(await directory('missing'), ['new-parent']);
   const draft = { child, contact };
   const pending = (await submit(draft)).json<Registration>();
   assert.equal(pending.status, 'PENDING');
+  assert.deepEqual(await directory('submitted'), ['new-parent']);
+  assert.deepEqual(await directory('missing'), []);
   assert.equal((await submit(draft)).json().revision, pending.revision);
   assert.equal((await search('APPROVED')).length, 0);
   assert.equal((await search('PENDING'))[0].reservedPoints, 0);
@@ -540,6 +547,7 @@ test('注册退回、重新提交和重复审核保持同一申请版本及预�
   assert.equal((await review({ ...returned, reason: ' ' })).statusCode, 400);
   const firstReview = (await review(returned)).json<Registration>();
   assert.equal(firstReview.reason, returned.reason);
+  assert.deepEqual(await directory('submitted'), ['new-parent']);
   assert.equal((await review(returned)).json().revision, firstReview.revision);
   assert.equal((await review({ decision: 'APPROVE', revision: pending.revision })).statusCode, 409);
   assert.equal((await submit({ ...draft, revision: pending.revision })).statusCode, 409);

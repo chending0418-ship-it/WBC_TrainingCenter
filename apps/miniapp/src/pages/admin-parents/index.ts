@@ -3,23 +3,35 @@ import { errorMessage } from '../../lib/client';
 import { allowPage, readVersion } from '../../lib/session';
 import { staffApi } from '../../lib/staff';
 
-function pathFor(query: string) {
-  return '/parents' + (query ? '?q=' + encodeURIComponent(query) : '');
+const filters = [
+  { param: 'profile=submitted', label: '已提交队员资料' }, { param: 'profile=missing', label: '仅登录、未提交资料' },
+  { param: 'status=APPROVED', label: '已通过' }, { param: 'status=PENDING', label: '待审核' }, { param: 'status=RETURNED', label: '已退回' }
+];
+
+function pathFor(query: string, index: number) {
+  return '/parents?' + filters[index].param + (query ? '&q=' + encodeURIComponent(query) : '');
 }
 
 Page({
   shownVersion: 0,
   requestNumber: 0,
-  data: { authorized: false, query: '', loading: true, error: '', searched: '', parents: [] as ManagedParent[] },
+  data: { authorized: false, filters, filterIndex: 0, query: '', loading: true, error: '', searched: '', parents: [] as ManagedParent[] },
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    const version = readVersion('/api/admin' + pathFor(this.data.searched));
+    const version = readVersion('/api/admin' + pathFor(this.data.searched, this.data.filterIndex));
     if (authorized && (!version || version !== this.shownVersion)) void this.load(this.data.searched);
   },
   onUnload() { this.requestNumber++; },
   changeQuery(event: WechatMiniprogram.Input) {
     this.setData({ query: event.detail.value });
+  },
+  changeFilter(event: WechatMiniprogram.PickerChange) {
+    const filterIndex = Number(event.detail.value);
+    if (!filters[filterIndex] || filterIndex === this.data.filterIndex) return;
+    this.shownVersion = 0;
+    this.setData({ filterIndex });
+    void this.search();
   },
   search() {
     return this.load(this.data.query.trim());
@@ -27,7 +39,7 @@ Page({
   async load(query: string) {
     if (!this.data.authorized) return;
     const request = ++this.requestNumber;
-    const path = pathFor(query);
+    const path = pathFor(query, this.data.filterIndex);
     this.setData({ loading: !this.shownVersion || this.data.searched !== query, searched: query, error: '' });
     try {
       const parents = await staffApi<ManagedParent[]>(path);

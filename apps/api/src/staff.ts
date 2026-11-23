@@ -298,8 +298,8 @@ export function registerStaffRoutes(
     routes.post('/registrations/:id/review', async request => reviewRegistration(db, requiredText(object(request.params).id),
       request.body, actor(request), clock()));
     routes.get('/parents', async request => {
-      const query = object(request.query).q;
-      return searchParents(db, query === undefined || query === '' ? '' : requiredText(query, 50), clock().toISOString(), object(request.query).status);
+      const { q: query, status, profile } = object(request.query);
+      return searchParents(db, query === undefined || query === '' ? '' : requiredText(query, 50), clock().toISOString(), status, profile);
     });
     routes.get('/accounts/:id', async request => {
       const userId = requiredText(object(request.params).id);

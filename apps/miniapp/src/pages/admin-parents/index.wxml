@@ -1,22 +1,26 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">家长资料</text>
+  <text class="page-title" role="heading" aria-level="1">队员档案</text>
   <form bindsubmit="search">
     <view class="parent-search">
       <label class="form-field">
-        <text>搜索家长账户</text>
-        <input class="field" value="{{query}}" bindinput="changeQuery" maxlength="50" placeholder="孩子姓名、联系人或电话" disabled="{{loading}}" />
+        <text>搜索账户</text>
+        <input class="field" value="{{query}}" bindinput="changeQuery" maxlength="50" placeholder="姓名、电话或账户 ID" disabled="{{loading}}" />
       </label>
       <button class="button row-action" form-type="submit" disabled="{{loading}}" hover-class="press">搜索</button>
     </view>
   </form>
-  <view wx:if="{{loading}}" class="message">正在查询家长资料…</view>
+  <picker class="filter-row" range="{{filters}}" range-key="label" value="{{filterIndex}}" bindchange="changeFilter">
+    <view class="picker"><text class="picker-label">档案筛选</text><text class="picker-value">{{filters[filterIndex].label}}</text><view class="chevron" aria-hidden="true"></view></view>
+  </picker>
+  <view wx:if="{{loading}}" class="message">正在查询队员档案…</view>
   <view wx:elif="{{error}}" class="form-error">{{error}}</view>
-  <view wx:elif="{{!parents.length}}" class="message">没有找到对应的家长账户。</view>
+  <view wx:elif="{{!parents.length}}" class="message">{{filterIndex === 1 ? '没有符合条件的账户。' : '没有符合条件的队员。'}}</view>
   <block wx:else>
-    <view class="section-title" role="heading" aria-level="2">{{searched ? '搜索结果' : '家长账户'}}</view>
+    <view class="section-title" role="heading" aria-level="2">{{searched ? '搜索结果' : filterIndex === 1 ? '未提交资料的账户' : '队员名单'}}</view>
     <view wx:if="{{parents.length === 50}}" class="muted">最多显示 50 条结果，可输入更具体的关键词。</view>
     <view wx:for="{{parents}}" wx:key="id" class="list-row">
-      <view class="row-line"><text class="row-name">{{item.childName || '未填写孩子资料'}}</text><text class="accent">{{item.balance}} 积分</text></view>
+      <view class="row-line"><text class="row-name">{{item.childName || '未提交队员资料'}}</text><text class="accent">{{item.balance}} 积分</text></view>
+      <view wx:if="{{!item.child}}" class="muted">账户 ID：<text user-select>{{item.id}}</text></view>
       <view wx:if="{{item.child.birthMonth}}" class="muted">出生年月 {{item.child.birthMonth}} · {{item.child.gender === 'MALE' ? '男' : '女'}}</view>
       <view wx:if="{{item.contact}}">{{item.contact.name}} · {{item.contact.phone}}</view>
       <view wx:else class="muted">未填写联系人。</view>
