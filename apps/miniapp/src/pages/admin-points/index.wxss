@@ -7,8 +7,50 @@
   color: white;
 }
 .page-shell > .details .accent { color: white; font-size: 23px; }
-form .section-actions:not(.form-actions) { margin: 5px 0 12px; }
-form .section-actions:not(.form-actions) .button { flex: none; min-width: 70px; min-height: 32px; padding: 5px 12px; }
+.points-tabs {
+  display: flex;
+  justify-content: flex-start;
+  gap: 19px;
+}
+.points-tabs .button {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 7px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.page-shell picker .picker.points-picker::after { display: none; }
+.direction-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 12px;
+}
+.direction-options .direction-option {
+  box-sizing: border-box;
+  flex: 0 0 70px;
+  width: 70px;
+  height: 32px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #761f32;
+  border-radius: 8px;
+  background: #761f32;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+.direction-options .direction-option.quiet {
+  border-color: #d5c4c5;
+  background: #fff;
+  color: #761f32;
+}
 .undo-overlay {
   position: fixed;
   inset: 0;

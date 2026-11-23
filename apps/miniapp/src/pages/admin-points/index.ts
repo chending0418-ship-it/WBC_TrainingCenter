@@ -103,7 +103,9 @@ Page({
     if (this.data.source !== source) this.setData({ ...emptyForm, source, action: operations[source].action });
   },
   setDirection(event: WechatMiniprogram.TouchEvent) {
-    this.setData({ direction: Number(event.currentTarget.dataset.direction), saveError: '' });
+    const direction = Number(event.currentTarget.dataset.direction);
+    if (this.data.busy || this.data.direction === direction || (direction !== 1 && direction !== -1)) return;
+    this.setData({ direction, saveError: '' });
   },
   selectBooking(event: WechatMiniprogram.PickerChange) {
     this.setData({ bookingIndex: Number(event.detail.value), saveError: '' });
