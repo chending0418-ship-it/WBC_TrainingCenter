@@ -595,6 +595,55 @@ test('管理员新增课程类型，班次及周期排课沿用类型和人数�
   assert.equal(rolled.find(item => item.title === draft.title)?.courseTypeId, courseType.id);
 });
 
+test('编辑或删除课程类型后原班次、模板和预约仍使用排课时的规则', async context => {
+  const { app } = fixture(context);
+  const headers = await session(app);
+  const parent = await session(app, false);
+  const catalog = '/api/admin/course-types';
+  const original = { name: '打击', maxStudents: 2, refundPercent: 75 };
+  const revised = { name: '新版打击', maxStudents: 1, refundPercent: 25 };
+  const post = (url: string, payload: object) => app.inject({ method: 'POST', url, headers, payload });
+  const old = (await post(catalog, { ...original, requestKey: 'create' })).json();
+  const plan = { ...draft, courseTypeId: old.id, weekdays: [2], requestKey: 'plan' };
+  assert.equal((await post('/api/admin/classes', plan)).statusCode, 200);
+  const list = async () => (await app.inject({ url: scheduleUrl, headers })).json<ManagedClass[]>();
+  const row = (await list()).find(item => item.courseTypeId === old.id)!;
+  const book = (await app.inject({ method: 'POST', url: '/api/bookings', headers: parent,
+    payload: { type: 'GROUP', classSessionId: row.id, requestKey: 'book' } })).json();
+  assert.equal(book.refundPoints, 33);
+  const edit = { method: 'PUT', url: catalog + '/' + old.id, headers, payload: { ...revised, requestKey: 'edit' } } as const;
+  assert.equal((await app.inject({ ...edit, headers: parent })).statusCode, 401);
+  const next = (await app.inject(edit)).json();
+  assert.ok(next.id && next.id !== old.id);
+  assert.deepEqual((await app.inject(edit)).json(), next);
+  assert.equal((await app.inject({ ...edit, payload: { ...original, requestKey: 'stale' } })).statusCode, 409);
+  const lesson = { ...draft, date: addDays(today, 1), capacity: 1, requestKey: 'new-class' };
+  assert.equal((await post('/api/admin/classes', { ...lesson, courseTypeId: old.id })).statusCode, 404);
+  assert.equal((await post('/api/admin/classes', { ...lesson, capacity: 2, courseTypeId: next.id })).statusCode, 400);
+  assert.equal((await post('/api/admin/classes', { ...lesson, courseTypeId: next.id })).statusCode, 200);
+  const newDay = (await app.inject({ url: '/api/admin/classes?date=' + lesson.date, headers })).json<ManagedClass[]>();
+  const newRow = newDay.find(item => item.courseTypeId === next.id)!;
+  const quote = async (id: string) => (await app.inject({ method: 'POST', url: '/api/admin/bookings/quote', headers,
+    payload: { userId: 'other-parent', type: 'GROUP', classSessionId: id } })).json();
+  const del = { method: 'DELETE', url: catalog + '/' + next.id, headers } as const;
+  assert.equal((await app.inject({ ...del, headers: parent })).statusCode, 401);
+  assert.equal((await app.inject(del)).statusCode, 204);
+  assert.equal((await app.inject(del)).statusCode, 204);
+  assert.deepEqual((await app.inject({ url: catalog, headers })).json(), []);
+  assert.equal((await quote(newRow.id)).refundPoints, 11);
+  assert.equal((await quote(row.id)).refundPoints, 33);
+  assert.equal((await list()).find(item => item.id === row.id)?.courseTypeName, original.name);
+  const [template] = (await app.inject({ url: '/api/admin/class-templates', headers })).json<ManagedTemplate[]>();
+  assert.equal(template.courseTypeName, original.name);
+  assert.equal(template.courseTypeMaxStudents, 2);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/class-templates/' + template.id, headers,
+    payload: { ...template, requestKey: 'revise' } })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/class-sessions/' + row.id, headers,
+    payload: { ...draft, courseTypeId: old.id, status: 'PUBLISHED' } })).statusCode, 204);
+  assert.equal((await post(catalog, { ...revised, requestKey: 'reuse-name' })).statusCode, 200);
+  assert.equal((await app.inject({ url: '/api/me/bookings', headers: parent })).json()[0].refundPoints, 33);
+});
+
 test('管理员可在六小时前取消，按原扣分全退、部分退或不退，同一笔只入账一次', async context => {
   const { app, db } = fixture(context);
   const admin = await session(app);

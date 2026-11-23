@@ -374,7 +374,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   first.close();
 
   const { app, db } = fixture(context, path);
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 15);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 16);
   const admin = await adminSession(app);
   const parent = await login(app);
   const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();

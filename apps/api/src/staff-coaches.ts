@@ -20,7 +20,7 @@ export function coachDraft(body: Record<string, unknown>) {
 
 function requirePrivateType(db: DatabaseSync, id: string | null) {
   if (id === null) return;
-  const course = db.prepare('SELECT max_students FROM course_types WHERE id = ?').get(id);
+  const course = db.prepare("SELECT max_students FROM course_types WHERE id = ? AND status = 'ACTIVE'").get(id);
   if (!course || course.max_students !== 1) {
     throw new ApiError(400, 'VALIDATION_ERROR', '请为私教选择一对一课程类型');
   }

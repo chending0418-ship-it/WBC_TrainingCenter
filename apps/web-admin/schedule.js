@@ -124,7 +124,7 @@ function recurringFields(days, times) {
 }
 
 export async function newClass(ctx) {
-  const [context, types] = await Promise.all([ctx.api('/context'), ctx.api('/course-types')]);
+  const [context, types] = await Promise.all([ctx.api('/context'), ctx.api('/course-types', true)]);
   return classEditor(ctx, context, types, context.coaches);
 }
 
@@ -132,10 +132,12 @@ export async function classCoaches(ctx) {
   const templateId = ctx.query.get('template');
   const id = templateId || ctx.query.get('id');
   const path = templateId ? '/class-templates' : '/classes?date=' + encodeURIComponent(ctx.query.get('date'));
-  const [context, types, coaches, rows] = await Promise.all([ctx.api('/context'), ctx.api('/course-types'), ctx.api('/coaches'), ctx.api(path)]);
+  const [context, types, coaches, rows] = await Promise.all([ctx.api('/context'), ctx.api('/course-types', true), ctx.api('/coaches'), ctx.api(path)]);
   const row = rows.find(item => item.id === id);
   if (!row) throw Error('未找到这项排课，请返回排课管理。');
-  return classEditor(ctx, context, types, coaches.filter(c => c.enabled || assignedCoaches(row).includes(c.id)), row, path);
+  const options = row.courseTypeId && !types.some(type => type.id === row.courseTypeId)
+    ? [...types, { id: row.courseTypeId, name: row.courseTypeName + '（排课时）', maxStudents: row.courseTypeMaxStudents }] : types;
+  return classEditor(ctx, context, options, coaches.filter(c => c.enabled || assignedCoaches(row).includes(c.id)), row, path);
 }
 
 function classEditor(ctx, context, types, choices, row, path) {

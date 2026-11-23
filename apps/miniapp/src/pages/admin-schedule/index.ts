@@ -38,6 +38,7 @@ Page({
     exceptions: [] as (CoachHours['exceptions'][number] & { label: string })[],
     blocking: false, blockStart: '', blockEnd: '', blockReason: ''
   },
+  activeTypes: [untyped] as TypeOption[],
   initialCoachId: '',
   onLoad(options: Record<string, string | undefined>) {
     if (options.coachId) {
@@ -49,8 +50,10 @@ Page({
     const authorized = allowPage('ADMIN');
     const firstShow = !this.data.authorized;
     this.setData({ authorized });
-    if (authorized && firstShow) void this.load();
-    else if (authorized && this.data.mode === 'classes' && !this.data.editor) void this.refresh(true);
+    if (authorized && (firstShow || !this.data.editor)) {
+      invalidateRead('/api/admin/course-types');
+      void this.load();
+    }
   },
   async load() {
     this.setData({ loading: true, loadError: '' });
@@ -65,7 +68,8 @@ Page({
         return;
       }
       this.initialCoachId = '';
-      this.setData({ today, lastDate, coaches, coachIndex, date: this.data.date || today, typeOptions: [untyped, ...options] });
+      this.activeTypes = [untyped, ...options];
+      this.setData({ today, lastDate, coaches, coachIndex, date: this.data.date || today, typeOptions: this.activeTypes });
       await this.refresh(true);
     } catch (error) {
       this.setData({ loading: false, loadError: errorMessage(error) });
@@ -164,9 +168,14 @@ Page({
     this.setData({ coachIndex: Number(event.detail.value), saveError: '', blocking: false, editingWeekday: -1 });
     void this.refresh();
   },
+  editTypeOptions(row: { courseTypeId?: string | null; courseTypeName: string | null; courseTypeMaxStudents: number | null }) {
+    if (!row.courseTypeId || this.activeTypes.some(type => type.id === row.courseTypeId)) return this.activeTypes;
+    return [...this.activeTypes, { id: row.courseTypeId, label: row.courseTypeName + '（排课时）', maxStudents: row.courseTypeMaxStudents! }];
+  },
   newClass() {
     const repeat = this.data.mode === 'templates';
     this.setData({
+      typeOptions: this.activeTypes,
       editor: { id: '', title: '', venue: '训练室 A', date: repeat ? this.data.today : this.data.date,
         time: '17:30', duration: '60', capacity: '6', points: '40',
         status: 'PUBLISHED', ...classCoachEditor(this.data.coaches), typeIndex: 0, repeat },
@@ -177,12 +186,13 @@ Page({
   editTemplate(event: WechatMiniprogram.TouchEvent) {
     const row = this.data.templates.find(item => item.id === event.currentTarget.dataset.id);
     if (!row) return;
-    this.setData({
+    const typeOptions = this.editTypeOptions(row);
+    this.setData({ typeOptions,
       editor: { id: row.id, template: row, title: row.title, venue: row.venue, date: row.date,
         time: row.startMinutes.map(minuteString).join('，'), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: 'PUBLISHED', repeat: true,
         ...classCoachEditor(this.data.coaches, row),
-        typeIndex: Math.max(0, this.data.typeOptions.findIndex(type => type.id === row.courseTypeId)) },
+        typeIndex: Math.max(0, typeOptions.findIndex(type => type.id === row.courseTypeId)) },
       days: weekdays.map((label, index) => ({ label, index, active: row.weekdays.includes(index) })), saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
@@ -207,12 +217,13 @@ Page({
   editClass(event: WechatMiniprogram.TouchEvent) {
     const row = this.findClass(String(event.currentTarget.dataset.id));
     if (!row) return;
-    this.setData({
+    const typeOptions = this.editTypeOptions(row);
+    this.setData({ typeOptions,
       editor: { id: row.id, title: row.title, venue: row.venue, date: row.date,
         time: minuteString(row.startMinute), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: row.status,
         ...classCoachEditor(this.data.coaches, row),
-        typeIndex: Math.max(0, this.data.typeOptions.findIndex(type => type.id === row.courseTypeId)), repeat: false }, saveError: ''
+        typeIndex: Math.max(0, typeOptions.findIndex(type => type.id === row.courseTypeId)), repeat: false }, saveError: ''
     });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
