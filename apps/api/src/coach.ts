@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import type { CoachLesson, CoachSchedule } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
-import { object, requiredText } from './input.ts';
+import { dateInput, object, requiredText } from './input.ts';
 import { roleSessions } from './role-session.ts';
 import type { Authorize } from './wechat-auth.ts';
 import { addDays, dateAt, venueDate, weekday } from './time.ts';
@@ -34,6 +34,7 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
 
   app.put('/api/coach/me/avatar', { bodyLimit: 524288 }, async request => {
     const coachId = (authorizeWechat ?? sessions.authorize)(request.headers.authorization).subject;
+    if (!coachId) throw new ApiError(403, 'NO_COACH_PROFILE', '请先绑定本人教练档案');
     const { image } = object(request.body);
     if (typeof image !== 'string' || !image) throw new ApiError(400, 'INVALID_IMAGE', '请选择头像图片');
     let jpeg: Buffer;
@@ -64,11 +65,13 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
     const period = object(request.query).period ?? 'today';
     if (period !== 'today' && period !== 'week') throw new ApiError(400, 'VALIDATION_ERROR', '请选择今日或本周');
     const coach = db.prepare('SELECT name, avatar_key FROM coaches WHERE id = ? AND enabled = 1').get(coachId);
-    if (!coach) throw new ApiError(404, 'NOT_FOUND', '未找到当前教练');
+    if (coachId && !coach) throw new ApiError(404, 'NOT_FOUND', '未找到当前教练');
 
     const today = venueDate(clock());
-    const from = period === 'today' ? today : addDays(today, -((weekday(today) + 6) % 7));
+    const anchor = object(request.query).date === undefined ? today : dateInput(object(request.query).date);
+    const from = period === 'today' ? today : addDays(anchor, -((weekday(anchor) + 6) % 7));
     const to = period === 'today' ? today : addDays(from, 6);
+    if (!coach) return { coachName: '', avatarKey: null, from, to, lessons: [] };
     const lower = dateAt(from);
     const upper = dateAt(addDays(to, 1));
     const rows = db.prepare(`

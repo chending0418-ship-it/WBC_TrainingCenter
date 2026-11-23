@@ -31,15 +31,18 @@
         <text>{{source === 'OFFLINE_CREDIT' ? '充值积分' : '调整积分'}}</text>
         <input class="field" type="number" maxlength="6" placeholder="例如 100" value="{{points}}" data-field="points" bindinput="changeField" disabled="{{busy}}" />
       </label>
+      <picker wx:if="{{source === 'ADJUSTMENT' && direction === -1}}" range="{{training}}" range-key="label" value="{{trainingIndex}}" bindchange="selectTraining" disabled="{{busy}}">
+        <view class="picker"><text class="picker-label">关联历史训练（选填）</text><text class="picker-value">{{training[trainingIndex].label}}</text></view>
+      </picker>
       <picker wx:if="{{source === 'ADJUSTMENT'}}" range="{{bookings}}" range-key="label" value="{{bookingIndex}}" bindchange="selectBooking" disabled="{{busy}}">
         <view class="picker"><text class="picker-label">关联预约</text><text class="picker-value">{{bookings[bookingIndex].label}}</text><view class="chevron" aria-hidden="true"></view></view>
       </picker>
       <label class="form-field">
-        <text>{{source === 'OFFLINE_CREDIT' ? '充值说明' : '调整原因'}}</text>
+        <text>{{source === 'OFFLINE_CREDIT' ? '充值备注' : '调整原因'}}</text>
         <input class="field" maxlength="100" placeholder="{{source === 'OFFLINE_CREDIT' ? '例如 线下收款' : '填写原因'}}" value="{{reason}}" data-field="reason" bindinput="changeField" disabled="{{busy}}" />
       </label>
-      <label class="form-field">
-        <text>{{source === 'OFFLINE_CREDIT' ? '凭证号或备注' : '备注（选填）'}}</text>
+      <label wx:if="{{source === 'ADJUSTMENT'}}" class="form-field">
+        <text>备注（选填）</text>
         <input class="field" maxlength="100" placeholder="例如 DEMO-001" value="{{reference}}" data-field="reference" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
@@ -53,6 +56,7 @@
       <view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.deltaLabel}}</text></view>
       <view class="muted">{{item.dateLabel}}{{item.operator ? ' · ' + item.operator : ''}}</view>
       <view wx:if="{{item.reference}}" class="muted">{{item.reference}}</view>
+      <view wx:if="{{item.trainingLabel}}" class="muted">关联训练 {{item.trainingLabel}}</view>
       <view wx:if="{{item.bookingLabel}}" class="muted">关联预约 {{item.bookingLabel}}</view>
       <view wx:if="{{item.reversalId}}" class="muted">已撤销 · 流水 #{{item.reversalId}}</view>
       <view wx:if="{{item.reversalOf}}" class="muted">原流水 #{{item.reversalOf}}</view>

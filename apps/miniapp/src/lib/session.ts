@@ -1,3 +1,4 @@
+import { config } from './config';
 import type { RoleSession, SessionRole, WechatLogin } from '../../../../packages/shared/contracts.js';
 import { demoCoachProfilesPath, invalidatePublicRead, publicSchedulePath } from './public-read';
 import { ReadCache } from './read-cache';
@@ -51,7 +52,7 @@ function openCurrentHome(courseId?: string, notice?: NoticePage) {
 
 export function allowEntry(courseId?: string, notice?: NoticePage): boolean {
   if (!active) return true;
-  if (notice && wechat && active.role !== noticePages[notice].role) return true;
+  if (notice && active.role !== noticePages[notice].role && wechat?.roles.includes(noticePages[notice].role)) return true;
   openCurrentHome(courseId, notice);
   return false;
 }
@@ -97,22 +98,28 @@ export async function signInWechat(): Promise<WechatLogin> {
 export async function selectWechatRole(role: SessionRole, courseId?: string, notice?: NoticePage) {
   if (!wechat) throw new RequestError('NOT_AUTHORIZED', '请先使用微信登录', 401);
   try {
-    if (notice && active && active.role !== role && active.role !== 'ADMIN') await signInWechat();
     const session = await send<RoleSession>('/api/auth/role', 'POST', { role }, wechat.token);
     wechat = { ...wechat, token: session.token };
     active = session;
     openCurrentHome(courseId, notice);
   } catch (error) {
-    if (error instanceof RequestError && (error.status === 401 || error.status === 403)) wechat = undefined;
+    if (error instanceof RequestError && (error.status === 401 || error.status === 403)) {
+      active = undefined;
+      wechat = undefined;
+    }
     throw error;
   }
 }
 
+export function canSwitchRole() {
+  return wechat ? wechat.roles.length > 1 : active?.role === 'ADMIN';
+}
+
 export function switchRole() {
-  if (active?.role !== 'ADMIN') return;
+  if (!active || !canSwitchRole()) return;
   if (!wechat) void send(endpoint.ADMIN, 'DELETE', undefined, active.token).catch(() => undefined);
   active = undefined;
-  openCurrentHome();
+  wx.reLaunch({ url: entry + '?login=1' });
 }
 
 const reads = new WeakMap<RoleSession, ReadCache>();
@@ -181,4 +188,19 @@ export async function roleRequest<T>(role: SessionRole, path: string, method: Me
     }
     throw error;
   }
+}
+
+export function fetchAdminFile(path: string): Promise<ArrayBuffer> {
+  const session = active;
+  if (session?.role !== 'ADMIN') return Promise.reject(new RequestError('NOT_AUTHORIZED', '请登录管理端', 401));
+  return new Promise((resolve, reject) => wx.request({
+    url: config.apiBase + '/api/admin/exports/' + path, responseType: 'arraybuffer',
+    header: { Authorization: 'Bearer ' + session.token }, timeout: 60000,
+    success(result) {
+      if (session !== active || result.statusCode !== 200) {
+        reject(new RequestError('EXPORT_FAILED', '导出失败，请确认登录状态后重试', result.statusCode));
+      } else resolve(result.data as ArrayBuffer);
+    },
+    fail: () => reject(new RequestError('NETWORK', '下载失败，请检查网络后重试', 0))
+  }));
 }

@@ -1,19 +1,22 @@
-import type { SessionRole } from '../../../../../packages/shared/contracts.js';
+import type { PublicSchedule, SessionRole } from '../../../../../packages/shared/contracts.js';
 import { config } from '../../lib/config';
 import { errorMessage } from '../../lib/request';
 import { allowEntry, noticePage, selectWechatRole, signIn, signInWechat, wechatIdentity } from '../../lib/session';
 import type { NoticePage } from '../../lib/session';
 
-import { publicRead, publicReadVersion, demoCoachProfilesPath } from '../../lib/public-read';
+import { publicLessonDays } from '../../lib/public-lessons';
+import type { PublicLesson } from '../../lib/public-lessons';
+import { weekAgenda } from '../../lib/week-agenda';
+import { publicRead, publicReadVersion, invalidatePublicRead, publicSchedulePath, demoCoachProfilesPath } from '../../lib/public-read';
 
-const roleLabels = { PARENT: '家长', COACH: '教练', ADMIN: '管理员' };
+const roleLabels = { PARENT: '家长', COACH: '教练', ADMIN: '俱乐部管理员' };
 
 Page({
   data: {
-    visible: false,
+    visible: false, home: true, weekLoading: true, weekError: '', weekLabel: '', today: '',
+    groups: [] as ReturnType<typeof weekAgenda<PublicLesson>>['groups'],
     wechatMode: config.mode === 'wechat',
     demoRoles: false,
-    accountId: '',
     noticeRoleLabel: '',
     allowedRoles: [] as { role: SessionRole; label: string }[],
     mode: '' as '' | 'COACH' | 'ADMIN',
@@ -25,10 +28,9 @@ Page({
   onLoad(options) {
     this.courseId = options.course?.slice(0, 100) ?? '';
     this.notice = noticePage(options.notice);
+    this.setData({ home: !this.notice && options.login !== '1' });
     if (this.notice) this.setData({ noticeRoleLabel: this.notice.startsWith('admin-') ? '管理员' : '家长' });
-    if ((!this.notice && options.login !== '1') || wechatIdentity()) return;
-    if (this.data.wechatMode) void this.loginWechat();
-    else this.setData({ demoRoles: true });
+    if (!this.data.wechatMode && (this.notice || options.login === '1')) this.setData({ demoRoles: true });
   },
   startLogin() {
     if (this.data.wechatMode) void this.loginWechat();
@@ -40,20 +42,58 @@ Page({
   onShow() {
     this.setData({ visible: allowEntry(this.courseId, this.notice) });
     this.showWechatIdentity();
+    if (this.data.visible && this.data.home && this.data.allowedRoles.length < 2 &&
+        (!this.weekVersion || this.weekVersion !== publicReadVersion(publicSchedulePath) || Date.now() >= this.nextCourseStart)) {
+      void this.loadWeek();
+    }
+  },
+  weekVersion: 0,
+  weekRequest: 0,
+  nextCourseStart: Infinity,
+  onUnload() { this.weekRequest++; },
+  async onPullDownRefresh() {
+    try {
+      if (this.data.home && this.data.visible && this.data.allowedRoles.length < 2) {
+        invalidatePublicRead(publicSchedulePath);
+        await this.loadWeek();
+      }
+    } finally { wx.stopPullDownRefresh(); }
+  },
+  async loadWeek() {
+    const request = ++this.weekRequest;
+    this.setData({ weekLoading: !this.data.weekLabel, weekError: '' });
+    try {
+      const schedule = await publicRead<PublicSchedule>(publicSchedulePath);
+      if (request !== this.weekRequest) return;
+      const { lessons, nextCourseStart } = publicLessonDays(schedule.courses);
+      const { groups, weekLabel } = weekAgenda(schedule.today, schedule.today, schedule.lastDate, lessons);
+      this.weekVersion = publicReadVersion(publicSchedulePath);
+      this.nextCourseStart = nextCourseStart;
+      this.setData({ today: schedule.today, groups, weekLabel });
+    } catch (error) {
+      if (request === this.weekRequest) this.setData({ weekError: errorMessage(error) });
+    } finally {
+      if (request === this.weekRequest) this.setData({ weekLoading: false });
+    }
   },
   showWechatIdentity() {
     const identity = wechatIdentity();
     this.setData({
-      accountId: identity?.accountId ?? '',
       allowedRoles: identity?.roles.map(role => ({ role, label: roleLabels[role] })) ?? []
     });
   },
   async loginWechat() {
-    if (this.data.busy || this.data.accountId) return;
+    if (this.data.busy) return;
     this.setData({ busy: true, error: '' });
     try {
-      await signInWechat();
-      this.showWechatIdentity();
+      const identity = await signInWechat();
+      if (identity.roles.length === 1) {
+        await selectWechatRole(identity.roles[0], this.courseId, this.notice);
+      } else if (identity.roles.length > 1) {
+        this.showWechatIdentity();
+      } else {
+        this.setData({ error: '当前账号暂无可用角色，请联系俱乐部管理员。' });
+      }
     } catch (error) {
       this.setData({ error: errorMessage(error) });
     } finally {
@@ -73,9 +113,6 @@ Page({
     } finally {
       this.setData({ busy: false });
     }
-  },
-  copyAccountId() {
-    if (this.data.accountId) wx.setClipboardData({ data: this.data.accountId });
   },
   chooseRole(event: WechatMiniprogram.TouchEvent) {
     if (this.data.busy) return;

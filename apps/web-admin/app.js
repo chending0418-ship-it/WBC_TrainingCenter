@@ -1,4 +1,5 @@
 import { html, href, link, title, box, empty, monthDay, weekday, weekdays, datetime } from './ui.js';
+import { exportsPage, roles } from './club.js';
 import { people, person, finance } from './people.js';
 import { schedule, newClass, classTable, classTemplates, classCoaches } from './schedule.js';
 import { coaches, editCoach, courseTypes } from './coaches.js';
@@ -9,9 +10,10 @@ import { registrations, bookings } from './reviews.js';
 const menu = [
   ['dashboard', '工作台', 'schedule'], ['people', '队员档案', 'parents'], ['finance', '积分调整', 'points'],
   ['schedule', '排课管理', 'schedule'], ['coaches', '教练管理', 'coaches'], ['courseTypes', '课程类型', 'types'],
-  ['registrations', '队员注册审核', 'types'], ['bookings', '预约管理', 'bookings']
+  ['registrations', '队员注册审核', 'types'], ['bookings', '预约管理', 'bookings'],
+  ['roles', '用户管理', 'parents'], ['exportsPage', '信息导出', 'export']
 ];
-const pages = { dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
+const pages = { exportsPage, roles, dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
   coaches, editCoach, courseTypes, registrations, bookings, newBooking, bookingDay };
 const workspace = document.querySelector('#workspace');
 const identity = document.querySelector('.admin-label');
@@ -46,7 +48,7 @@ function clearSession() {
   }
 }
 
-async function api(path, method = 'GET', payload) {
+async function api(path, method = 'GET', payload, file = false) {
   const authorization = token;
   const headers = {};
   if (authorization) headers.Authorization = 'Bearer ' + authorization;
@@ -67,6 +69,7 @@ async function api(path, method = 'GET', payload) {
     error.code = failure.code;
     throw error;
   }
+  if (file) return response.blob();
   return response.status === 204 ? undefined : response.json();
 }
 
@@ -203,6 +206,7 @@ async function render() {
       if (fresh) reads.delete(path);
       return read(path);
     },
+    download: path => api(path, 'GET', undefined, true),
     async postQuote(path, payload) {
       if (!active()) throw new Error('页面已切换');
       return api(path, 'POST', payload);

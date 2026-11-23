@@ -18,7 +18,7 @@ export async function people(ctx) {
   const initial = choices.find(([value]) => value === ctx.query.get('filter'))?.[0] ?? choices[0][0];
   const root = ctx.show(html`${title(choosing ? '选择家庭' : '队员档案')}
     <form class="tool-row" role="search"><label class="web-search"><i aria-hidden="true"></i>
-    <input name="q" type="search" maxlength="50" aria-label="搜索队员" value="${ctx.query.get('q') || ''}" placeholder="姓名、电话或账户 ID"></label>
+    <input name="q" type="search" maxlength="50" aria-label="搜索队员" value="${ctx.query.get('q') || ''}" placeholder="姓名、球衣号码、电话或账户 ID"></label>
     ${filter(choosing ? '注册状态' : '档案筛选', 'status', choices, initial)}</form><div id="family-list" aria-live="polite"></div>`);
   if (!root) return;
   const form = root.querySelector('form');
@@ -37,7 +37,7 @@ export async function people(ctx) {
     const rows = await ctx.api('/parents?' + query.toString());
     if (!ctx.active() || request !== revision) return;
     const contents = rows.map(family => [
-      html`<b>${missing ? '账户 · ' + family.id.slice(-8) : nameOf(family)}</b>`, family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—',
+      html`<b>${missing ? '账户 · ' + family.id.slice(-8) : nameOf(family)}${family.jerseyNumber ? ' · #' + family.jerseyNumber : ''}</b>`, family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—',
       phoneTail(family.contact), stamp(stateOf(family)), family.balance - family.reservedPoints, family.reservedPoints,
       choosing ? link('选择家庭', 'finance', { id: family.id, mode }) : link('查看档案', 'person', { id: family.id, filter: selected, q: form.q.value.trim() })
     ]);
@@ -70,11 +70,20 @@ export async function person(ctx) {
   const [family, account, bookings] = await Promise.all([loadFamily(ctx, id), ctx.api(path), ctx.api(path + '/bookings')]);
   const profile = details([...(family.child ? [] : [['账户 ID', id]]), ['姓名', nameOf(family)], ['出生年月 / 性别', family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—'],
     ['联系人', family.contact ? family.contact.name + ' · ' + maskedPhone(family.contact.phone) : '—'], ['注册状态', stamp(stateOf(family))]]);
-  ctx.show(html`${title(nameOf(family) + '的队员档案', link('返回队员名单', 'people', { filter: ctx.query.get('filter'), q: ctx.query.get('q') }))}
-    <div class="split equal">${box('队员资料', profile)}${box('积分账户', html`${balances(account)}
+  const root = ctx.show(html`${title(nameOf(family) + '的队员档案', link('返回队员名单', 'people', { filter: ctx.query.get('filter'), q: ctx.query.get('q') }))}
+    <div class="split equal">${box('队员资料', html`${profile}${family.child ? html`<form class="form-pad">${field('球衣号码（选填）', 'number', family.jerseyNumber || '', { required: false, maxLength: 4 })}${submit('保存号码')}</form>` : ''}`)}${box('积分账户', html`${balances(account)}
       ${buttons(link('充值', 'finance', { id }, 'wb outline'), link('调整积分', 'finance', { id, mode: 'adjust' }, 'wb outline'))}`)}</div>
     ${box('近期预约', table(['开课时间', '课程', '教练', '积分', '状态'], bookings.map(b =>
       [datetime(b.startsAt), b.title, b.coachName, b.points, stamp(bookingLabels[b.status])]), '暂无预约'))}`);
+  const jersey = root?.querySelector('form');
+  if (jersey) jersey.onsubmit = event => {
+    event.preventDefault();
+    ctx.perform(async () => {
+      await ctx.write('/parents/' + encodeURIComponent(id) + '/jersey', 'PUT', { number: jersey.number.value.trim() });
+      ctx.notice('球衣号码已保存');
+      ctx.refresh();
+    });
+  };
 }
 
 export async function finance(ctx) {
@@ -84,8 +93,8 @@ export async function finance(ctx) {
   const firstFamily = id ? null : (await ctx.api('/parents'))[0];
   if (!id && !firstFamily) { ctx.show(html`${title('积分调整')}${empty('暂无可操作的家庭账户。')}`); return; }
   const path = accountUrl(id || firstFamily.id);
-  const [family, account, bookings] = await Promise.all([
-    firstFamily || loadFamily(ctx, id), ctx.api(path), adjusting ? ctx.api(path + '/bookings') : []
+  const [family, account, bookings, training] = await Promise.all([
+    firstFamily || loadFamily(ctx, id), ctx.api(path), adjusting ? ctx.api(path + '/bookings') : [], adjusting ? ctx.api('/past-training') : []
   ]);
   const action = adjusting ? '确认调整' : '确认充值';
   const pointForm = html`${tabs([
@@ -94,14 +103,15 @@ export async function finance(ctx) {
   ])}<form class="form-pad">
     ${adjusting ? select('调整方向', 'direction', [['1', '增加'], ['-1', '扣减']], '1') : ''}
     ${field(adjusting ? '调整积分' : '充值积分', 'points', '', { type: 'number', min: 1, max: 100000 })}
-    ${field(adjusting ? '调整原因' : '充值说明', 'reason', adjusting ? '' : '训练积分充值')}
+    ${field(adjusting ? '调整原因' : '充值备注', 'reason')}
     ${adjusting ? select('关联预约', 'bookingId', [['', '无关联预约'], ...bookings.map(b => [b.id, datetime(b.startsAt) + ' · ' + b.title])], '') : ''}
-    ${field(adjusting ? '备注（选填）' : '凭证号或备注', 'reference', '', { required: !adjusting })}
+    ${adjusting ? html`<div id="past-training" hidden>${select('关联历史训练（选填）', 'trainingId', [['', '不关联训练'], ...training.map(t => [t.id, datetime(t.startsAt) + ' · ' + t.title])], '')}</div>
+      ${field('备注（选填）', 'reference', '', { required: false })}` : ''}
     ${buttons(submit(action))}</form>`;
   const rows = account.ledger.map(row => {
     const reversible = ['OFFLINE_CREDIT', 'ADJUSTMENT'].includes(row.source) && row.reversalId == null;
     const undo = reversible ? html`<button type="button" class="txt" data-undo="${row.id}">撤销记录</button>` : row.reversalId ? '已撤销' : '—';
-    return [datetime(row.createdAt), row.reason, html`<b>${row.delta > 0 ? '+' : ''}${row.delta}</b>`, undo];
+    return [datetime(row.createdAt), html`${row.reason}${row.reference ? html`<div>${row.reference}</div>` : ''}${row.trainingStart ? html`<div>关联训练 ${datetime(row.trainingStart)} · ${row.trainingTitle}</div>` : ''}`, html`<b>${row.delta > 0 ? '+' : ''}${row.delta}</b>`, undo];
   });
   const root = ctx.show(html`${title('积分调整')}<div class="account-line"><span>当前家庭</span><b>${nameOf(family)}</b>
     ${family.contact ? family.contact.name + ' · 尾号 ' + family.contact.phone.replace(/\D/g, '').slice(-4) : ''}
@@ -109,6 +119,9 @@ export async function finance(ctx) {
     <div class="split finance">${box('账户操作', pointForm)}<div>${box('账户余额', balances(account))}
     ${box('积分流水', table(['时间', '项目', '变动', '操作'], rows, '暂无积分流水'))}</div></div>`);
   if (!root) return;
+  if (adjusting) root.querySelector('[name=direction]').onchange = event => {
+    root.querySelector('#past-training').hidden = event.target.value !== '-1';
+  };
   async function record(payload) {
     await ctx.write(path + '/ledger', 'POST', payload, true);
     if (ctx.active()) { ctx.notice('积分流水已更新'); ctx.refresh(); }
@@ -122,9 +135,9 @@ export async function finance(ctx) {
       const confirmation = await confirmAction(action, nameOf(family) + '的可用积分将从 ' +
         (account.balance - account.reservedPoints) + ' 变为 ' + (account.balance - account.reservedPoints + amount) + '。');
       if (!confirmation || !ctx.active()) return;
-      const base = { reason: data.reason.trim(), reference: data.reference.trim() };
-      await record(adjusting ? { ...base, source: 'ADJUSTMENT', delta: amount, bookingId: data.bookingId || null } :
-        { ...base, source: 'OFFLINE_CREDIT', points });
+      const base = { reason: data.reason.trim(), reference: data.reference?.trim() };
+      await record(adjusting ? { ...base, source: 'ADJUSTMENT', delta: amount, trainingId: amount < 0 ? data.trainingId : undefined, bookingId: data.bookingId || null } :
+        { note: data.reason.trim(), source: 'OFFLINE_CREDIT', points });
     });
   };
   root.addEventListener('click', event => {

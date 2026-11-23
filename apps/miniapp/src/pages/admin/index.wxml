@@ -1,5 +1,5 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">管理端</text>
+  <text class="page-title" role="heading" aria-level="1">俱乐部管理员</text>
   <view class="overview">
     <view class="overview-today">
       <text class="overview-label">今日训练</text>
@@ -27,6 +27,6 @@
   <subscription-reminder topic="admin" />
   <view class="utility-links">
     <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
-    <text aria-role="button" bindtap="switchRole" hover-class="press">切换身份</text>
+    <text aria-role="button" bindtap="switchRole" hover-class="press">切换角色</text>
   </view>
 </view>

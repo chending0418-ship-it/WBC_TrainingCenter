@@ -9,7 +9,7 @@ import type { WechatLoginConfig } from './wechat-login.ts';
 
 const sessionDuration = 8 * 60 * 60 * 1000;
 
-type Identity = { userId: string; isAdmin: number; coachId: string | null };
+type Identity = { userId: string; isParent: number; isAdmin: number; coachId: string | null };
 type WechatSession = Identity & { tokenHash: string; activeRole: SessionRole | null };
 
 export type Authorize = (authorization: string | undefined) => { subject: string };
@@ -19,8 +19,9 @@ function hash(token: string) {
 }
 
 function availableRoles(account: Identity): SessionRole[] {
-  const roles: SessionRole[] = ['PARENT'];
-  if (account.coachId) roles.push('COACH');
+  const roles: SessionRole[] = [];
+  if (account.isParent || account.isAdmin) roles.push('PARENT');
+  if (account.coachId || account.isAdmin) roles.push('COACH');
   if (account.isAdmin) roles.push('ADMIN');
   return roles;
 }
@@ -30,7 +31,7 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
     const token = authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
     const stored = token && db.prepare(`
       SELECT s.token_hash AS tokenHash, s.active_role AS activeRole, a.user_id AS userId,
-        a.is_admin AS isAdmin, c.id AS coachId
+        a.is_parent AS isParent, a.is_admin AS isAdmin, c.id AS coachId
       FROM wechat_sessions s JOIN wechat_accounts a ON a.user_id = s.user_id
       LEFT JOIN coaches c ON c.id = a.coach_id AND c.enabled = 1
       WHERE s.token_hash = ? AND a.app_id = ? AND s.expires_at > ?
@@ -42,7 +43,7 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
   function login(openId: string): WechatLogin {
     return transaction(db, () => {
       let account = db.prepare(`
-        SELECT a.user_id AS userId, a.is_admin AS isAdmin, c.id AS coachId
+        SELECT a.user_id AS userId, a.is_parent AS isParent, a.is_admin AS isAdmin, c.id AS coachId
         FROM wechat_accounts a LEFT JOIN coaches c ON c.id = a.coach_id AND c.enabled = 1
         WHERE a.app_id = ? AND a.open_id = ?
       `).get(config.appId, openId) as Identity | undefined;
@@ -50,7 +51,7 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
         const userId = randomUUID();
         db.prepare('INSERT INTO users (id) VALUES (?)').run(userId);
         db.prepare('INSERT INTO wechat_accounts (user_id, app_id, open_id) VALUES (?, ?, ?)').run(userId, config.appId, openId);
-        account = { userId, isAdmin: 0, coachId: null };
+        account = { userId, isParent: 1, isAdmin: 0, coachId: null };
       }
       const now = clock().getTime();
       const token = randomBytes(32).toString('base64url');
@@ -64,9 +65,6 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
   function activate(authorization: string | undefined, role: SessionRole): RoleSession {
     return transaction(db, () => {
       const current = session(authorization);
-      if (current.activeRole && current.activeRole !== role && (current.activeRole !== 'ADMIN' || !current.isAdmin)) {
-        throw new ApiError(403, 'ROLE_SWITCH_FORBIDDEN', '只有当前管理员身份可以切换身份');
-      }
       if (!availableRoles(current).includes(role)) {
         throw new ApiError(403, 'ROLE_NOT_ASSIGNED', '当前微信账号未绑定此身份');
       }
@@ -82,7 +80,7 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
     if (current.activeRole !== role || !availableRoles(current).includes(role)) {
       throw new ApiError(401, 'NOT_AUTHORIZED', '请使用获授权的对应身份登录');
     }
-    return { subject: role === 'COACH' && current.coachId ? current.coachId : current.userId };
+    return { subject: role === 'COACH' ? current.coachId ?? '' : current.userId };
   }
 
   function registerRoutes(app: FastifyInstance) {

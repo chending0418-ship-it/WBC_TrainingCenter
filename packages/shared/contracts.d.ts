@@ -78,7 +78,7 @@ export interface Booking extends Quote {
 export interface Account {
   balance: number;
   reservedPoints: number;
-  ledger: { id: number; delta: number; reason: string; createdAt: string }[];
+  ledger: { id: number; delta: number; reason: string; createdAt: string; trainingTitle: string | null; trainingStart: string | null }[];
 }
 
 export interface Child {
@@ -170,6 +170,7 @@ export interface ManagedUser {
 }
 
 export interface ManagedParent extends ManagedUser {
+  jerseyNumber: string | null;
   registrationStatus: RegistrationStatus | null;
   reservedPoints: number;
   contact: ParentContact | null;

@@ -1,7 +1,8 @@
 import type { CoachLesson, CoachSchedule } from '../../../../../packages/shared/contracts.js';
+import { addDays } from '../../lib/private-availability';
 import { coachIdentity } from '../../lib/coach-avatar';
 import { errorMessage } from '../../lib/request';
-import { allowPage, roleRequest, readVersion, invalidateRead, hasFreshRead } from '../../lib/session';
+import { canSwitchRole, switchRole, allowPage, roleRequest, readVersion, invalidateRead, hasFreshRead } from '../../lib/session';
 import { dateLabel, localTimestamp, timeRange } from '../../lib/display';
 
 type Period = 'today' | 'week';
@@ -9,8 +10,8 @@ type Day = {
   date: string; label: string;
   lessons: (CoachLesson & { key: string; hours: string; names: string })[];
 };
-function schedulePath(period: Period) {
-  return '/api/coach/me/schedule?period=' + period;
+function schedulePath(period: Period, date: string) {
+  return '/api/coach/me/schedule?period=' + period + (date && period === 'week' ? '&date=' + date : '');
 }
 
 function groupLessons(lessons: CoachLesson[]): Day[] {
@@ -35,7 +36,7 @@ function groupLessons(lessons: CoachLesson[]): Day[] {
 Page({
   data: {
     authorized: false,
-    identity: coachIdentity(''), hasProfile: false, uploading: false, period: 'today' as Period,
+    identity: coachIdentity(''), hasProfile: false, uploading: false, period: 'week' as Period, date: '', weekStart: '', canSwitch: false,
     rangeLabel: '', days: [] as Day[], loading: true, error: ''
   },
   requestNumber: 0,
@@ -43,13 +44,13 @@ Page({
   onUnload() { this.requestNumber++; },
   onShow() {
     const authorized = allowPage('COACH');
-    this.setData({ authorized });
-    if (authorized && (!this.shownVersion || this.shownVersion !== readVersion(schedulePath(this.data.period)))) void this.refresh();
+    this.setData({ authorized, canSwitch: canSwitchRole() });
+    if (authorized && (!this.shownVersion || this.shownVersion !== readVersion(schedulePath(this.data.period, this.data.date)))) void this.refresh();
   },
   async onPullDownRefresh() {
     try {
       if (this.data.authorized) {
-        invalidateRead(schedulePath(this.data.period));
+        invalidateRead(schedulePath(this.data.period, this.data.date));
         await this.refresh();
       }
     } finally {
@@ -82,15 +83,24 @@ Page({
       this.setData({ uploading: false });
     }
   },
+  switchRole,
+  changeWeek(event: WechatMiniprogram.TouchEvent) {
+    const step = Number(event.currentTarget.dataset.step);
+    if (!this.data.weekStart) return;
+    this.setData({ date: addDays(this.data.weekStart, step * 7) });
+    this.shownVersion = 0;
+    void this.loadPeriod('week');
+  },
   changePeriod(event: WechatMiniprogram.TouchEvent) {
     const period = event.currentTarget.dataset.period as Period;
-    if (period === this.data.period) return;
+    if (period === this.data.period && !this.data.date) return;
+    this.setData({ date: '' });
     void this.loadPeriod(period);
   },
   refresh() { return this.loadPeriod(this.data.period); },
   async loadPeriod(period: Period) {
     const current = ++this.requestNumber;
-    const path = schedulePath(period);
+    const path = schedulePath(period, this.data.date);
     if (!hasFreshRead(path)) {
       const changing = period !== this.data.period;
       if (changing) this.shownVersion = 0;
@@ -101,7 +111,7 @@ Page({
       if (current !== this.requestNumber) return;
       this.shownVersion = readVersion(path);
       this.setData({
-        period, loading: false, error: '', identity: coachIdentity(result.coachName, result.avatarKey), hasProfile: true, days: groupLessons(result.lessons),
+        period, loading: false, error: '', identity: coachIdentity(result.coachName, result.avatarKey), hasProfile: Boolean(result.coachName), weekStart: result.from, days: groupLessons(result.lessons),
         rangeLabel: result.from === result.to ? dateLabel(result.from) : dateLabel(result.from) + ' – ' + dateLabel(result.to)
       });
     } catch (error) {

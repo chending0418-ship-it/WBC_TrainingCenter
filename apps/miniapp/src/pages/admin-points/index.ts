@@ -11,7 +11,7 @@ const operations = {
   ADJUSTMENT: { action: '确认调整', success: '积分已调整' },
   REVERSAL: { action: '确认撤销', success: '记录已撤销' }
 };
-const emptyForm = { points: '', reason: '', reference: '', saveError: '', bookingIndex: 0, direction: 1, original: null };
+const emptyForm = { points: '', reason: '', reference: '', saveError: '', trainingIndex: 0, bookingIndex: 0, direction: 1, original: null };
 let request = 0;
 
 Page({
@@ -30,6 +30,7 @@ Page({
     reservedPoints: 0,
     source: 'OFFLINE_CREDIT' as Exclude<StaffLedgerSource, 'REVERSAL'>,
     action: operations.OFFLINE_CREDIT.action,
+    training: [] as { id: string; label: string }[],
     bookings: [] as { id: string; label: string }[],
     ledger: [] as Entry[]
   },
@@ -65,8 +66,9 @@ Page({
     this.setData({ loading: true, error: '' });
     try {
       const path = '/accounts/' + encodeURIComponent(id);
-      const [account, bookings] = await Promise.all([
-        staffApi<StaffAccount>(path), staffApi<Booking[]>(path + '/bookings')
+      const [account, bookings, past] = await Promise.all([
+        staffApi<StaffAccount>(path), staffApi<Booking[]>(path + '/bookings'),
+        staffApi<{ id: string; title: string; startsAt: string }[]>('/past-training')
       ]);
       if (current !== request) return;
       const choices = bookings.map(booking => ({
@@ -76,12 +78,14 @@ Page({
       const labels = new Map(choices.map(item => [item.id, item.label]));
       const ledger = account.ledger.map(entry => ({
         ...entry, dateLabel: datetime(entry.createdAt), deltaLabel: this.signed(entry.delta),
+        trainingLabel: entry.trainingStart ? datetime(entry.trainingStart) + ' · ' + entry.trainingTitle : '',
         bookingLabel: entry.bookingId ? labels.get(entry.bookingId) ?? '' : '',
         canReverse: (entry.source === 'OFFLINE_CREDIT' || entry.source === 'ADJUSTMENT') && entry.reversalId === null
       }));
       this.setData({
         ...(this.data.targetUserId ? { users: [{ id, label: account.childName || '未填写孩子资料' }] } : {}),
         balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
+        training: [{ id: '', label: '不关联训练' }, ...past.map(row => ({ id: row.id, label: datetime(row.startsAt) + ' · ' + row.title }))],
         bookings: [{ id: '', label: '无关联预约' }, ...choices], ledger });
     } catch (error) {
       if (current === request) this.setData({ error: errorMessage(error) });
@@ -106,6 +110,9 @@ Page({
     const direction = Number(event.currentTarget.dataset.direction);
     if (this.data.busy || this.data.direction === direction || (direction !== 1 && direction !== -1)) return;
     this.setData({ direction, saveError: '' });
+  },
+  selectTraining(event: WechatMiniprogram.PickerChange) {
+    this.setData({ trainingIndex: Number(event.detail.value) });
   },
   selectBooking(event: WechatMiniprogram.PickerChange) {
     this.setData({ bookingIndex: Number(event.detail.value), saveError: '' });
@@ -154,23 +161,23 @@ Page({
       this.setData({ saveError: '请填写 1 至 100000 的整数积分。' });
       return;
     }
-    if (!reason || (source === 'OFFLINE_CREDIT' && !reference)) {
-      this.setData({ saveError: source === 'OFFLINE_CREDIT' ? '请填写充值说明和凭证号或备注。' : '请填写操作原因。' });
+    if (!reason) {
+      this.setData({ saveError: source === 'OFFLINE_CREDIT' ? '请填写充值备注。' : '请填写操作原因。' });
       return;
     }
 
     this.setData({ busy: true, saveError: '' });
     try {
       let delta = points;
-      let details: object = { points };
+      let details: object = { points, note: reason };
       if (source === 'ADJUSTMENT') {
         delta = points * this.data.direction;
         const bookingId = this.data.bookings[this.data.bookingIndex]?.id;
-        details = { delta, bookingId };
+        details = { delta, bookingId, trainingId: delta < 0 ? this.data.training[this.data.trainingIndex]?.id : undefined };
       }
       const message = user.label + '\n' + (delta > 0 ? '增加 ' : '扣减 ') + Math.abs(delta) + ' 积分';
       if (!await confirmAction(action, message, action)) return;
-      await staffWrite('/accounts/' + user.id + '/ledger', { source, reason, reference, ...details });
+      await staffWrite('/accounts/' + user.id + '/ledger', { source, ...(source === 'ADJUSTMENT' ? { reason, reference } : {}), ...details });
       this.setData({ ...emptyForm });
       if (this.data.targetUserId && getCurrentPages().length > 1) {
         wx.navigateBack({ success: () => wx.showToast({ title: operations[source].success, icon: 'success' }) });

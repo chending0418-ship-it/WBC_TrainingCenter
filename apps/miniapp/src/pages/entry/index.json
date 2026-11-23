@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "WBC 训练助手" }
+{ "navigationBarTitleText": "WBC 训练助手", "enablePullDownRefresh": true, "backgroundTextStyle": "dark" }

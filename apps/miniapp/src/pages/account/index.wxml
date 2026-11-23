@@ -1,5 +1,6 @@
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page">
   <text class="page-title" role="heading" aria-level="1">我的账户</text>
+  <view class="utility-links">当前角色 · 队员家长<button wx:if="{{canSwitch}}" size="mini" bindtap="switchRole">切换角色</button></view>
   <view wx:if="{{loading}}" class="message">正在查询账户…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view>
@@ -19,6 +20,7 @@
     </navigator>
   </block>
   <view class="utility-links">
+    <text aria-role="button" bindtap="copyAccountId" hover-class="press">复制账号 ID</text>
     <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
   </view>
   <block wx:if="{{loaded}}">
@@ -26,7 +28,7 @@
     <view wx:if="{{!ledger.length}}" class="muted">暂无积分变动。</view>
     <view wx:for="{{ledger}}" wx:key="id" class="list-row">
       <view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.change}}</text></view>
-      <view class="muted">{{item.date}}</view>
+      <view class="muted">{{item.date}}</view><view wx:if="{{item.training}}" class="muted">关联训练 {{item.training}}</view>
     </view>
   </block>
 </view>

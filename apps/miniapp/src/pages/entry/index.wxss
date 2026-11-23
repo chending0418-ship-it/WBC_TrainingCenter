@@ -33,3 +33,32 @@
 .browse-chevron { width: 7px; height: 7px; border: solid currentColor; border-width: 1.5px 1.5px 0 0; transform: rotate(45deg); }
 .portal-signature { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 26px; padding: 19px 0 max(17px, env(safe-area-inset-bottom)); border-top: 1px solid #d9d1c9; color: #514950; font: 12px/1.4 Arial, sans-serif; }
 .portal-signature image { width: 42px; height: 24px; flex: none; }
+
+.club-home .portal-hero { flex: none; min-height: 0; height: clamp(232px, 83vw, 44vh); }
+.club-home .portal-title { padding: 24px 6vw; }
+.club-home .portal-title text:first-child { font-size: clamp(64px, 18vw, 90px); }
+.club-home .portal-title text:last-child { font-size: clamp(24px, 7.6vw, 36px); }
+.portal-hero .member-link {
+  position: absolute; top: 17px; right: 5vw; width: auto; margin: 0; padding: 0 10px;
+  color: #fff7e9; background: #4e1921; border: 1px solid #956e70; border-radius: 6px;
+  font-size: 13px; font-weight: 500; line-height: 35px;
+}
+.member-link::after { border: 0; }
+.home-schedule { padding: 24px 6vw 20px; }
+.home-week-heading, .full-schedule, .lesson-hours { display: flex; align-items: center; justify-content: space-between; }
+.home-week-title { display: block; font-size: 25px; font-weight: 700; line-height: 1.25; }
+.home-week-range, .home-course-detail, .week-status { color: #66595c; font-size: 13px; line-height: 1.5; }
+.home-week-range { margin-top: 4px; }
+.full-schedule { gap: 7px; padding: 10px 2px 10px 8px; color: #761f32; font-size: 14px; font-weight: 650; }
+.home-week-heading { margin-bottom: 14px; }
+.home-day { display: flex; gap: 16px; border-top: 1px solid #d9d1c9; }
+.home-date { display: flex; flex-direction: column; width: 38px; flex: none; padding-top: 14px; color: #761f32; font-size: 12px; }
+.day-number { font-size: 28px; line-height: 1.1; font-weight: 650; }
+.home-lessons { min-width: 0; flex: 1; }
+.home-lesson { padding: 12px 0; }
+.home-lesson + .home-lesson { border-top: 1px solid #e7dfd8; }
+.lesson-hours { color: #761f32; font-size: 13px; font-weight: 650; line-height: 1.4; }
+.started-label { color: #66595c; font-size: 11px; font-weight: 400; }
+.home-course-title { margin: 2px 0; font-size: 18px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.week-status { padding: 16px 0; border-top: 1px solid #d9d1c9; }
+.retry-week { display: block; width: max-content; margin: 10px 0 0; }

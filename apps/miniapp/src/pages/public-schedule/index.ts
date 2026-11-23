@@ -1,26 +1,26 @@
-import type { PublicCourse, PublicSchedule } from '../../../../../packages/shared/contracts.js';
-import { coachLabel } from '../../lib/coach-avatar';
-import { localTimestamp, timeRange } from '../../lib/display';
+import type { PublicSchedule } from '../../../../../packages/shared/contracts.js';
+import { publicLessonDays } from '../../lib/public-lessons';
+import type { PublicLesson } from '../../lib/public-lessons';
 import { groupReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
 import { errorMessage } from '../../lib/request';
 import { publicRead, publicReadVersion, invalidatePublicRead, publicSchedulePath } from '../../lib/public-read';
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
-type Lesson = PublicCourse & { hours: string; coachLabel: string; hasStarted: boolean };
-
 Page({
   data: {
-    selectedCourse: null as CourseReminder | null,
-    loading: true, error: '', today: '', lastDate: '', date: '',
+    selectedCourse: null as (CourseReminder & { venue: string }) | null,
+    serviceDetails: false, loading: true, error: '', today: '', lastDate: '', date: '',
     dates: [] as ReturnType<typeof weekAgenda>['dates'],
-    groups: [] as ReturnType<typeof weekAgenda<Lesson>>['groups'],
+    groups: [] as ReturnType<typeof weekAgenda<PublicLesson>>['groups'],
     total: 0, weekLabel: '', hasPrevious: false, hasNext: false
   },
-  lessons: new Map<string, Lesson[]>(),
+  lessons: new Map<string, PublicLesson[]>(),
   nextCourseStart: Infinity,
   requestNumber: 0,
   renderedVersion: 0,
+  initialDay: '',
+  onLoad(options) { this.initialDay = options.day || ''; },
   onShow() {
     if (!this.renderedVersion || this.renderedVersion !== publicReadVersion(publicSchedulePath) ||
       Date.now() >= this.nextCourseStart) void this.refresh();
@@ -37,22 +37,17 @@ Page({
       const schedule = await publicRead<PublicSchedule>(publicSchedulePath);
       if (request !== this.requestNumber) return;
       this.renderedVersion = publicReadVersion(publicSchedulePath);
-      const lessons = new Map<string, Lesson[]>();
-      const now = Date.now();
-      this.nextCourseStart = Infinity;
-      for (const course of schedule.courses) {
-        const date = localTimestamp(course.startsAt).slice(0, 10);
-        const day = lessons.get(date) ?? [];
-        const startsAt = Date.parse(course.startsAt);
-        if (startsAt > now) this.nextCourseStart = Math.min(this.nextCourseStart, startsAt);
-        day.push({ ...course, hasStarted: startsAt <= now,
-          hours: timeRange(course.startsAt, course.endsAt), coachLabel: coachLabel(course.coachName) });
-        lessons.set(date, day);
-      }
+      const { lessons, nextCourseStart } = publicLessonDays(schedule.courses);
+      this.nextCourseStart = nextCourseStart;
       this.lessons = lessons;
       const { today, lastDate } = schedule;
       const date = this.data.date >= today && this.data.date <= lastDate ? this.data.date : today;
-      this.setData({ today, lastDate, date, ...weekAgenda(date, today, lastDate, lessons) });
+      const agenda = weekAgenda(date, today, lastDate, lessons);
+      const initialDay = agenda.groups.find(day => day.date === this.initialDay);
+      this.initialDay = '';
+      this.setData({ today, lastDate, date, ...agenda }, () => {
+        if (initialDay) goToAgendaDay(initialDay.date, initialDay.count);
+      });
     } catch (error) {
       if (request === this.requestNumber) this.setData({ error: errorMessage(error) });
     } finally {
@@ -75,7 +70,7 @@ Page({
       void this.refresh();
       return;
     }
-    this.setData({ selectedCourse: groupReminder(course) });
+    this.setData({ selectedCourse: { ...groupReminder(course), venue: course.venue } });
   },
   dismissCourse() { this.setData({ selectedCourse: null }); },
   registerForCourse() {
@@ -84,5 +79,6 @@ Page({
     this.dismissCourse();
     wx.navigateTo({ url: '/pages/entry/index?login=1&course=' + encodeURIComponent(selection.classSessionId) });
   },
+  toggleServices() { this.setData({ serviceDetails: !this.data.serviceDetails }); },
   login() { wx.navigateTo({ url: '/pages/entry/index?login=1' }); }
 });

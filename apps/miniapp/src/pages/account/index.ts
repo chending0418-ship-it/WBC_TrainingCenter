@@ -1,4 +1,4 @@
-import { invalidateRead, readVersion, showParentTab } from '../../lib/session';
+import { canSwitchRole, parentAccountId, switchRole, invalidateRead, readVersion, showParentTab } from '../../lib/session';
 import type { Account, Registration } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
 import { registrationLabels } from '../../lib/registration';
@@ -9,7 +9,7 @@ const registrationPath = '/api/me/registration';
 
 Page({
   data: {
-    authorized: false,
+    authorized: false, canSwitch: false,
     balance: 0,
     reservedPoints: 0,
     ledger: [] as { id: number; reason: string; change: string; date: string }[],
@@ -18,13 +18,18 @@ Page({
     error: ''
   },
 
+  switchRole,
+  copyAccountId() {
+    const id = parentAccountId();
+    if (id) wx.setClipboardData({ data: id });
+  },
   accountVersion: 0,
   registrationVersion: 0,
   sequence: 0,
   onUnload() { this.sequence++; },
   onShow() {
     const authorized = showParentTab(this);
-    if (authorized !== this.data.authorized) this.setData({ authorized });
+    if (authorized !== this.data.authorized) this.setData({ authorized, canSwitch: canSwitchRole() });
     if (!authorized) return;
     if (this.accountVersion && this.accountVersion === readVersion(accountPath) &&
         this.registrationVersion && this.registrationVersion === readVersion(registrationPath)) return;
@@ -51,7 +56,7 @@ Page({
       this.registrationVersion = readVersion(registrationPath);
       const ledger = account.ledger.map(entry => ({
         id: entry.id,
-        reason: entry.reason,
+        reason: entry.reason, training: entry.trainingStart ? datetime(entry.trainingStart) + ' · ' + entry.trainingTitle : '',
         change: (entry.delta > 0 ? '+' : '') + entry.delta,
         date: datetime(entry.createdAt)
       }));

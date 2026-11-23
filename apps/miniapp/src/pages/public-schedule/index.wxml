@@ -4,8 +4,11 @@
 <view class="page-shell calendar-page">
   <view class="calendar-heading public-heading">
     <text class="page-title" role="heading" aria-level="1">课程表</text>
-    <button class="login-link" bindtap="login" hover-class="press">家长登录</button>
+    <button class="login-link" bindtap="login" hover-class="press">成员登录</button>
   </view>
+  <view class="service-intro">WBC 俱乐部提供棒球团课和一对一私教。可按周查看团课的时间、教练和训练场地。</view>
+  <button class="button quiet" size="mini" bindtap="toggleServices" aria-expanded="{{serviceDetails}}">{{serviceDetails ? '收起训练服务介绍' : '查看训练服务介绍'}}</button>
+  <view wx:if="{{serviceDetails}}" class="service-intro"><view class="row-name">团体训练</view><view>按课表上的时间和训练场地上课，每个班次单独开放预约。</view><view class="row-name">一对一私教</view><view>可选 60、90 或 120 分钟，开放时段和所需积分由教练档案确定。家长提交预约后，俱乐部管理员确认并扣除积分。</view></view>
   <view wx:if="{{loading}}" class="message">正在加载排课…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view>
@@ -17,11 +20,11 @@
     <template is="groups" data="{{groups, total, today, showBooking: false}}" />
   </block>
   <view wx:if="{{selectedCourse}}" class="quote-overlay">
-    <view class="quote-dialog registration-dialog" aria-role="dialog" aria-label="队员注册">
-      <view class="card-title">预约前请先注册队员</view>
+    <view class="quote-dialog registration-dialog" aria-role="dialog" aria-label="课程详情">
+      <view class="card-title">课程详情</view>
       <view class="registration-course"><text class="row-name">{{selectedCourse.title}}</text><text class="card-note">{{selectedCourse.when}}</text></view>
-      <view class="card-note">微信登录后填写队员资料。管理员批准后，就可以回来预约。</view>
-      <view class="quote-actions"><button class="button quiet" bindtap="dismissCourse">继续看课</button><button class="button" bindtap="registerForCourse">登录并注册队员</button></view>
+      <view class="card-note">{{selectedCourse.venue}} · 申请预约需登录，首次预约需完成队员注册。</view>
+      <view class="quote-actions"><button class="button quiet" bindtap="dismissCourse">继续看课</button><button class="button" bindtap="registerForCourse">登录办理预约</button></view>
     </view>
   </view>
 </view>
