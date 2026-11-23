@@ -14,7 +14,7 @@
       <picker range="{{coaches}}" range-key="name" value="{{editor.coachIndex}}" bindchange="changeClassCoach" disabled="{{busy}}">
         <view class="picker"><text class="picker-label">教练</text><text class="picker-value">{{editor.coachIndex < 0 ? editor.template.coachName + '（已停用）' : coaches[editor.coachIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
       </picker>
-      <label class="form-field"><text>场地</text><input class="field" value="{{editor.venue}}" data-field="venue" bindinput="changeClassField" maxlength="50" disabled="{{busy}}" /></label>
+      <label class="form-field"><text>训练场地</text><input class="field" value="{{editor.venue}}" data-field="venue" bindinput="changeClassField" maxlength="50" disabled="{{busy}}" /></label>
     </view>
     <view class="lesson-card">
       <picker mode="date" start="{{editor.date < today ? editor.date : today}}" end="{{lastDate}}" value="{{editor.date}}" bindchange="changeClassDate" disabled="{{busy}}">

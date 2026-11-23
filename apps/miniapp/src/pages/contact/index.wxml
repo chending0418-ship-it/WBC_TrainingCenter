@@ -3,7 +3,7 @@
   <view wx:if="{{loading}}" class="message">正在查询联系人…</view>
   <view wx:elif="{{error}}" class="message"><view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重试</button></view>
   <form wx:else bindsubmit="save">
-    <view class="muted">可选填，仅供场馆管理员联系你处理预约。</view>
+    <view class="muted">可选填，仅供俱乐部管理员联系你处理预约。</view>
     <label class="form-field"><text>联系人姓名</text><input class="field" value="{{name}}" maxlength="40" bindinput="changeName" disabled="{{busy}}" /></label>
     <label class="form-field"><text>联系电话</text><input class="field" value="{{phone}}" maxlength="24" bindinput="changePhone" disabled="{{busy}}" /></label>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>

@@ -8,7 +8,7 @@
     <view wx:elif="{{!registration}}" class="en-back" bindtap="continueBrowsing" role="button">返回课表</view>
     <text class="page-title" role="heading" aria-level="1">{{registration && registration.status === 'APPROVED' ? '队员资料' : '注册队员'}}</text>
     <block wx:if="{{!registration || registration.status !== 'APPROVED'}}">
-      <view class="en-hint">填写队员资料，提交给场馆审核。</view>
+      <view class="en-hint">填写队员资料，提交给俱乐部审核。</view>
       <view class="en-sub">队员资料</view>
     </block>
     <label class="form-field"><text>{{registration && registration.status === 'APPROVED' ? '姓名或昵称' : '队员姓名或昵称'}}</text>
@@ -61,7 +61,7 @@
   <view wx:if="{{confirmEdit}}" class="quote-overlay">
     <view class="quote-dialog registration-dialog" aria-role="dialog" aria-label="保存队员资料">
       <view class="card-title">保存队员资料</view>
-      <view class="card-note">修改后将重新提交给场馆审核。</view>
+      <view class="card-note">修改后将重新提交给俱乐部审核。</view>
       <view class="quote-actions"><button size="mini" class="button quiet" bindtap="cancelEdit">取消</button><button size="mini" class="button" bindtap="save">确认提交</button></view>
     </view>
   </view>

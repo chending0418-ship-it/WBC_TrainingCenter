@@ -64,7 +64,7 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
   function parentSelection(body: Record<string, unknown>) {
     const requested = selection(body);
     if (requested.type === 'PRIVATE' && requested.courseTypeId !== undefined) {
-      throw new ApiError(400, 'VALIDATION_ERROR', '私教课程类型由场馆设置');
+      throw new ApiError(400, 'VALIDATION_ERROR', '私教课程类型由俱乐部设置');
     }
     return requested;
   }

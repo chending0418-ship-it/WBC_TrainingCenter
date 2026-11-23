@@ -2,7 +2,7 @@ import { addDays, box, buttons, coach, details, field, filter, href, hours, html
   options, select, submit, table, title, weekday, weekdays } from './ui.js';
 
 export function classTable(classes) {
-  return table(['时段', '团课', '教练', '场地', '已占 / 容量'], classes.map(row =>
+  return table(['时段', '团课', '教练', '训练场地', '已占 / 容量'], classes.map(row =>
     [hours(row), row.title + (row.bookable ? '' : '（已停开）'), coach(row.coachName), row.venue, row.bookedCount + ' / ' + row.capacity]), '当天暂无团课');
 }
 
@@ -51,7 +51,7 @@ export async function newClass(ctx) {
     ${select('课程类型', 'courseTypeId', [['', '无课程类型'], ...types.map(t => [t.id, t.name])], '')}
     <label class="w-field"><span>教练</span><select name="coachId" class="w-select" required>
       ${options(context.coaches.map(c => [c.id, coach(c.name)]), context.coaches[0]?.id)}</select></label>
-    ${field('场地', 'venue', '', { maxLength: 50 })}
+    ${field('训练场地', 'venue', '', { maxLength: 50 })}
     ${field('开课日期', 'date', date, { type: 'date', min: context.today, max: context.lastDate })}
     ${field('开始时间', 'start', '14:00', { type: 'time' })}
     ${field('时长（分钟）', 'duration', '60', { type: 'number', min: 1, max: 720 })}

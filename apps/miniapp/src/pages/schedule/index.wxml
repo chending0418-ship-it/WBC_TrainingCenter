@@ -94,7 +94,7 @@
       <view class="quote-details">
         <text>时间</text><text>{{confirmation.when}}</text>
         <text>教练</text><text>{{confirmation.coach}}</text>
-        <text>场地</text><text>{{confirmation.venue}}</text>
+        <text>训练场地</text><text>{{confirmation.venue}}</text>
         <text>积分</text><text>确认后扣除 {{confirmation.points}} 积分</text>
         <text>按时取消</text><text>{{confirmation.refundPoints ? '退回 ' + confirmation.refundPoints + ' 积分' : '不退积分'}}</text>
       </view>
