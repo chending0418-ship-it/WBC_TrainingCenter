@@ -534,6 +534,9 @@ dialog .w-field { margin-top: 16px; }
   .nav-item { flex: none; gap: 5px; margin: 0; padding: 0 9px; height: 36px; font-size: 13px; }
   .nav-item img { width: 16px; }
   .page-shell { padding: 16px 12px; }
+  .section-head { flex-wrap: wrap; }
+  .section-head .buttons { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+  .section-head .wb { white-space: nowrap; }
   h1 { font-size: 27px; }
   .split.equal { grid-template-columns: 1fr; }
   .tool-row, .account-line { flex-wrap: wrap; }
@@ -555,3 +558,14 @@ dialog .w-field { margin-top: 16px; }
 
 .capacity-field { min-width: 0; }
 .capacity-field small:not([hidden]) { display: block; margin: -6px 0 11px; }
+
+.coach-row-actions { display: flex; gap: 12px; align-items: center; white-space: nowrap; }
+.coach-edit-form { max-width: 790px; }
+.coach-price-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+.hours-window { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.hours-window:not(:has([data-remove])) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hours-window [data-remove] { align-self: end; margin-bottom: 15px; }
+
+.private-hours th:first-child, .private-hours td:first-child, .private-hours th:last-child, .private-hours td:last-child { white-space: nowrap; }
+.hours-range { display: inline-block; margin-inline-end: 8px; }

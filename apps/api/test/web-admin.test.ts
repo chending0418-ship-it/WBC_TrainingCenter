@@ -7,7 +7,8 @@ const base = '/wbctraining/admin';
 test('Web 管理端静态资源可访问，生产数据需要独立管理员凭据，退出使会话失效', async context => {
   const app = createApp(openDatabase(':memory:'), undefined, { demo: false, webAdminPassword: 'test-password' });
   context.after(() => app.close());
-  for (const path of ['', '/', '/admin.css', '/icons/parents.svg']) {
+  for (const path of ['', '/', '/admin.css', '/icons/parents.svg', '/icons/coaches.svg',
+    '/app.js', '/coaches.js', '/admin-booking.js', '/private-hours.js']) {
     assert.equal((await app.inject(base + path)).statusCode, 200);
   }
   assert.equal((await app.inject(base + '/api/overview')).statusCode, 401);

@@ -1,13 +1,18 @@
 import { html, href, link, title, box, empty, monthDay, weekday, weekdays, datetime } from './ui.js';
 import { people, person, finance } from './people.js';
 import { schedule, newClass, classTable, classTemplates, classCoaches } from './schedule.js';
+import { coaches, editCoach, courseTypes } from './coaches.js';
+import { privateHours } from './private-hours.js';
+import { newBooking, bookingDay } from './admin-booking.js';
 import { registrations, bookings } from './reviews.js';
 
 const menu = [
   ['dashboard', '工作台', 'schedule'], ['people', '队员档案', 'parents'], ['finance', '积分调整', 'points'],
-  ['schedule', '排课管理', 'schedule'], ['registrations', '队员注册审核', 'types'], ['bookings', '预约审核', 'bookings']
+  ['schedule', '排课管理', 'schedule'], ['coaches', '教练管理', 'coaches'], ['courseTypes', '课程类型', 'types'],
+  ['registrations', '队员注册审核', 'types'], ['bookings', '预约管理', 'bookings']
 ];
-const pages = { dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, registrations, bookings };
+const pages = { dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
+  coaches, editCoach, courseTypes, registrations, bookings, newBooking, bookingDay };
 const workspace = document.querySelector('#workspace');
 const identity = document.querySelector('.admin-label');
 const sessionKey = 'wbc.web.admin.session';
@@ -177,7 +182,8 @@ async function render() {
   const page = Object.hasOwn(pages, requested) ? requested : 'dashboard';
   if (currentPage !== page) reads.clear();
   currentPage = page;
-  const section = ({ person: 'people', newClass: 'schedule', classTemplates: 'schedule', classCoaches: 'schedule' })[page] || page;
+  const section = ({ person: 'people', newClass: 'schedule', classTemplates: 'schedule', classCoaches: 'schedule',
+    privateHours: 'schedule', editCoach: 'coaches', newBooking: 'bookings', bookingDay: 'bookings' })[page] || page;
   const sectionName = menu.find(([id]) => id === section)[1];
   identity.hidden = false;
   shell(section, sectionName);
@@ -196,6 +202,10 @@ async function render() {
       if (!active()) throw new Error('页面已切换');
       if (fresh) reads.delete(path);
       return read(path);
+    },
+    async postQuote(path, payload) {
+      if (!active()) throw new Error('页面已切换');
+      return api(path, 'POST', payload);
     },
     async write(...args) {
       if (!active()) throw new Error('页面已切换');

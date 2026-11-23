@@ -30,11 +30,11 @@ export function registerWebAdmin(app: FastifyInstance, clock: () => Date, demo: 
       return reply.type(mime.html).send(await asset('index', 'html'));
     });
   }
-  for (const file of ['admin.css', 'app.js', 'ui.js', 'people.js', 'schedule.js', 'reviews.js']) {
+  for (const file of ['admin.css', 'app.js', 'ui.js', 'people.js', 'schedule.js', 'reviews.js', 'coaches.js', 'private-hours.js', 'admin-booking.js']) {
     const [name, type] = file.split('.') as [string, 'css' | 'js'];
     app.get(root + '/' + file, async (_request, reply) => reply.type(mime[type]).send(await asset(name, type)));
   }
-  for (const icon of ['schedule', 'parents', 'points', 'types', 'bookings']) {
+  for (const icon of ['schedule', 'parents', 'points', 'types', 'bookings', 'coaches']) {
     app.get(root + '/icons/' + icon + '.svg', async (_request, reply) => reply.type(mime.svg).send(await asset(icon, 'svg', icons)));
   }
 
