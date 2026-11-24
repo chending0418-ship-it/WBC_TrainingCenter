@@ -41,7 +41,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
 
   function list(firstDate: string, days = 1): ManagedClass[] {
     const rows = db.prepare(`
-      SELECT s.id, s.coach_id AS coachId, ${sessionRoster.ids} AS coachIds, ${sessionRoster.names} AS coachName, s.title, s.venue,
+      SELECT s.id, s.coach_id AS coachId, ${sessionRoster.ids} AS coachIds, ${sessionRoster.names} AS coachName, s.title, s.training_plan AS trainingPlan, s.venue,
         s.starts_at AS startsAt, s.ends_at AS endsAt, s.points, s.capacity, s.status,
         s.course_type_id AS courseTypeId, t.name AS courseTypeName, t.max_students AS courseTypeMaxStudents,
         (s.status = 'PUBLISHED' AND ${sessionRoster.enabled} AND ${templateAllowsBooking}) AS bookable,
@@ -86,9 +86,9 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
   function insertClass(draft: ClassDraft, startsAt: string, endsAt: string): string {
     const id = randomUUID();
     db.prepare(`
-      INSERT INTO class_sessions (id, coach_id, title, venue, starts_at, ends_at, points, capacity, course_type_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, draft.courseTypeId ?? null);
+      INSERT INTO class_sessions (id, coach_id, title, venue, starts_at, ends_at, points, capacity, course_type_id, training_plan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, draft.courseTypeId ?? null, draft.trainingPlan ?? '');
     saveExtras(db, 'class', id, assignedCoaches(draft));
     return id;
   }
@@ -138,10 +138,10 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     const id = randomUUID();
     db.prepare(`
       INSERT INTO class_templates (id, coach_id, title, venue, first_date, weekdays, start_minutes,
-        duration, capacity, points, course_type_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration, capacity, points, course_type_id, training_plan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, plan.coachId, plan.title, plan.venue, plan.date, JSON.stringify(plan.weekdays),
-      JSON.stringify(plan.startMinutes), plan.duration, plan.capacity, plan.points, plan.courseTypeId ?? null);
+      JSON.stringify(plan.startMinutes), plan.duration, plan.capacity, plan.points, plan.courseTypeId ?? null, plan.trainingPlan ?? '');
     saveExtras(db, 'template', id, coachIds);
     const count = materialize(id, plan, now, true);
     if (!count) throw new ApiError(400, 'VALIDATION_ERROR', '未来 30 天内没有符合重复规则的开课日期');
@@ -151,7 +151,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
 
   function templates(activeOnly = false): ManagedTemplate[] {
     const plans = db.prepare(`
-      SELECT t.id, t.coach_id AS coachId, ${templateRoster.ids} AS coachIds, ${templateRoster.names} AS coachName, t.title, t.venue, t.first_date AS date, t.enabled,
+      SELECT t.id, t.coach_id AS coachId, ${templateRoster.ids} AS coachIds, ${templateRoster.names} AS coachName, t.title, t.training_plan AS trainingPlan, t.venue, t.first_date AS date, t.enabled,
         t.weekdays, t.start_minutes AS startMinutes, t.duration, t.capacity, t.points, t.course_type_id AS courseTypeId,
         ct.name AS courseTypeName, ct.max_students AS courseTypeMaxStudents
       FROM class_templates t LEFT JOIN course_types ct ON ct.id = t.course_type_id
@@ -167,7 +167,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
 
   function reviseTemplate(id: string, plan: ClassPlan, enabled: boolean, actor: string, now: string) {
     const current = db.prepare(`
-      SELECT t.course_type_id AS courseTypeId, ${templateRoster.ids} AS coachIds
+      SELECT t.course_type_id AS courseTypeId, t.training_plan AS trainingPlan, ${templateRoster.ids} AS coachIds
       FROM class_templates t WHERE t.id = ?
     `).get(id);
     if (!current) {
@@ -179,6 +179,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     if (!plan.weekdays.length || plan.date > addDays(venueDate(now), 29)) {
       throw new ApiError(400, 'VALIDATION_ERROR', '请填写有效的周期及起始日期');
     }
+    const trainingPlan = plan.trainingPlan ?? String(current.trainingPlan);
     const replaced = db.prepare(`
       DELETE FROM template_occurrences WHERE template_id = ? AND manual_override = 0 AND class_id IN (
         SELECT s.id FROM class_sessions s WHERE s.starts_at > ? AND s.status = 'PUBLISHED'
@@ -192,11 +193,11 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     }
     db.prepare(`
       UPDATE class_templates SET coach_id = ?, title = ?, venue = ?, first_date = ?, weekdays = ?, start_minutes = ?,
-        duration = ?, capacity = ?, points = ?, course_type_id = ?, enabled = ? WHERE id = ?
+        duration = ?, capacity = ?, points = ?, course_type_id = ?, training_plan = ?, enabled = ? WHERE id = ?
     `).run(plan.coachId, plan.title, plan.venue, plan.date, JSON.stringify(plan.weekdays), JSON.stringify(plan.startMinutes),
-      plan.duration, plan.capacity, plan.points, plan.courseTypeId ?? null, Number(enabled), id);
+      plan.duration, plan.capacity, plan.points, plan.courseTypeId ?? null, trainingPlan, Number(enabled), id);
     saveExtras(db, 'template', id, coachIds);
-    const count = enabled ? materialize(id, { ...plan, coachIds }, now, true) : 0;
+    const count = enabled ? materialize(id, { ...plan, coachIds, trainingPlan }, now, true) : 0;
     audit(db, actor, enabled ? 'TEMPLATE_UPDATED' : 'TEMPLATE_PAUSED', id, now);
     return { count };
   }
@@ -244,8 +245,8 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       }
       db.prepare(`
         UPDATE class_sessions SET coach_id = ?, title = ?, venue = ?, starts_at = ?, ends_at = ?,
-          points = ?, capacity = ?, status = ?, course_type_id = ? WHERE id = ?
-      `).run(draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, status, courseTypeId, id);
+          points = ?, capacity = ?, status = ?, course_type_id = ?, training_plan = ? WHERE id = ?
+      `).run(draft.coachId, draft.title, draft.venue, startsAt, endsAt, draft.points, draft.capacity, status, courseTypeId, draft.trainingPlan ?? current.training_plan, id);
       saveExtras(db, 'class', id, coachIds);
       if (current.booked) {
         // Active bookings, including pending approvals, follow the class and keep their original financial terms.

@@ -31,6 +31,7 @@ export interface PublicCourse {
 }
 
 export interface Course extends PublicCourse {
+  trainingPlan: string;
   points: number;
   capacity: number;
   bookedCount: number;
@@ -100,6 +101,7 @@ export interface ApiFailure {
 export type ClassStatus = 'PUBLISHED' | 'CLOSED';
 
 export interface ClassDraft {
+  trainingPlan?: string;
   coachIds?: string[];
   courseTypeId?: string | null;
   title: string;
@@ -118,6 +120,7 @@ export interface ClassPlan extends ClassDraft {
 }
 
 export interface ManagedTemplate extends ClassPlan {
+  trainingPlan: string;
   courseTypeName: string | null;
   courseTypeMaxStudents: number | null;
   coachIds: string[];
@@ -127,6 +130,7 @@ export interface ManagedTemplate extends ClassPlan {
 }
 
 export interface ManagedClass extends ClassDraft {
+  trainingPlan: string;
   courseTypeMaxStudents: number | null;
   coachIds: string[];
   courseTypeId: string | null;
@@ -202,6 +206,7 @@ export interface StaffAccount extends Account {
 }
 
 export interface CoachLesson {
+  trainingPlan: string | null;
   id: string;
   type: BookingSelection['type'];
   title: string;

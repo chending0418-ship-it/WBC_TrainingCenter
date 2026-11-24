@@ -5,7 +5,7 @@
         <view class="week-picker"><text class="week-caption">{{weekLabel}}</text><view class="picker-caret"></view></view>
       </picker>
       <text wx:else class="week-caption">{{weekLabel}}</text>
-      <view class="week-nav">
+      <view wx:if="{{!fixedWeek}}" class="week-nav">
         <button class="week-arrow" data-step="-1" bindtap="changeWeek" disabled="{{!hasPrevious || busy}}" aria-label="上一周" hover-class="press"><view class="arrow-icon back"></view></button>
         <button class="week-arrow" data-step="1" bindtap="changeWeek" disabled="{{!hasNext || busy}}" aria-label="下一周" hover-class="press"><view class="arrow-icon"></view></button>
       </view>

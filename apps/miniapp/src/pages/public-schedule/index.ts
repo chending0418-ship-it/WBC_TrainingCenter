@@ -5,17 +5,16 @@ import { groupReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
 import { errorMessage } from '../../lib/request';
 import { publicRead, publicReadVersion, invalidatePublicRead, publicSchedulePath } from '../../lib/public-read';
-import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
+import { goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
 Page({
   data: {
     selectedCourse: null as (CourseReminder & { venue: string }) | null,
-    serviceDetails: false, loading: true, error: '', today: '', lastDate: '', date: '',
+    serviceDetails: false, loading: true, error: '', today: '',
     dates: [] as ReturnType<typeof weekAgenda>['dates'],
     groups: [] as ReturnType<typeof weekAgenda<PublicLesson>>['groups'],
-    total: 0, weekLabel: '', hasPrevious: false, hasNext: false
+    total: 0, weekLabel: ''
   },
-  lessons: new Map<string, PublicLesson[]>(),
   nextCourseStart: Infinity,
   requestNumber: 0,
   renderedVersion: 0,
@@ -39,13 +38,11 @@ Page({
       this.renderedVersion = publicReadVersion(publicSchedulePath);
       const { lessons, nextCourseStart } = publicLessonDays(schedule.courses);
       this.nextCourseStart = nextCourseStart;
-      this.lessons = lessons;
       const { today, lastDate } = schedule;
-      const date = this.data.date >= today && this.data.date <= lastDate ? this.data.date : today;
-      const agenda = weekAgenda(date, today, lastDate, lessons);
+      const agenda = weekAgenda(today, today, lastDate, lessons);
       const initialDay = agenda.groups.find(day => day.date === this.initialDay);
       this.initialDay = '';
-      this.setData({ today, lastDate, date, ...agenda }, () => {
+      this.setData({ today, ...agenda }, () => {
         if (initialDay) goToAgendaDay(initialDay.date, initialDay.count);
       });
     } catch (error) {
@@ -53,11 +50,6 @@ Page({
     } finally {
       if (request === this.requestNumber && this.data.loading) this.setData({ loading: false });
     }
-  },
-  changeWeek(event: WechatMiniprogram.TouchEvent) {
-    const { date, today, lastDate } = this.data;
-    const next = adjacentWeek(date, Number(event.currentTarget.dataset.step), today, lastDate);
-    if (next) this.setData({ date: next, ...weekAgenda(next, today, lastDate, this.lessons) });
   },
   jumpDay(event: WechatMiniprogram.TouchEvent) {
     const day = this.data.dates.find(item => item.date === event.currentTarget.dataset.date);

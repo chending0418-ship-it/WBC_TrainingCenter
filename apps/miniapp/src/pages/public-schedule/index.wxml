@@ -6,7 +6,7 @@
     <text class="page-title" role="heading" aria-level="1">课程表</text>
     <button class="login-link" bindtap="login" hover-class="press">成员登录</button>
   </view>
-  <view class="service-intro">WBC 俱乐部提供棒球团课和一对一私教。可按周查看团课的时间、教练和训练场地。</view>
+  <view class="service-intro">WBC 俱乐部提供棒球团课和一对一私教。访客可查看本周团课的时间、教练和训练场地，成员登录后可查看训练计划。</view>
   <button class="button quiet" size="mini" bindtap="toggleServices" aria-expanded="{{serviceDetails}}">{{serviceDetails ? '收起训练服务介绍' : '查看训练服务介绍'}}</button>
   <view wx:if="{{serviceDetails}}" class="service-intro"><view class="row-name">团体训练</view><view>按课表上的时间和训练场地上课，每个班次单独开放预约。</view><view class="row-name">一对一私教</view><view>可选 60、90 或 120 分钟，开放时段和所需积分由教练档案确定。家长提交预约后，俱乐部管理员确认并扣除积分。</view></view>
   <view wx:if="{{loading}}" class="message">正在加载排课…</view>
@@ -16,7 +16,7 @@
   </view>
   <block wx:if="{{today}}">
     <view class="calendar-tabs"><text class="calendar-tab active">团课</text></view>
-    <template is="week" data="{{weekLabel, hasPrevious, hasNext, dates, today, showDays: true}}" />
+    <template is="week" data="{{weekLabel, dates, today, showDays: true, fixedWeek: true}}" />
     <template is="groups" data="{{groups, total, today, showBooking: false}}" />
   </block>
   <view wx:if="{{selectedCourse}}" class="quote-overlay">

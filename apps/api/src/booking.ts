@@ -22,7 +22,7 @@ const publicClassFields = `
   s.ends_at AS endsAt, t.name AS courseTypeName
 `;
 const classFields = `
-  ${publicClassFields}, s.points, s.capacity,
+  ${publicClassFields}, s.training_plan AS trainingPlan, s.points, s.capacity,
   (SELECT COUNT(*) FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED') AS bookedCount,
   EXISTS (SELECT 1 FROM bookings b WHERE b.class_id = s.id AND b.status = 'CONFIRMED' AND b.user_id = ?) AS mine
 `;
@@ -86,8 +86,10 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
   `;
 
   function publicSchedule(): PublicSchedule {
-    const { today, lastDate, from, until } = scheduleWindow(true);
-    const courses = db.prepare(`SELECT ${publicClassFields} ${publishedClasses}`).all(from, until) as unknown as PublicSchedule['courses'];
+    const today = venueDate(clock());
+    const monday = addDays(today, -((weekday(today) + 6) % 7));
+    const lastDate = addDays(monday, 6);
+    const courses = db.prepare(`SELECT ${publicClassFields} ${publishedClasses}`).all(dateAt(monday), dateAt(addDays(monday, 7))) as unknown as PublicSchedule['courses'];
     return { today, lastDate, courses };
   }
 
