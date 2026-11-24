@@ -253,6 +253,11 @@ button.button[disabled] {
   font-variant-numeric: tabular-nums;
 }
 
+.training-plan {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .card-note, .card-state {
   color: #66595c;
   font-size: 13px;

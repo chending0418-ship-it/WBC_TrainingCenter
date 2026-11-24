@@ -15,7 +15,7 @@ type TypeOption = { id: string | null; label: string; maxStudents: number };
 const untyped: TypeOption = { id: null, label: '未指定类型', maxStudents: 500 };
 
 type Editor = ReturnType<typeof classCoachEditor> & {
-  id: string; title: string; venue: string; date: string; time: string; duration: string;
+  id: string; title: string; trainingPlan: string; venue: string; date: string; time: string; duration: string;
   capacity: string; points: string; status: ClassStatus; typeIndex: number; repeat: boolean;
   template?: ManagedTemplate;
 };
@@ -176,7 +176,7 @@ Page({
     const repeat = this.data.mode === 'templates';
     this.setData({
       typeOptions: this.activeTypes,
-      editor: { id: '', title: '', venue: '训练室 A', date: repeat ? this.data.today : this.data.date,
+      editor: { id: '', title: '', trainingPlan: '', venue: '训练室 A', date: repeat ? this.data.today : this.data.date,
         time: '17:30', duration: '60', capacity: '6', points: '40',
         status: 'PUBLISHED', ...classCoachEditor(this.data.coaches), typeIndex: 0, repeat },
       days: weekdays.map((label, index) => ({ label, index, active: false })), saveError: ''
@@ -188,7 +188,7 @@ Page({
     if (!row) return;
     const typeOptions = this.editTypeOptions(row);
     this.setData({ typeOptions,
-      editor: { id: row.id, template: row, title: row.title, venue: row.venue, date: row.date,
+      editor: { id: row.id, template: row, title: row.title, trainingPlan: row.trainingPlan, venue: row.venue, date: row.date,
         time: row.startMinutes.map(minuteString).join('，'), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: 'PUBLISHED', repeat: true,
         ...classCoachEditor(this.data.coaches, row),
@@ -219,7 +219,7 @@ Page({
     if (!row) return;
     const typeOptions = this.editTypeOptions(row);
     this.setData({ typeOptions,
-      editor: { id: row.id, title: row.title, venue: row.venue, date: row.date,
+      editor: { id: row.id, title: row.title, trainingPlan: row.trainingPlan, venue: row.venue, date: row.date,
         time: minuteString(row.startMinute), duration: String(row.duration), capacity: String(row.capacity),
         points: String(row.points), status: row.status,
         ...classCoachEditor(this.data.coaches, row),
@@ -287,7 +287,7 @@ Page({
       }
       const draft: ClassDraft = {
         courseTypeId: type.id,
-        title: editor.title, venue: editor.venue, coachId, coachIds: editor.coachIds, date: editor.date, startMinute: startMinutes[0],
+        title: editor.title, trainingPlan: editor.trainingPlan, venue: editor.venue, coachId, coachIds: editor.coachIds, date: editor.date, startMinute: startMinutes[0],
         duration: Number(editor.duration), capacity, points: Number(editor.points)
       };
       let message = '班次已保存';

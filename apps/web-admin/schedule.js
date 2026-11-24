@@ -12,7 +12,9 @@ export function classTable(classes, editDate) {
     const editable = !privateLesson && editDate && Date.parse(row.startsAt) > Date.now();
     const cell = editable ? html`${label} ${link('编辑班次', 'classCoaches', { date: editDate, id: row.id })}` : label;
     const names = privateLesson ? row.childName : row.attendees.map(person => person.childName).join('、');
-    return [hours(row), row.title + (privateLesson || row.bookable ? '' : '（已停开）'), cell, row.venue,
+    const name = row.title + (privateLesson || row.bookable ? '' : '（已停开）');
+    const course = row.trainingPlan ? html`${name}<details><summary>训练计划</summary><div class="plan-text">${row.trainingPlan}</div></details>` : name;
+    return [hours(row), course, cell, row.venue,
       privateLesson ? '1 / 1' : row.bookedCount + ' / ' + row.capacity, names || '暂无已确认队员', ...(editDate ? [Date.parse(row.startsAt) > Date.now()
         ? html`<button type="button" class="txt" data-delete="${row.id}">删除课程</button>` : '—'] : [])];
   }), '当天暂无课程');
@@ -108,7 +110,7 @@ export async function classTemplates(ctx) {
 
 function rowSettings(row) {
   return {
-    title: row.title, venue: row.venue, date: row.date, duration: row.duration, capacity: row.capacity, points: row.points,
+    title: row.title, trainingPlan: row.trainingPlan, venue: row.venue, date: row.date, duration: row.duration, capacity: row.capacity, points: row.points,
     courseTypeId: row.courseTypeId ?? null, coachIds: assignedCoaches(row), coachId: row.coachId,
     startMinute: row.startMinute, startMinutes: row.startMinutes ?? [row.startMinute], weekdays: row.weekdays ?? [],
     ...(row.status ? { status: row.status } : { enabled: row.enabled })
@@ -153,6 +155,8 @@ function classEditor(ctx, context, types, choices, row, path) {
   const action = row ? '保存修改' : '发布团课';
   const days = existing?.weekdays ?? [weekday(date)];
   const classFields = html`${field('课程名称', 'title', row?.title, { maxLength: 50 })}
+      <label class="w-field plan-field"><span>训练计划（选填）</span><textarea name="trainingPlan" rows="3" maxlength="500"
+        placeholder="填写本节训练内容，登录后可见">${row?.trainingPlan}</textarea></label>
       ${select('课程类型', 'courseTypeId', [['', '无课程类型'], ...types.map(t => [t.id, t.name])], row?.courseTypeId ?? '')}
       ${coachChoices(choices, initial)}
       ${field('训练场地', 'venue', row?.venue, { maxLength: 50 })}
@@ -201,7 +205,7 @@ function classEditor(ctx, context, types, choices, row, path) {
       group.querySelector('[name=weekday]').setCustomValidity(weekly && !data.has('weekday') ? '请选择每周开课日。' : '');
     }
     fields.start.setCustomValidity(startMinute + duration > 1440 ? '课程须在同一天结束。' : '');
-    return { title: fields.title.value.trim(), venue: fields.venue.value.trim(), date: fields.date.value, duration, capacity,
+    return { title: fields.title.value.trim(), trainingPlan: fields.trainingPlan.value.trim(), venue: fields.venue.value.trim(), date: fields.date.value, duration, capacity,
       points: Number(fields.points.value), courseTypeId: fields.courseTypeId.value || null, coachIds, coachId: coachIds[0],
       startMinute, startMinutes, weekdays: weekly ? data.getAll('weekday').map(Number).sort() : [],
       ...(row ? (template ? { enabled } : { status: fields.status.value }) : {}) };

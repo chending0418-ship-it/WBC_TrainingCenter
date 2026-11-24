@@ -7,6 +7,10 @@
   <form wx:if="{{editor}}" bindsubmit="saveClass">
     <view class="lesson-card">
       <label class="form-field"><text>课程名称</text><input class="field" value="{{editor.title}}" data-field="title" bindinput="changeClassField" maxlength="50" placeholder="输入课程名称" disabled="{{busy}}" /></label>
+      <label class="form-field"><text>训练计划（选填）</text>
+        <textarea class="field plan-input" value="{{editor.trainingPlan}}" data-field="trainingPlan" bindinput="changeClassField"
+          maxlength="500" placeholder="填写本节训练内容，登录后可见" disabled="{{busy}}" />
+      </label>
       <picker wx:if="{{typeOptions.length > 1}}" class="filter-row" range="{{typeOptions}}" range-key="label"
         value="{{editor.typeIndex}}" bindchange="changeCourseType" disabled="{{busy}}">
         <view class="picker"><text class="picker-label">课程类型</text><text class="picker-value">{{typeOptions[editor.typeIndex].label}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
@@ -80,6 +84,7 @@
               <button class="manage-toggle" data-id="{{item.id}}" bindtap="toggleDetails" aria-expanded="{{expandedId === item.id}}" disabled="{{busy}}" hover-class="press">{{expandedId === item.id ? '收起' : '详情'}}</button>
             </view>
             <view wx:if="{{expandedId === item.id}}" class="agenda-details">
+              <view wx:if="{{item.trainingPlan}}" class="agenda-note training-plan">训练计划 · {{item.trainingPlan}}</view>
               <view wx:if="{{item.type === 'GROUP'}}" class="agenda-note">余 {{item.capacity - item.bookedCount}} 位</view>
               <view wx:if="{{item.editable}}" class="section-actions item-actions">
                 <button wx:if="{{item.type === 'GROUP'}}" class="button quiet" data-id="{{item.id}}" bindtap="editClass" disabled="{{busy}}" hover-class="press">编辑班次</button>

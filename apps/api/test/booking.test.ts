@@ -76,6 +76,29 @@ test('游客只看到已发布的团课安排，报名满员和私教预约不�
   assert.ok(!(await readPublic()).courses.some(course => course.id === group.classSessionId));
 });
 
+test('公开课表在上海周一零点换周，跨年仍只公开本周且不返回训练计划', async context => {
+  let clock = new Date(dateAt('2030-12-23'));
+  const { app, db } = fixture(context, ':memory:', () => clock);
+  const plan = '内野分组传接球';
+  db.prepare('UPDATE class_sessions SET training_plan = ?').run(plan);
+  const query = '/api/public/schedule?date=2031-01-06&days=30&view=week';
+  for (const [instant, monday, sunday] of [
+    ['2030-12-29T15:59:59.999Z', '2030-12-23', '2030-12-29'],
+    ['2030-12-29T16:00:00.000Z', '2030-12-30', '2031-01-05']
+  ]) {
+    clock = new Date(instant);
+    const response = await app.inject({ url: query });
+    const week = response.json<PublicSchedule>();
+    assert.equal(week.lastDate, sunday);
+    assert.deepEqual(week.courses.map(row => row.id), Array.from({ length: 7 }, (_, i) =>
+      ['-strength', '-stability'].map(suffix => addDays(monday, i) + suffix)).flat());
+    assert.ok(!response.body.includes('trainingPlan') && !response.body.includes(plan));
+  }
+  const member = await login(app);
+  const schedule = (await app.inject({ url: '/api/schedule?view=week', headers: member })).json<Schedule>();
+  assert.ok(schedule.courses.some(row => row.id === '2031-01-06-strength' && row.trainingPlan === plan));
+});
+
 test('团课申请保留积分，管理员确认才扣分，重试不会重复扣分', async context => {
   const directory = mkdtempSync(join(tmpdir(), 'wbc-booking-'));
   const path = join(directory, 'test.sqlite');
@@ -348,6 +371,8 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   seedDemo(old, now());
   const short = privateTraining(870, 900, 'wang');
   old.exec(`
+    ALTER TABLE class_sessions DROP COLUMN training_plan;
+    ALTER TABLE class_templates DROP COLUMN training_plan;
     ALTER TABLE children DROP COLUMN jersey_number;
     ALTER TABLE ledger DROP COLUMN training_title;
     ALTER TABLE ledger DROP COLUMN training_start;
@@ -378,7 +403,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   first.close();
 
   const { app, db } = fixture(context, path);
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 17);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 18);
   const admin = await adminSession(app);
   const parent = await login(app);
   const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();
@@ -575,6 +600,8 @@ test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
   const previous = openDatabase(path);
   previous.exec(`
     DROP TABLE registrations;
+    ALTER TABLE class_sessions DROP COLUMN training_plan;
+    ALTER TABLE class_templates DROP COLUMN training_plan;
     ALTER TABLE children DROP COLUMN jersey_number;
     ALTER TABLE ledger DROP COLUMN training_title;
     ALTER TABLE ledger DROP COLUMN training_start;
@@ -654,7 +681,7 @@ test('生产模式开放公开课表，角色课表需要登录，不注册演�
   assert.equal((await app.inject({ url: '/api/dev/coach-profiles' })).statusCode, 404);
   const publicSchedule = await app.inject({ url: '/api/public/schedule' });
   assert.equal(publicSchedule.statusCode, 200);
-  assert.deepEqual(publicSchedule.json(), { today: date, lastDate: addDays(date, 29), courses: [] });
+  assert.deepEqual(publicSchedule.json(), { today: date, lastDate: '2031-01-05', courses: [] });
   for (const url of ['/api/schedule', '/api/admin/overview', '/api/coach/me/schedule']) {
     assert.equal((await app.inject({ url })).statusCode, 401);
   }

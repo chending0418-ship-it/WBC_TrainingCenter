@@ -7,12 +7,12 @@
   <view wx:if="{{home}}" class="home-schedule">
     <view class="home-week-heading">
       <view><text class="home-week-title" role="heading" aria-level="2">本周课程</text><view wx:if="{{weekLabel}}" class="home-week-range">{{weekLabel}}</view></view>
-      <navigator class="full-schedule" url="/pages/public-schedule/index" hover-class="press">完整课表<view class="browse-chevron"></view></navigator>
+      <navigator class="full-schedule" url="/pages/public-schedule/index" hover-class="press">本周课表<view class="browse-chevron"></view></navigator>
     </view>
     <view wx:if="{{error}}" class="form-error">{{error}}</view>
     <view wx:if="{{weekLoading}}" class="week-status">正在加载课程…</view>
     <view wx:elif="{{weekError}}" class="week-status">{{weekError}}<button class="retry-week" size="mini" bindtap="loadWeek">重新加载</button></view>
-    <view wx:elif="{{!groups.length}}" class="week-status">本周暂无已发布的团课，可在完整课表中查看其他周次。</view>
+    <view wx:elif="{{!groups.length}}" class="week-status">本周暂无已发布的团课。</view>
     <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" class="home-day">
       <view class="home-date"><text class="day-number">{{day.day}}</text><text>{{day.date === today ? '今天' : day.weekday}}</text></view>
       <view class="home-lessons">

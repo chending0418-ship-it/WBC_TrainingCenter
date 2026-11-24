@@ -32,6 +32,7 @@
         <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state">{{item.type === 'GROUP' ? '团课' : '私教'}}</text></view>
         <view class="card-head"><text class="card-title">{{item.title}}</text></view>
         <view class="card-note">{{item.venue}}</view>
+        <view wx:if="{{item.trainingPlan}}" class="card-note training-plan">训练计划 · {{item.trainingPlan}}</view>
         <view class="card-footer">已预约 {{item.bookedCount}} 人</view>
         <view wx:if="{{item.names}}" class="details">{{item.names}}</view>
       </view>

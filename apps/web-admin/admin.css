@@ -264,7 +264,7 @@ tr:last-child td {
 .tool-row {
   margin-bottom: 14px;
 }
-.web-search,.select-filter,.w-select,.w-field input {
+.web-search,.select-filter,.w-select,.w-field input,.w-field textarea {
   border: 1px solid #d6cbca;
   background: white;
   border-radius: 7px;
@@ -373,7 +373,7 @@ dd {
   display: block;
   margin-bottom: 11px;
 }
-.w-field input,.w-select {
+.w-field input,.w-field textarea,.w-select {
   width: 100%;
   color: var(--ink);
   margin-top: 4px;
@@ -504,7 +504,10 @@ a.wb, a.txt { display: inline-block; }
 .web-tabs .on { color: var(--wine); font-weight: 650; }
 .select-filter select { font: inherit; background: transparent; border: 0; min-width: 70px; }
 .login-card { max-width: 100%; }
-.w-field input, .w-select { min-width: 0; font: inherit; }
+.plan-field { grid-column: 1 / -1; }
+.plan-field textarea { resize: vertical; }
+.plan-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 40ch; }
+.w-field input, .w-field textarea, .w-select { min-width: 0; font: inherit; }
 .cal-day { display: block; width: 100%; text-align: left; font: inherit; background: none; padding: 0; border: 0; color: inherit; }
 .cal-day:focus-visible { outline-color: currentColor; outline-offset: 0; }
 .calbody .cal-day { height: 100%; align-content: start; }

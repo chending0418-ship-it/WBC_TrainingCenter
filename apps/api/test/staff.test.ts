@@ -384,14 +384,15 @@ test('教练仅能读取本人今日和本周日程，学员数据只包含姓�
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: admin,
     payload: { ...slot, userId: 'parent', requestKey: 'coach-private' } })).statusCode, 200);
 
+  db.prepare('UPDATE class_sessions SET training_plan = ? WHERE id = ?').run('守备脚步练习', group.classSessionId);
   const day = (await app.inject({ url: url + '?coachId=wang', headers: li })).json<CoachSchedule>();
   assert.deepEqual(day, {
     coachName: '李晨', avatarKey: null, from: today, to: today,
     lessons: [{
-      id: group.classSessionId, type: 'GROUP', title: '力量基础', venue: '训练室 A',
+      id: group.classSessionId, type: 'GROUP', title: '力量基础', trainingPlan: '守备脚步练习', venue: '训练室 A',
       startsAt: dateAt(today, 600), endsAt: dateAt(today, 660), bookedCount: 1, childNames: ['陈同学']
     }, {
-      id: day.lessons[1].id, type: 'PRIVATE', title: '一对一训练', venue: '训练室 B',
+      id: day.lessons[1].id, type: 'PRIVATE', title: '一对一训练', trainingPlan: null, venue: '训练室 B',
       startsAt: slot.startsAt, endsAt: slot.endsAt, bookedCount: 1, childNames: ['陈同学']
     }]
   });
@@ -697,6 +698,37 @@ test('管理员可在六小时前取消，按原扣分全退、部分退或不�
   assert.deepEqual(account.ledger.filter((entry: { delta: number; reason: string }) => entry.delta > 0 && entry.reason.includes('退积分'))
     .map((entry: { delta: number }) => entry.delta), [22, 45]);
   assert.equal(account.balance, 320 - 135 + 67);
+});
+
+test('周期训练计划生成到班次，旧版编辑保留计划，管理员可单节覆盖或清空', async context => {
+  const { app } = fixture(context);
+  const headers = await session(app);
+  const templatePlan = '热身\n两人一组接传球';
+  const plan = { ...draft, weekdays: [weekday(today)] };
+  const create = (trainingPlan: unknown) => app.inject({ method: 'POST', url: '/api/admin/classes', headers,
+    payload: { ...plan, trainingPlan, requestKey: 'plan' } });
+  assert.equal((await create('训'.repeat(501))).statusCode, 400);
+  assert.equal((await create(42)).statusCode, 400);
+  assert.equal((await create(templatePlan)).statusCode, 200);
+  const getTemplates = async () => (await app.inject({ url: '/api/admin/class-templates', headers })).json<ManagedTemplate[]>();
+  const [template] = await getTemplates();
+  assert.equal(template.trainingPlan, templatePlan);
+  const getClass = async (day: string) => (await app.inject({ url: '/api/admin/classes?date=' + day, headers }))
+    .json<ManagedClass[]>().find(row => row.title === draft.title)!;
+  const editTemplate = (key: string, extra: object) => app.inject({ method: 'PUT', url: '/api/admin/class-templates/' + template.id, headers,
+    payload: { ...plan, enabled: true, requestKey: key, ...extra } });
+  assert.equal((await editTemplate('legacy', {})).statusCode, 200);
+  const row = await getClass(today);
+  assert.equal(row.trainingPlan, templatePlan);
+  const editClass = (extra: object) => app.inject({ method: 'PUT', url: '/api/admin/class-sessions/' + row.id, headers,
+    payload: { ...draft, status: 'PUBLISHED', ...extra } });
+  assert.equal((await editClass({ trainingPlan: '体能训练' })).statusCode, 204);
+  assert.equal((await editClass({})).statusCode, 204);
+  assert.equal((await editTemplate('updated', { trainingPlan: '挥棒练习' })).statusCode, 200);
+  assert.equal((await getClass(addDays(today, 7))).trainingPlan, '挥棒练习');
+  assert.equal((await getClass(today)).trainingPlan, '体能训练');
+  assert.equal((await editClass({ trainingPlan: '' })).statusCode, 204);
+  assert.equal((await getClass(today)).trainingPlan, '');
 });
 
 test('周期模板变更保留已有预约和单独停开的班次，停用后停止补排', async context => {

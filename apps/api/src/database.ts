@@ -390,6 +390,14 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 17;
     `);
   });
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 18) return;
+    db.exec(`
+      ALTER TABLE class_sessions ADD COLUMN training_plan TEXT NOT NULL DEFAULT '';
+      ALTER TABLE class_templates ADD COLUMN training_plan TEXT NOT NULL DEFAULT '';
+      PRAGMA user_version = 18;
+    `);
+  });
   return db;
 }
 

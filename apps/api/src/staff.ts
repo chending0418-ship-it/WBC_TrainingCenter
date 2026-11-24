@@ -24,6 +24,10 @@ const demoPassword = 'wbc-demo-2026';
 function classDraft(body: Record<string, unknown>): ClassDraft {
   const duration = integer(body.duration, 1, 720, '课程时长须为 1 至 720 分钟');
   const courseTypeId = body.courseTypeId;
+  const trainingPlan = body.trainingPlan;
+  if (trainingPlan !== undefined && (typeof trainingPlan !== 'string' || trainingPlan.length > 500)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', '训练计划须为 500 字以内的文本');
+  }
   let coachIds: string[] | undefined;
   if (body.coachIds !== undefined) {
     if (!Array.isArray(body.coachIds) || !body.coachIds.length) throw new ApiError(400, 'VALIDATION_ERROR', '请至少选择一位教练');
@@ -35,6 +39,7 @@ function classDraft(body: Record<string, unknown>): ClassDraft {
   }
   return {
     ...(courseTypeId === undefined ? {} : { courseTypeId: courseTypeId === null ? null : requiredText(courseTypeId) }),
+    ...(trainingPlan === undefined ? {} : { trainingPlan: trainingPlan.trim() }),
     title: requiredText(body.title, 50), coachId: coachIds?.[0] ?? requiredText(body.coachId),
     ...(coachIds === undefined ? {} : { coachIds }),
     venue: requiredText(body.venue, 50), date: dateInput(body.date),

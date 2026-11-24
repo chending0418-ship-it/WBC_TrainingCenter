@@ -2,6 +2,7 @@
   <view class="agenda-line"><text class="agenda-time">{{item.hours}}</text><text wx:if="{{showBooking && item.unavailable}}" class="agenda-state">{{item.action}}</text><text wx:elif="{{item.hasStarted}}" class="agenda-state">已开课</text></view>
   <text class="agenda-name">{{item.title}}</text>
   <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
+  <view wx:if="{{showBooking && item.trainingPlan}}" class="agenda-note training-plan">训练计划 · {{item.trainingPlan}}</view>
 </template>
 
 <template name="groups">
@@ -9,7 +10,7 @@
     <text class="agenda-title" role="heading" aria-level="2">团课安排</text>
     <text class="agenda-count">{{groups.length}} 天有课 · 共 {{total}} 节</text>
   </view>
-  <view wx:if="{{!total}}" class="message">本周暂无团课，可切换周次查看。</view>
+  <view wx:if="{{!total}}" class="message">{{showBooking ? '本周暂无团课，可切换周次查看。' : '本周暂无已发布的团课。'}}</view>
   <view wx:for="{{groups}}" wx:for-item="day" wx:key="date" id="agenda-{{day.date}}" class="agenda-day">
     <view class="agenda-stamp {{day.date === today ? 'stamp-today' : ''}}">
       <text class="stamp-number">{{day.day}}</text><text class="stamp-weekday">{{day.weekday}}</text>
