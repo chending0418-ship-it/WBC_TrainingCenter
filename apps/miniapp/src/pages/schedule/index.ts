@@ -1,8 +1,8 @@
 import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
 import { familyContext, parentAccountId, hasFreshRead, invalidateRead, readVersion, showParentTab, wechatIdentity } from '../../lib/session';
-import type { Booking, BookingQuote, BookingSelection, Coach, Course, FamilyPlayer, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
+import type { Booking, BookingQuote, BookingSelection, Coach, Course, FamilyPlayer, PrivateBoard, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
-import { availableRanges, mondayOfWeek } from '../../lib/private-availability';
+import { privateTimeline, mondayOfWeek } from '../../lib/private-availability';
 import { dateLabel, datetime, localTimestamp, time, timeRange } from '../../lib/display';
 import { requestOnSubmit } from '../../lib/subscription-request';
 
@@ -11,7 +11,7 @@ import type { CourseReminder } from '../../lib/registration';
 import { adjacentWeek, goToAgendaDay, weekAgenda } from '../../lib/week-agenda';
 
 type VisibleCourse = Course & { hours: string; coachLabel: string; action: string; unavailable: boolean };
-type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof availableRanges> };
+type PrivateDay = { date: string; label: string; ranges: ReturnType<typeof privateTimeline> };
 
 function weekPath(date: string) { return '/api/schedule?week=' + mondayOfWeek(date); }
 
@@ -95,6 +95,7 @@ Page({
   async onPullDownRefresh() {
     try {
       if (this.data.authorized && !this.data.booking) {
+        void this.selectComponent('#clubNotice')?.refresh(true);
         invalidateRead('/api/me/players');
         invalidateRead(this.schedulePath);
         if (this.data.mode === 'PRIVATE') { invalidateRead('/api/me/private-coaches'); invalidateRead(this.slotsPath); }
@@ -173,6 +174,7 @@ Page({
   changeMode(event: WechatMiniprogram.TouchEvent) {
     const mode = event.currentTarget.dataset.mode as BookingSelection['type'];
     if (this.data.booking || this.data.mode === mode) return;
+    this.slotsRequest++;
     this.setData({ mode });
     if (mode === 'GROUP' && this.schedulePath !== weekPath(this.data.date)) void this.refresh(this.data.date);
     else void this.selectDate(this.data.date);
@@ -210,7 +212,7 @@ Page({
     const coach = this.data.coaches[this.data.coachIndex];
     const dates = this.data.dates.filter(day => day.date >= this.data.today && !day.outside);
     const path = coach && dates.length ? '/api/coaches/' + encodeURIComponent(coach.id) +
-      '/slots?date=' + dates[0].date + '&days=' + dates.length : '';
+      '/slots?date=' + dates[0].date + '&days=' + dates.length + '&view=board' : '';
     const sameWeek = path === this.slotsPath;
     if (sameWeek && this.slotsVersion && this.slotsVersion === readVersion(path)) return;
     const request = ++this.slotsRequest;
@@ -221,17 +223,10 @@ Page({
     } else if (this.data.slotError) this.setData({ slotError: '' });
     if (!path) return;
     try {
-      const slots = await api<PrivateSlot[]>(path);
-      if (request !== this.slotsRequest) return;
-      const byDate = new Map<string, PrivateSlot[]>();
-      for (const slot of slots) {
-        const date = localTimestamp(slot.startsAt).slice(0, 10);
-        const daily = byDate.get(date);
-        if (daily) daily.push(slot);
-        else byDate.set(date, [slot]);
-      }
+      const board = await api<PrivateBoard>(path);
+      if (request !== this.slotsRequest || this.data.mode !== 'PRIVATE') return;
       const privateDays = dates.map(day => ({
-        date: day.date, label: dateLabel(day.date) + ' · ' + day.weekday, ranges: availableRanges(byDate.get(day.date) ?? [])
+        date: day.date, label: dateLabel(day.date) + ' · ' + day.weekday, ranges: privateTimeline(board,day.date)
       }));
       const range = privateDays.flatMap(day => day.ranges).find(item => item.startsAt === this.data.selectedRange);
       const start = range?.starts.find(item => item.startsAt === this.data.selectedStart);

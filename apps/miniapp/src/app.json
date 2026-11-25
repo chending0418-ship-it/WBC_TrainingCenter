@@ -1,6 +1,9 @@
 {
   "pages": [
     "pages/entry/index",
+    "pages/admin-announcements/index",
+    "pages/announcements/index",
+    "pages/public-private/index",
     "pages/public-schedule/index",
     "pages/schedule/index",
     "pages/bookings/index",

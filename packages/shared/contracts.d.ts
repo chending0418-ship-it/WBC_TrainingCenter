@@ -289,3 +289,13 @@ export interface ManagedLink {
   status: FamilyPlayer['status'] | 'REMOVED';
   revision: string;
 }
+
+export interface PrivateBoard {
+  slots: PrivateSlot[];
+  occupied: { startsAt: string; endsAt: string; mine?: true; venue?: string }[];
+}
+export interface ClubAnnouncement {
+  id: number; title: string; body: string; revision: number; publishedAt: string;
+  published: number; isRead?: number;
+}
+export interface AnnouncementPage { rows: ClubAnnouncement[]; next: number | null }

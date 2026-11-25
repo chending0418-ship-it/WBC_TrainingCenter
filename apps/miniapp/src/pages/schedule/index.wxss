@@ -1,3 +1,4 @@
+@import "../../calendar/private.wxss";
 @import "../../calendar/week.wxss";
 @import "../../registration/dialog.wxss";
 

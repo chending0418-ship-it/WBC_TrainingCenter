@@ -1,0 +1,4 @@
+.private-period { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 13px; margin:6px 0; border-radius:8px; color:#761f32; background:#fff; border:1px solid #dbcdd0; font-weight:600; }
+.private-period.occupied { color:#5c5658; background:#eeeceb; border-color:#e2dedd; }
+.private-period.mine { color:#761f32; background:#f7edef; }
+.private-period text:last-child { text-align:right; overflow-wrap:anywhere; font-size:14px; }

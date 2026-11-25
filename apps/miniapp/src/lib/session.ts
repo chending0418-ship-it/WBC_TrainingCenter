@@ -2,7 +2,7 @@ import { config } from './config';
 import { localTimestamp } from './display';
 import { addDays, mondayOfWeek } from './private-availability';
 import type { FamilyPlayer, RoleSession, SessionRole, WechatLogin } from '../../../../packages/shared/contracts.js';
-import { demoCoachProfilesPath, invalidatePublicRead, publicSchedulePath } from './public-read';
+import { demoCoachProfilesPath, invalidatePublicRead, invalidatePublicSlots, publicSchedulePath } from './public-read';
 import { ReadCache } from './read-cache';
 import { staffReadAffected } from './staff-read-dependencies';
 import { RequestError, send } from './request';
@@ -155,6 +155,7 @@ function parentReadAffected(write: string, read: string, data?: object, changedD
   if (['/api/me/players','/api/me/player-links','/api/me/registration','/api/me/child'].includes(write))
     return ['/api/me/players','/api/me/registration','/api/me/child','/api/me/contact','/api/me/contact-profile','/api/me/wallets','/api/me/bookings'].includes(read.split('?')[0]);
   if (write === '/api/me/contact' || write === '/api/me/contact-profile') return ['/api/me/contact','/api/me/contact-profile','/api/me/registration'].includes(read);
+  if (write.startsWith('/api/me/announcements/')) return read.startsWith('/api/me/announcements');
   if (write === '/api/bookings' || write.startsWith('/api/me/bookings/')) {
     const [resource, query] = read.split('?');
     if (['/api/me/bookings','/api/me/account','/api/me/wallets'].includes(resource)) return true;
@@ -193,9 +194,15 @@ export async function roleRequest<T>(role: SessionRole, path: string, method: Me
       if (owner !== undefined && owner !== playerId && !resource.startsWith('/api/schedule') && !['/api/me/players','/api/me/player-links','/api/me/contact','/api/me/contact-profile'].includes(path)) return false;
       return parentReadAffected(path,resource,data,changedDate);
     });
+    if (role === 'PARENT' && path === '/api/bookings' && data && 'coachId' in data)
+      invalidatePublicSlots(String(data.coachId), changedDate);
     if (role === 'ADMIN') {
       const coachChanged = /^\/api\/admin\/coaches(?:\/[^/]+)?$/.test(path);
-      if (coachChanged) invalidatePublicRead(demoCoachProfilesPath);
+      if (coachChanged) { invalidatePublicRead(demoCoachProfilesPath); invalidatePublicRead('/api/public/private-coaches'); }
+      if (/^\/api\/admin\/(bookings|schedule|class-sessions|classes|class-templates|coaches)(?:\/|$)/.test(path)) {
+        const coach = /^\/api\/admin\/coaches\/([^/]+)/.exec(path)?.[1];
+        invalidatePublicSlots(coach, changedDate);
+      }
       if (coachChanged || /^\/api\/admin\/(classes|class-sessions|class-templates)(?:\/|$)/.test(path))
         invalidatePublicRead(publicSchedulePath);
     }

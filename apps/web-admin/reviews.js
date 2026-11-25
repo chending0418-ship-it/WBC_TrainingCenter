@@ -104,11 +104,11 @@ export async function bookings(ctx, byWeek = ctx.query.get('view') !== 'pending'
       const label = approve ? '确认预约' : cancel ? '取消预约' : '拒绝申请';
       const result = await confirmAction(label, selected.childName + ' · ' + selected.title + ' · ' + datetime(selected.startsAt) +
         (approve ? '。确认后扣除 ' + selected.points + ' 积分。' : cancel ?
-          (selected.refundPoints ? '。取消将退回 ' + selected.refundPoints + ' 积分。' : '。取消不退积分。') : '。拒绝后将释放预留积分和名额。'));
+          (selected.refundPoints ? '。取消将退回 ' + selected.refundPoints + ' 积分。' : '。取消不退积分。') : '。拒绝后将释放预留积分和名额。'), approve && selected.type === 'PRIVATE' ? '训练场地（如 3 号道）' : '');
       if (!result || !ctx.active()) return;
       const path = '/bookings/' + encodeURIComponent(selected.id);
       if (cancel) await ctx.write(path, 'DELETE');
-      else await ctx.write(path + (approve ? '/approve' : '/reject'), 'POST');
+      else await ctx.write(path + (approve ? '/approve' : '/reject'), 'POST', approve && selected.type === 'PRIVATE' ? {venue:result.reason} : undefined);
       if (ctx.active()) { ctx.notice(approve ? '预约已确认' : cancel ? '预约已取消' : '预约申请已拒绝'); ctx.refresh(); }
     });
   }

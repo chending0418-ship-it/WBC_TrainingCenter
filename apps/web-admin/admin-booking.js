@@ -54,6 +54,7 @@ export async function newBooking(ctx) {
     ${select('预约类型', 'type', [['GROUP', '团课'], ['PRIVATE', '私教']], 'GROUP')}
     ${field('开课日期', 'date', date, { type: 'date', min: today, max: lastDate })}</div>
     <div data-private hidden>${select('私教教练', 'coach', coaches.map(c => [c.id, coach(c.name)]), coaches[0]?.id)}
+      ${field('训练场地','venue','',{required:false,placeholder:'例如 3 号道'})}
       ${select('私教课程类型', 'courseType', [['', '按教练设置']], '')}</div>
     ${select('可约课程或时段', 'choice', [], '')}
     ${buttons(html`<button type="submit" class="wb" disabled>核对代约</button>`)}</form>`;
@@ -98,6 +99,7 @@ export async function newBooking(ctx) {
     const version = ++choiceVersion;
     const isPrivate = controls.type.value === 'PRIVATE';
     form.querySelector('[data-private]').hidden = !isPrivate;
+    controls.venue.required = isPrivate;
     choices = [];
     controls.choice.innerHTML = html`<option>正在读取可约安排…</option>`.value;
     sync();
@@ -143,6 +145,10 @@ export async function newBooking(ctx) {
     const choice = choices[controls.choice.value];
     if (!family || !choice) return;
     const selection = { ...choice.selection, userId: family.id };
+    if (selection.type === 'PRIVATE') {
+      selection.venue = controls.venue.value.trim();
+      if (!selection.venue) { ctx.notice('请填写训练场地'); return; }
+    }
     if (selection.type === 'PRIVATE' && controls.courseType.value) selection.courseTypeId = controls.courseType.value;
     ctx.perform(async () => {
       let quote;
@@ -151,7 +157,7 @@ export async function newBooking(ctx) {
       if (!ctx.active()) return;
       const refund = '取消须至少提前 6 小时，' + (quote.refundPoints ? '退回 ' + quote.refundPoints + ' 积分。' : '不退积分。');
       const result = await confirmAction('确认代约', familyLabel(family) + ' · ' + quote.title + ' · ' + coach(quote.coachName) + ' · ' +
-        datetime(quote.startsAt) + '–' + time(quote.endsAt) + '。确认后扣除 ' + quote.points + ' 积分。' + refund);
+        datetime(quote.startsAt) + '–' + time(quote.endsAt) + (selection.venue ? ' · ' + selection.venue : '') + '。确认后扣除 ' + quote.points + ' 积分。' + refund);
       if (!result || !ctx.active()) return;
       const pending = { date: controls.date.value, payload: { ...selection, expectedRevision: quote.revision, requestKey: crypto.randomUUID() } };
       sessionStorage.setItem(pendingKey, JSON.stringify(pending));

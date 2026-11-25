@@ -1,0 +1,12 @@
+<view class="page-shell">
+  <text class="page-title">私教课表</text>
+  <picker wx:if="{{coaches.length}}" range="{{coaches}}" range-key="name" value="{{index}}" bindchange="coachChanged"><view class="picker"><text>教练</text><text>{{coaches[index].name}}　›</text></view></picker>
+  <picker wx:if="{{today}}" mode="date" start="{{today}}" end="{{lastDate}}" value="{{date}}" bindchange="dateChanged"><view class="picker"><text>训练日期</text><text>{{date}}　›</text></view></picker>
+  <view wx:if="{{loading}}" class="message">正在读取时段…</view>
+  <view wx:elif="{{error}}" class="message">{{error}}<button class="button quiet" bindtap="load">重试</button></view>
+  <view wx:elif="{{!rows.length}}" class="message">当天暂无私教时段</view>
+  <block wx:else><view class="section-title">当日时段</view>
+    <view wx:for="{{rows}}" wx:key="startsAt" class="private-period {{item.booked ? 'occupied' : ''}}"><text>{{item.label}}</text><text>{{item.booked ? '已预约' : '可预约'}}</text></view>
+  </block>
+  <navigator class="button quiet login-private" url="/pages/entry/index?login=1">登录办理预约</navigator>
+</view>

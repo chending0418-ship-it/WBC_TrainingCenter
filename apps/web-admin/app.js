@@ -8,13 +8,15 @@ import { privateHours } from './private-hours.js';
 import { newBooking, bookingDay } from './admin-booking.js';
 import { registrations, bookings } from './reviews.js';
 
+import { announcements } from './announcements.js';
+
 const menu = [
   ['dashboard', '工作台', 'schedule'], ['people', '队员档案', 'parents'], ['finance', '积分调整', 'points'],
   ['schedule', '排课管理', 'schedule'], ['coaches', '教练管理', 'coaches'], ['courseTypes', '课程类型', 'types'],
   ['registrations', '队员注册审核', 'types'], ['bookings', '预约管理', 'bookings'],
-  ['playerLinks', '家长关联', 'parents'], ['roles', '用户管理', 'parents'], ['exportsPage', '信息导出', 'export']
+  ['playerLinks', '家长关联', 'parents'], ['roles', '用户管理', 'parents'], ['exportsPage', '信息导出', 'export'], ['announcements','公告管理','announcements']
 ];
-const pages = { playerLinks, exportsPage, roles, dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
+const pages = { announcements, playerLinks, exportsPage, roles, dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
   coaches, editCoach, courseTypes, registrations, bookings, newBooking, bookingDay };
 const workspace = document.querySelector('#workspace');
 const identity = document.querySelector('.admin-label');
@@ -96,7 +98,8 @@ function invalidateAfterWrite(path, data) {
   for (const key of reads.keys()) {
     const [name, readId] = key.split('?')[0].slice(1).split('/');
     let affected;
-    if (resource === 'player-links') {
+    if (resource === 'announcements') affected = name === 'announcements';
+    else if (resource === 'player-links') {
       const player = new URLSearchParams(key.split('?')[1]).get('playerId');
       affected = (name === 'player-links' && (!player || player === data?.playerId)) ||
         name === 'account-roles' || (name === 'parents' && (!readId || readId === encodeURIComponent(data?.playerId)));

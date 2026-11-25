@@ -1,5 +1,5 @@
 import type { PrivateSlot } from '../../../../packages/shared/contracts.js';
-import { time } from './display';
+import { localTimestamp, time } from './display';
 
 export function addDays(date: string, days: number): string {
   const timestamp = Date.parse(date + 'T00:00:00Z') + days * 86_400_000;
@@ -38,4 +38,14 @@ export function availableRanges(slots: PrivateSlot[]): AvailableRange[] {
     previousEnd = hour.endsAt;
   }
   return ranges;
+}
+
+export function privateTimeline(board: import('../../../../packages/shared/contracts.js').PrivateBoard, date: string) {
+  const onDay = (slot: { startsAt: string }) => localTimestamp(slot.startsAt).slice(0,10) === date;
+  const available = availableRanges(board.slots.filter(onDay)).map(range => ({ ...range, booked: false, mine: false, venue: '' }));
+  const occupied = board.occupied.filter(onDay).map(row => ({
+    startsAt: row.startsAt, booked: true, starts: [] as StartOption[], label: time(row.startsAt) + '–' + (time(row.endsAt) === '00:00' ? '24:00' : time(row.endsAt)),
+    mine: !!row.mine, venue: row.venue || ''
+  }));
+  return [...available,...occupied].sort((a,b) => a.startsAt.localeCompare(b.startsAt));
 }

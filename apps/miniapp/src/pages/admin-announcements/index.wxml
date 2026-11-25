@@ -1,0 +1,11 @@
+<view class="page-shell"><view class="screen-heading"><text class="page-title">{{editing ? (selected ? '编辑公告' : '新建公告') : '公告管理'}}</text>
+<button wx:if="{{!editing}}" class="button" bindtap="edit">新建公告</button></view>
+<view wx:if="{{error}}" class="form-error">{{error}}<button wx:if="{{!editing}}" class="button quiet" bindtap="retry">重试</button></view>
+<block wx:if="{{editing}}">
+ <label class="form-field">公告标题<input class="field" data-field="title" value="{{title}}" bindinput="update" maxlength="60" placeholder="例如：周六投捕课换场地了"/></label>
+ <label class="form-field">公告正文<textarea class="field body" data-field="body" value="{{body}}" bindinput="update" maxlength="800" placeholder="写明日期、训练场地和家长需要准备的事项"/></label>
+ <view class="muted">发布后显示在家长课程表顶部。家长点「标为已读」后清除该条提醒。</view>
+ <view class="actions"><button class="button" bindtap="save" disabled="{{busy}}">{{selected ? '更新公告' : '发布公告'}}</button><button class="button quiet" bindtap="close" disabled="{{busy}}">取消</button><button wx:if="{{selected}}" class="button quiet" data-action="withdraw" bindtap="save" disabled="{{busy}}">撤下公告</button></view>
+</block><block wx:else><view wx:if="{{loading}}" class="message">正在读取公告…</view><view wx:elif="{{!rows.length && !error}}" class="message">暂无公告</view>
+<view class="list-row" wx:for="{{rows}}" wx:key="id"><view class="row-line"><text class="row-name">{{item.title}}</text><text class="muted">{{item.published ? '已发布' : '已撤下'}}</text></view><view class="muted">{{item.date}}</view><button wx:if="{{item.published}}" class="button quiet" bindtap="edit" data-id="{{item.id}}">编辑公告</button></view>
+<button wx:if="{{next}}" class="button quiet" bindtap="more" disabled="{{loading}}">更早公告</button></block></view>

@@ -19,6 +19,21 @@ export function openDatabase(path: string): DatabaseSync {
       ) STRICT; PRAGMA user_version = 21;`);
     });
   }
+  if (Number(db.prepare('PRAGMA user_version').get()?.user_version) < 22) {
+    transaction(db, () => {
+      if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 22) return;
+      db.exec(`CREATE TABLE announcements (
+        id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, published_at TEXT NOT NULL,
+        published INTEGER NOT NULL DEFAULT 1, revision INTEGER NOT NULL DEFAULT 1
+      ) STRICT;
+      CREATE INDEX published_announcements ON announcements(id DESC) WHERE published=1;
+      CREATE TABLE announcement_reads (
+        announcement_id INTEGER NOT NULL REFERENCES announcements(id), parent_id TEXT NOT NULL REFERENCES users(id),
+        revision INTEGER NOT NULL, PRIMARY KEY (announcement_id,parent_id)
+      ) STRICT;
+      PRAGMA user_version=22;`);
+    });
+  }
   return db;
 }
 
