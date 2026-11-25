@@ -325,8 +325,8 @@ export function registerStaffRoutes(
         .header('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(file.filename)).send(file.body);
     });
     routes.get('/account-roles', async request => {
-      const { q } = object(request.query);
-      return accountRoles(db, appId, q ? requiredText(q, 50) : '');
+      const { q, profile } = object(request.query);
+      return accountRoles(db, appId, q ? requiredText(q, 50) : '', profile);
     });
     routes.put('/account-roles/:id', async (request, reply) => {
       saveRoles(db, appId, requiredText(object(request.params).id), request.body, actor(request), clock().toISOString());
@@ -344,6 +344,12 @@ export function registerStaffRoutes(
       if (!db.prepare('UPDATE children SET jersey_number = ? WHERE player_id = ?').run(number || null, requiredText(object(request.params).id)).changes)
         throw new ApiError(404, 'NOT_FOUND', '未找到队员档案');
       return reply.code(204).send();
+    });
+    routes.get('/parents/:id', async request => {
+      const id = requiredText(object(request.params).id);
+      const [family] = searchParents(db, '', clock().toISOString(), undefined, undefined, id);
+      if (!family) throw new ApiError(404, 'NOT_FOUND', '找不到该队员，请返回名单重新选择');
+      return family;
     });
     routes.get('/parents', async request => {
       const { q: query, status, profile } = object(request.query);

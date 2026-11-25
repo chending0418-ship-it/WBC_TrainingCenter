@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Account, Booking, BookingQuote, BookingSelection, Child, Coach, Course, PrivateSlot, PublicSchedule, Quote, Schedule } from '../../../packages/shared/contracts.js';
-import { selectedPlayer } from './player-links.ts';
+import { accessiblePlayerLink, selectedPlayer } from './player-links.ts';
 import { sessionRoster } from './class-coaches.ts';
 import { audit, privateVenue, transaction } from './database.ts';
 import { notifyBooking } from './notification-events.ts';
@@ -42,10 +42,12 @@ const privateStartIntervalMinutes = 30;
 const privateDurations = [60, 90, 120] as const;
 export const cancellationLeadMs = 6 * 60 * 60 * 1000;
 
+const reservedBookings = "status='CONFIRMED' AND approval_pending=1 AND starts_at>?";
+
 export function reservedPoints(db: DatabaseSync, user: string, now: string): number {
   return Number(db.prepare(`
     SELECT COALESCE(SUM(points), 0) AS total FROM bookings
-    WHERE player_id = ? AND status = 'CONFIRMED' AND approval_pending = 1 AND starts_at > ?
+    WHERE player_id = ? AND ${reservedBookings}
   `).get(user, now)?.total);
 }
 
@@ -134,6 +136,21 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
 
   function balance(user: string): number {
     return Number(db.prepare('SELECT COALESCE(SUM(delta), 0) AS balance FROM ledger WHERE player_id = ?').get(user)?.balance);
+  }
+
+  function wallets(parent: string) {
+    // The account page needs balances for this family, but none of the individual ledger rows.
+    return db.prepare(`WITH family AS (
+      SELECT c.player_id AS id, c.name, c.jersey_number AS jerseyNumber
+        FROM parent_players l JOIN children c USING(player_id) WHERE parent_id=? AND ${accessiblePlayerLink}
+      UNION ALL
+      SELECT p.id, NULL, NULL FROM players p WHERE p.legacy_parent_id=?
+        AND NOT EXISTS (SELECT 1 FROM children WHERE player_id=p.id)
+        AND EXISTS (SELECT 1 FROM ledger WHERE player_id=p.id)
+    ) SELECT family.*,
+      (SELECT coalesce(sum(delta),0) FROM ledger WHERE player_id=family.id) AS balance,
+      (SELECT coalesce(sum(points),0) FROM bookings WHERE player_id=family.id AND ${reservedBookings}) AS reservedPoints
+      FROM family ORDER BY name,id`).all(parent, parent, clock().toISOString());
   }
 
   function account(user: string, { limit, before }: { limit: number; before: number | null } = { limit: -1,before: null }): Account {
@@ -271,18 +288,21 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     `).all(user,limit) as unknown as Booking[];
   }
 
-  function bookingPage(player: string, period: 'upcoming' | 'history', after?: string) {
+  function bookingPage(owner: string, period: 'upcoming' | 'history', after?: string, family = false) {
     const upcoming = period === 'upcoming';
     const order = upcoming ? 'ASC' : 'DESC';
     const comparison = upcoming ? '>' : '<';
-    const cursor = after && db.prepare('SELECT starts_at FROM bookings WHERE id=? AND player_id=?').get(after, player);
+    const scope = family ? `b.player_id IN (SELECT player_id FROM parent_players WHERE parent_id=? AND ${accessiblePlayerLink})` : 'b.player_id=?';
+    const cursor = after && db.prepare('SELECT b.starts_at FROM bookings b WHERE b.id=? AND ' + scope).get(after, owner);
     if (after && !cursor) throw new ApiError(400, 'INVALID_CURSOR', '预约列表已更新，请刷新');
     const limit = 25;
-    const rows = db.prepare(`SELECT ${bookingFields} FROM bookings b JOIN coaches c ON c.id=b.coach_id
-      WHERE b.player_id=? AND ${upcoming ? '' : 'NOT'} (b.status='CONFIRMED' AND b.starts_at>?)
+    const rows = db.prepare(`SELECT ${bookingFields}${family ? ',child.name AS playerName' : ''}
+      FROM bookings b JOIN coaches c ON c.id=b.coach_id
+      ${family ? 'JOIN children child ON child.player_id=b.player_id' : ''}
+      WHERE ${scope} AND ${upcoming ? '' : 'NOT'} (b.status='CONFIRMED' AND b.starts_at>?)
       ${cursor ? 'AND (b.starts_at,b.id) ' + comparison + ' (?,?)' : ''}
       ORDER BY b.starts_at ${order}, b.id ${order} LIMIT ?`)
-      .all(player, clock().toISOString(), ...(cursor ? [cursor.starts_at, after!] : []), limit+1) as unknown as Booking[];
+      .all(owner, clock().toISOString(), ...(cursor ? [cursor.starts_at, after!] : []), limit+1) as unknown as Booking[];
     const more = rows.length > limit;
     if (more) rows.pop();
     return { rows, next: more ? rows.at(-1)!.id : null };
@@ -407,5 +427,5 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  return { publicSchedule, activeCoaches, weekSchedule, schedule, scheduleContext, child, account, listSlots, quote, bookings, bookingPage, book, approve, cancel, deleteLesson };
+  return { publicSchedule, activeCoaches, weekSchedule, schedule, scheduleContext, child, account, wallets, listSlots, quote, bookings, bookingPage, book, approve, cancel, deleteLesson };
 }

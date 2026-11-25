@@ -17,8 +17,8 @@ export async function coaches(ctx) {
   const columns = ['姓名', '私教课程类型', ...rates.map(rate => rate.minutes + ' 分钟积分'), '状态', '操作'];
   const records = rows.map(row => [row.name, names.get(row.privateCourseTypeId) || '一对一训练（默认）',
     ...rates.map(rate => row[rate.key]), row.enabled ? '已启用' : '已停用',
-    html`<div class="coach-row-actions">${link('编辑', 'editCoach', { id: row.id })}
-      ${row.enabled ? link('开放时段', 'privateHours', { coach: row.id }) : ''}
+    html`<div class="coach-row-actions">${row.enabled ? link('查看开放时间', 'privateHours', { coach: row.id }) : ''}
+      ${link('编辑资料', 'editCoach', { id: row.id })}
       <button class="txt" type="button" data-toggle="${row.id}">${row.enabled ? '停用' : '启用'}</button></div>`]);
   const root = ctx.show(html`${title('教练管理', link('＋ 新增教练', 'editCoach', {}, 'wb'))}
     ${box('教练名单', table(columns, records, '还没有教练。'))}`);

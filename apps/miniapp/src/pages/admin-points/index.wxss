@@ -67,3 +67,8 @@
 .undo-note { margin: 14px 0; font-size: 14px; }
 .undo-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 16px; }
 .undo-actions button { width: 100%; }
+.points-selector { display: flex; justify-content: space-between; gap: 12px; align-items: center; box-sizing: border-box; width: 100%; padding: 16px; margin-bottom: 12px; background: white; border: 1px solid #ded5d3; border-radius: 10px; }
+.points-account { display: grid; gap: 3px; }
+.points-label { font-size: 15px; font-weight: 600; }
+.points-account .row-name { color: #761f32; }
+.points-selector .button { flex: none; margin: 0; width: auto; }

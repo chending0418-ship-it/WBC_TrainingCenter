@@ -3,8 +3,8 @@
     <view class="en-meta"><text>队员姓名</text><text>{{row.child.name}}</text></view>
     <view class="en-meta"><text>出生年月</text><text>{{row.child.birthMonth}}</text></view>
     <view class="en-meta"><text>性别</text><text>{{row.genderLabel}}</text></view>
-    <view wx:if="{{row.parentId}}" class="en-meta"><text>家长账号 ID</text><text user-select>{{row.parentId}}</text></view>
-    <view wx:if="{{row.wechatIdHint}}" class="en-meta"><text>微信 ID</text><text>{{row.wechatIdHint}}</text></view>
+    <view wx:if="{{row.parentId}}" class="en-meta"><text>申请家长</text><text>{{row.parentName || '未填写称呼'}}</text></view>
+    <view wx:if="{{row.wechatIdHint}}" class="en-meta"><text>识别尾号</text><text>{{row.wechatIdHint}}</text></view>
     <view class="en-meta"><text>联系人</text><text>{{row.contact ? row.contact.name : '未填写'}}</text></view>
     <view class="en-meta"><text>联系电话</text><text>{{row.phoneLabel}}</text></view>
   </view>

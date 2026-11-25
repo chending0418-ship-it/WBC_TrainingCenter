@@ -1,7 +1,10 @@
 <page-meta page-style="{{original ? 'overflow:hidden' : ''}}" />
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">积分调整</text>
-  <button class="picker" bindtap="pickPlayer" disabled="{{busy || original}}"><text class="picker-label">队员账户</text><text class="picker-value">{{users[0].label || '搜索并选择队员'}}</text><view class="chevron"></view></button>
+  <view class="points-selector">
+    <view class="points-account"><text class="points-label">队员账户</text><text wx:if="{{users.length}}" class="row-name">{{users[0].label}}</text></view>
+    <button class="button quiet" bindtap="pickPlayer" disabled="{{busy || original}}" hover-class="press">{{users.length ? '更换队员' : '选择队员'}}</button>
+  </view>
   <view wx:if="{{loading}}" class="message">正在查询积分账户…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
@@ -67,7 +70,6 @@
     </view>
     <button wx:if="{{nextBefore}}" class="button quiet" bindtap="loadMore">更早的流水</button>
   </block>
-  <view wx:else class="message">选择队员后可办理充值或调整积分。</view>
   <view wx:if="{{original}}" class="undo-overlay">
     <form class="undo-panel" bindsubmit="reverse" aria-role="dialog" aria-label="撤销这笔记录">
       <view class="undo-title">撤销这笔记录？</view>

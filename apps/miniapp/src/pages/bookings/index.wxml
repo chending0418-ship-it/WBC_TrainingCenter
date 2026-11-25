@@ -3,14 +3,13 @@
     <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state">{{item.label}}</text></view>
         <view class="card-head"><text class="card-title">{{item.title}}</text></view>
     <view class="card-note">{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.coachLabel}} · {{item.venue}}</view>
-    <view class="card-footer">{{item.points}} 积分</view>
+    <view class="card-footer">{{item.playerName}} · {{item.points}} 积分</view>
     <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="card-note">已退回 {{item.refundPoints}} 积分</view>
   </view>
 </template>
 
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page">
   <text class="page-title" role="heading" aria-level="1">我的预约</text>
-  <navigator class="picker" url="/pages/family/index" hover-class="press"><text>{{playerName || '我的队员'}}</text><text class="accent">管理与切换队员</text></navigator>
   <view wx:if="{{loading}}" class="message">正在查询预约…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view>

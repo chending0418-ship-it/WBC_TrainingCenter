@@ -1,0 +1,22 @@
+<view class="page-shell">
+  <text class="page-title">编辑队员资料</text>
+  <view wx:if="{{error}}" class="form-error">{{error}}<button wx:if="{{!family}}" class="button quiet" bindtap="load">重新查询</button></view>
+  <view wx:if="{{loading}}" class="message">正在查询队员档案…</view>
+  <block wx:elif="{{family}}">
+    <view class="row-name">{{family.childName}}</view>
+    <view class="section-title">球衣号码</view>
+    <view class="list-row editor-panel"><input class="field" data-field="number" bindinput="input" value="{{number}}" maxlength="4" type="number" placeholder="球衣号码（选填）" aria-label="球衣号码"/>
+      <view class="admin-row-actions"><button class="button quiet" bindtap="saveNumber" disabled="{{busy || number === (family.jerseyNumber || '')}}">保存号码</button></view></view>
+    <view class="section-title">关联家长</view>
+    <view class="list-row editor-panel">
+      <view wx:for="{{guardians}}" wx:key="parentId" class="guardian-line"><text>{{item.parentName || '未填写称呼'}} <text class="muted">{{item.wechatIdHint}}</text></text>
+        <button class="button quiet" bindtap="editLink" data-revision="{{item.revision}}" disabled="{{busy}}">解除关联</button></view>
+      <view wx:if="{{!guardians.length}}" class="muted">暂无已关联家长。</view>
+      <block wx:if="{{family.registrationStatus === 'APPROVED'}}">
+        <guardian-search id="guardianSearch" bind:pick="pickedGuardian" disabled="{{busy}}"/>
+        <view class="admin-row-actions"><button class="button quiet" bindtap="editLink" disabled="{{busy || !guardian}}">添加关联家长</button></view>
+      </block>
+      <view wx:else class="muted">队员审核通过后可添加关联家长。</view>
+    </view>
+  </block>
+</view>

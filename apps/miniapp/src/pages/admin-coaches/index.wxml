@@ -39,8 +39,7 @@
           <text>{{tier.minutes}} 分钟</text><text class="accent">{{item[tier.field]}} 积分</text>
         </view>
       </view>
-      <navigator wx:if="{{item.enabled && !busy}}" class="button quiet row-action hours-link" url="/pages/admin-schedule/index?coachId={{item.id}}" hover-class="press">查看私教开放时间</navigator>
-      <view class="section-actions item-actions">
+      <view class="admin-row-actions"><navigator wx:if="{{item.enabled && !busy}}" class="button quiet" url="/pages/admin-schedule/index?coachId={{item.id}}" hover-class="press">查看开放时间</navigator>
         <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑资料</button>
         <button class="button quiet" data-id="{{item.id}}" bindtap="toggle" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用' : '启用'}}</button>
       </view>

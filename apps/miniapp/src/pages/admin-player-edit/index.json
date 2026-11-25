@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "队员档案",
+  "usingComponents": {
+    "guardian-search": "/components/guardian-search/index"
+  }
+}

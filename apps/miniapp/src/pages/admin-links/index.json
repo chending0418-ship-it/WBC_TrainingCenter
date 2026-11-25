@@ -1,1 +1,7 @@
-{ "navigationBarTitleText": "家长关联", "enablePullDownRefresh": true }
+{
+  "navigationBarTitleText": "家长关联",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "guardian-search": "/components/guardian-search/index"
+  }
+}

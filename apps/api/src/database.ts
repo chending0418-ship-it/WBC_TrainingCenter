@@ -11,6 +11,14 @@ export function openDatabase(path: string): DatabaseSync {
     initializeLegacySchema(db);
     migratePlayers(db);
   }
+  if (Number(db.prepare('PRAGMA user_version').get()?.user_version) < 21) {
+    transaction(db, () => {
+      if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 21) return;
+      db.exec(`CREATE TABLE parent_display_names (
+        user_id TEXT PRIMARY KEY REFERENCES users(id), nickname TEXT NOT NULL
+      ) STRICT; PRAGMA user_version = 21;`);
+    });
+  }
   return db;
 }
 

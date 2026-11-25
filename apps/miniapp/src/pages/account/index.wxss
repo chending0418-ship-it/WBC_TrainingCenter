@@ -1,21 +1,20 @@
-.balance {
-  padding: 15px 17px;
-  border-radius: 11px;
-  background: #761f32;
-  color: #fff;
-}
-
-.balance-number {
-  display: block;
-  margin: 2px 0 5px;
-  font-size: 36px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
-.profile {
-  margin-top: 9px;
-}
-
-.balance > view:last-child:not(:first-child) { font-size: 13px; color: #f8e9ec; }
+.account-heading, .account-row, .account-primary { display: flex; align-items: center; }
+.account-heading { justify-content: space-between; gap: 16px; }
+.account-heading .page-title, .account-heading .section-title { margin: 0; }
+.account-section { margin: 26px 0 10px; min-height: 32px; }
+.account-action { margin: 0; padding: 5px 0 5px 8px; background: transparent; color: #761f32; font-size: 14px; font-weight: 600; line-height: 22px; }
+.account-action::after { border: 0; }
+.account-panel { background: white; border: 1px solid #e0d8d5; border-radius: 12px; padding: 0 16px; }
+.account-row { min-height: 53px; gap: 10px; }
+.account-row + .account-row { border-top: 1rpx solid #e9e3e0; }
+.account-primary { gap: 8px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.wallet-row { min-height: 78px; }
+.wallet-name { font-size: 18px; font-weight: 650; }
+.jersey { color: #74676a; font-size: 13px; white-space: nowrap; }
+.wallet-value { flex-shrink: 0; text-align: right; padding: 8px 0; }
+.wallet-number, .wallet-caption { display: block; }
+.wallet-number { color: #761f32; font-size: 25px; font-weight: 700; line-height: 1.2; }
+.wallet-caption { color: #74676a; font-size: 12px; }
+.account-chevron { flex: none; width: 6px; height: 6px; margin-right: 2px; border-top: 1.5px solid #a59a98; border-right: 1.5px solid #a59a98; transform: rotate(45deg); }
+.row-link { color: #761f32; font-size: 14px; }
+.account-empty { color: #66595c; padding: 18px 16px; }

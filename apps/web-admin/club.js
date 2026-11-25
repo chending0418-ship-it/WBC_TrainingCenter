@@ -1,4 +1,4 @@
-import { html, title, box, field, select, submit, table, confirmAction } from './ui.js';
+import { html, title, box, buttons, options, select, submit, table, confirmAction } from './ui.js';
 
 const categories = [['players', '队员档案'], ['bookings', '预约历史'], ['deductions', '积分扣减明细']];
 export function exportsPage(ctx) {
@@ -22,23 +22,31 @@ export function exportsPage(ctx) {
 
 export async function roles(ctx) {
   const q = ctx.query.get('q') || '';
-  const [accounts, coaches] = await Promise.all([ctx.api('/account-roles?q=' + encodeURIComponent(q)), ctx.api('/coaches')]);
+  const profiles = [['submitted', '已填写'], ['missing', '未填写']];
+  const profile = ctx.query.get('profile') === 'missing' ? 'missing' : 'submitted';
+  const accounts = await ctx.api('/account-roles?profile=' + profile + '&q=' + encodeURIComponent(q));
   const selected = accounts.find(a => a.id === ctx.query.get('id'));
+  const coaches = selected ? await ctx.api('/coaches') : [];
   const editor = selected && box('编辑角色', html`<form class="form-pad" id="roles">
-    <p>${selected.name || selected.id}</p>
+    <p>${selected.parentName || selected.name || '未填写称呼'} · ${selected.wechatIdHint || '微信账户'}</p>
     <label><input name="parent" type="checkbox" ${selected.parent ? 'checked' : ''}>队员家长</label>
     <label><input name="admin" type="checkbox" ${selected.admin ? 'checked' : ''}>俱乐部管理员（可切换全部角色）</label>
-    ${select('本人教练档案', 'coach', [['', '未绑定'], ...coaches.filter(c => c.enabled).map(c => [c.id, c.name])], selected.coachId)}
-    ${submit('保存角色')}</form>`);
-  const rows = accounts.map(a => [a.name || '未填写队员资料', a.id,
+    ${select('本人教练档案', 'coach', [['', '未绑定'], ...coaches.filter(c => c.enabled || c.id === selected.coachId).map(c => [c.id, c.name])], selected.coachId)}
+    ${buttons(submit('保存角色'))}</form>`);
+  const rows = accounts.map(a => [a.parentName || '未填写称呼', a.name || '未填写队员资料', a.wechatIdHint || '—',
     a.admin ? '俱乐部管理员' : [a.parent && '队员家长', a.coachId && '教练'].filter(Boolean).join('、'),
     html`<button class="txt" data-id="${a.id}">编辑角色</button>`]);
-  const root = ctx.show(html`${title('用户管理')}<form role="search" class="tool-row">${field('姓名或账户 ID', 'q', q, { required: false, maxLength: 50 })}${submit('搜索')}</form>
-    ${editor || ''}${box('微信账户', table(['队员', '账户 ID', '角色', ''], rows, '未找到微信账户'))}
+  const root = ctx.show(html`${title('用户管理')}<form role="search" class="tool-row user-toolbar">
+    <label class="web-search"><input type="search" name="q" value="${q}" placeholder="昵称、姓名或尾号" aria-label="搜索用户" maxlength="50"></label>
+    <select class="w-select" name="profile" aria-label="队员资料筛选">${options(profiles,profile)}</select>${submit('搜索')}</form>
+    ${editor || ''}${box('微信账户', table(['家长称呼', '关联队员', '识别尾号', '角色', '操作'], rows, '未找到微信账户'))}
     ${accounts.length === 50 ? '显示前 50 个账户，可搜索缩小范围。' : ''}`);
   if (!root) return;
-  root.querySelector('[role=search]').onsubmit = e => { e.preventDefault(); ctx.navigate('roles', { q: e.target.q.value.trim() }); };
-  for (const button of root.querySelectorAll('[data-id]')) button.onclick = () => ctx.navigate('roles', { q, id: button.dataset.id });
+  const search = root.querySelector('[role=search]');
+  const apply = () => ctx.navigate('roles', { q: search.q.value.trim(), profile: search.profile.value });
+  search.onsubmit = e => { e.preventDefault(); apply(); };
+  search.profile.onchange = apply;
+  for (const button of root.querySelectorAll('[data-id]')) button.onclick = () => ctx.navigate('roles', { q, profile, id: button.dataset.id });
   const form = root.querySelector('#roles');
   if (form) form.onsubmit = e => {
     e.preventDefault();
@@ -47,7 +55,7 @@ export async function roles(ctx) {
       await ctx.write('/account-roles/' + encodeURIComponent(selected.id), 'PUT', {
         parent: form.parent.checked, admin: form.admin.checked, coachId: form.coach.value || null
       });
-      ctx.notice('角色已保存'); ctx.navigate('roles', { q });
+      ctx.notice('角色已保存'); ctx.navigate('roles', { q, profile });
     });
   };
 }

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { ManagedParent, ParentContact } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
+import { transaction } from './database.ts';
 import { object, requiredText } from './input.ts';
 
 export function readContact(db: DatabaseSync, userId: string): ParentContact | null {
@@ -26,7 +27,24 @@ export function saveContact(db: DatabaseSync, userId: string, input: unknown): P
   return { name, phone };
 }
 
-export function searchParents(db: DatabaseSync, query: string, now: string, status: unknown, profile: unknown): ManagedParent[] {
+export function parentProfile(db: DatabaseSync, id: string) {
+  const nickname = db.prepare('SELECT nickname FROM parent_display_names WHERE user_id=?').get(id)?.nickname ?? '';
+  return { contact: readContact(db,id), nickname };
+}
+export function saveParentProfile(db: DatabaseSync, id: string, input: unknown) {
+  const body = object(input);
+  const nickname = body.nickname === '' ? '' : requiredText(body.nickname,40);
+  return transaction(db, () => {
+    if (body.contact === null) db.prepare('DELETE FROM parent_contacts WHERE user_id=?').run(id);
+    else saveContact(db,id,body.contact);
+    if (nickname) db.prepare(`INSERT INTO parent_display_names VALUES (?,?) ON CONFLICT(user_id)
+      DO UPDATE SET nickname=excluded.nickname`).run(id,nickname);
+    else db.prepare('DELETE FROM parent_display_names WHERE user_id=?').run(id);
+    return parentProfile(db,id);
+  });
+}
+
+export function searchParents(db: DatabaseSync, query: string, now: string, status: unknown, profile: unknown, id?: string): ManagedParent[] {
   const filter = status === undefined || status === '' ? '' : requiredText(status, 20);
   if (filter && !['APPROVED', 'PENDING', 'RETURNED', 'UNREGISTERED'].includes(filter)) {
     throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的注册状态');
@@ -49,10 +67,10 @@ export function searchParents(db: DatabaseSync, query: string, now: string, stat
       (SELECT parent_id FROM parent_players WHERE player_id=u.id AND (status='APPROVED' OR (kind='CREATE' AND status<>'REMOVED'))
        ORDER BY status='APPROVED' DESC,kind,parent_id LIMIT 1) END
     LEFT JOIN registrations r ON r.player_id = u.id
-    WHERE (? = '' OR coalesce(r.status, 'UNREGISTERED') = ?) ${profileCondition} AND (? = '' OR instr(lower(u.id), lower(?)) > 0 OR instr(lower(c.name), lower(?)) > 0
+    WHERE ${id ? 'u.id=? AND' : ''} (? = '' OR coalesce(r.status, 'UNREGISTERED') = ?) ${profileCondition} AND (? = '' OR instr(lower(u.id), lower(?)) > 0 OR instr(lower(c.name), lower(?)) > 0
       OR instr(lower(p.name), lower(?)) > 0 OR instr(p.phone, ?) > 0 OR c.jersey_number = ?)
     ORDER BY u.id = 'parent' DESC, u.id LIMIT 50
-  `).all(now, filter, filter, query, query, query, query, query, query) as unknown as
+  `).all(now, ...(id ? [id] : []), filter, filter, query, query, query, query, query, query) as unknown as
     (Omit<ManagedParent, 'contact' | 'child'> & { contactName: string | null; phone: string | null;
       birthMonth: NonNullable<ManagedParent['child']>['birthMonth']; gender: NonNullable<ManagedParent['child']>['gender'] })[];
   return rows.map(({ contactName, phone, birthMonth, gender, ...account }) => ({

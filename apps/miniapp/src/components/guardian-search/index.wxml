@@ -1,0 +1,11 @@
+<view class="guardian-picker">
+  <text class="guardian-label">查找家长</text>
+  <view wx:if="{{selected}}" class="guardian-selected"><view>{{selected.parentName || '未填写称呼'}} <text class="muted">{{selected.wechatIdHint}}</text></view><button class="button quiet" bindtap="reset" disabled="{{disabled}}">重选</button></view>
+  <block wx:else>
+    <view class="guardian-search-bar"><input class="field" value="{{query}}" bindinput="input" bindconfirm="search" confirm-type="search" maxlength="100" disabled="{{disabled}}" placeholder="微信昵称、联系人姓名或尾号"/><button class="button quiet" bindtap="search" disabled="{{disabled || busy || !query}}">搜索</button></view>
+    <view wx:if="{{error}}" class="form-error">{{error}}</view>
+    <view wx:if="{{searched && !rows.length}}" class="muted">未找到家长。可请家长在「我的账户」复制账号 ID，再粘贴搜索。</view>
+    <button wx:for="{{rows}}" wx:key="id" class="guardian-result" data-index="{{index}}" bindtap="choose"><text>{{item.parentName || '未填写称呼'}}</text><text class="muted">{{item.wechatIdHint}} ›</text></button>
+    <view wx:if="{{rows.length === 25}}" class="muted">显示前 25 位，请缩小搜索范围。</view>
+  </block>
+</view>

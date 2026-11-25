@@ -1,20 +1,25 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title">用户管理</text>
-  <form bindsubmit="search" class="section-actions"><input class="field" maxlength="50" placeholder="姓名或账户 ID" bindinput="input"/><button class="button quiet" form-type="submit">搜索</button></form>
+  <form bindsubmit="search"><view class="user-toolbar">
+    <input class="field" maxlength="50" value="{{query}}" placeholder="昵称、姓名或尾号" aria-label="搜索用户" bindinput="input" confirm-type="search" bindconfirm="search"/>
+    <picker range="{{profiles}}" range-key="label" value="{{filterIndex}}" bindchange="filter" disabled="{{busy}}"><view class="profile-filter">{{profiles[filterIndex].label}}<view class="chevron"></view></view></picker>
+    <button class="button" form-type="submit" disabled="{{busy}}">搜索</button>
+  </view></form>
   <view wx:if="{{loading}}" class="message">正在查询微信账户…</view>
   <view wx:elif="{{error}}" class="form-error">{{error}}</view>
   <view wx:elif="{{!members.length}}" class="message">未找到微信账户。</view>
   <block wx:else>
     <view wx:if="{{members.length === 50}}" class="muted">显示前 50 个账户，可搜索缩小范围。</view>
     <view wx:for="{{members}}" wx:key="id" class="list-row">
-      <view class="row-name">{{item.name || '未填写队员资料'}}</view><text user-select class="muted">{{item.id}}</text>
+      <view class="row-line"><text class="row-name">{{item.parentName || item.name || '未填写称呼'}}</text><text class="muted">{{item.wechatIdHint}}</text></view>
+      <view wx:if="{{item.parentName && item.name}}" class="muted">关联队员 · {{item.name}}</view>
       <view>{{item.admin ? '俱乐部管理员' : (item.parent ? '队员家长' : '') + (item.coachId ? ' 教练' : '')}}</view>
-      <button size="mini" wx:if="{{editing !== item.id}}" data-id="{{item.id}}" disabled="{{busy}}" bindtap="edit">编辑角色</button>
+      <view wx:if="{{editing !== item.id}}" class="admin-row-actions"><button class="button quiet" data-id="{{item.id}}" disabled="{{busy}}" bindtap="edit">编辑角色</button></view>
       <view wx:else>
         <label class="picker">队员家长<switch checked="{{parent}}" bindchange="setParent" disabled="{{busy}}"/></label>
         <label class="picker">俱乐部管理员（可切换全部角色）<switch checked="{{admin}}" bindchange="setAdmin" disabled="{{busy}}"/></label>
         <picker range="{{coaches}}" range-key="name" value="{{coach}}" bindchange="setCoach" disabled="{{busy}}"><view class="picker">本人教练档案 · {{coaches[coach].name}}</view></picker>
-        <button class="button" bindtap="save" disabled="{{busy}}">保存角色</button>
+        <view class="admin-row-actions"><button class="button" bindtap="save" disabled="{{busy}}">保存角色</button></view>
       </view>
     </view>
   </block>

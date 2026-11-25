@@ -1,6 +1,6 @@
 <import src="../../calendar/week.wxml" />
 <import src="../../calendar/groups.wxml" />
-<page-meta page-style="{{detail || confirmation || registrationPrompt ? 'overflow: hidden' : ''}}" />
+<page-meta page-style="{{playerPrompt || detail || confirmation || registrationPrompt ? 'overflow: hidden' : ''}}" />
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page calendar-page">
   <text class="page-title" role="heading" aria-level="1">课程表</text>
 
@@ -11,10 +11,6 @@
   </view>
 
   <block wx:if="{{today}}">
-    <picker wx:if="{{players.length > 1}}" range="{{players}}" range-key="name" value="{{playerIndex}}" bindchange="changePlayer" disabled="{{booking}}">
-      <view class="picker"><text>预约队员</text><text class="picker-value">{{players[playerIndex].name}}</text><view class="chevron"></view></view>
-    </picker>
-    <view wx:elif="{{players.length}}" class="card-note">预约队员 · {{players[0].name}}</view>
     <view class="calendar-tabs">
       <button class="calendar-tab {{mode === 'GROUP' ? 'active' : ''}}" data-mode="GROUP"
         bindtap="changeMode" hover-class="press" aria-pressed="{{mode === 'GROUP'}}">团课</button>
@@ -96,11 +92,23 @@
       <scroll-view scroll-y class="detail-scroll"><text class="detail-text">{{detail.body}}</text></scroll-view>
     </view>
   </view>
+  <view wx:if="{{playerPrompt}}" class="quote-overlay">
+    <view class="quote-dialog" aria-role="dialog" aria-label="选择预约队员">
+      <view class="detail-heading"><text class="card-title">选择预约队员</text>
+        <button class="button quiet row-action detail-close" bindtap="dismissQuote" hover-class="press">取消</button></view>
+      <view class="chooser-course">{{playerPrompt.title}}</view>
+      <scroll-view class="chooser-list" scroll-y>
+        <button wx:for="{{playerPrompt.players}}" wx:key="id" class="chooser-row" data-id="{{item.id}}" bindtap="pickBookingPlayer" hover-class="press">
+          <text class="chooser-name">{{item.name}}</text><text wx:if="{{item.jerseyNumber}}" class="chooser-jersey">#{{item.jerseyNumber}}</text><view class="chooser-chevron"></view>
+        </button>
+      </scroll-view>
+    </view>
+  </view>
   <view wx:if="{{registrationPrompt}}" class="quote-overlay">
     <view class="quote-dialog registration-dialog" aria-role="dialog" aria-label="队员注册">
-      <view class="card-title">{{registrationPrompt.newPlayer ? '先添加预约队员' : '查看队员注册进度'}}</view>
+      <view class="card-title">{{registrationPrompt.linkPending ? '队员关联待审核' : registrationPrompt.newPlayer ? '先添加预约队员' : '查看队员注册进度'}}</view>
       <view class="registration-course"><text class="row-name">{{registrationPrompt.title}}</text><text class="card-note">{{registrationPrompt.when}}</text></view>
-      <view class="card-note">{{registrationPrompt.newPlayer ? '可以创建队员，或搜索已有队员申请关联。俱乐部管理员审核通过后即可预约。' : '注册审核通过后，就可以回来预约。'}}</view>
+      <view class="card-note">{{registrationPrompt.linkPending ? '俱乐部管理员通过关联申请后，就可以为队员预约。' : registrationPrompt.newPlayer ? '可以创建队员，或搜索已有队员申请关联。俱乐部管理员审核通过后即可预约。' : '注册审核通过后，就可以回来预约。'}}</view>
       <view class="quote-actions"><button class="button quiet" bindtap="dismissRegistration">继续看课</button><button class="button" bindtap="openRegistration">{{registrationPrompt.newPlayer ? '添加队员' : '查看申请'}}</button></view>
     </view>
   </view>

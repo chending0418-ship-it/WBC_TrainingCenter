@@ -1,14 +1,15 @@
 import { coachLabel } from '../../lib/coach-avatar';
-import { familyContext, invalidateRead, readVersion, showParentTab } from '../../lib/session';
+import { invalidateRead, readVersion, showParentTab } from '../../lib/session';
 import type { Booking } from '../../../../../packages/shared/contracts.js';
-import { api, errorMessage, RequestError } from '../../lib/client';
+import { api, errorMessage } from '../../lib/client';
 import { datetime, time } from '../../lib/display';
 
-type Row = Booking & { coachLabel: string; hours: string; label: string };
+type FamilyBooking = Booking & { playerName: string };
+type Row = FamilyBooking & { coachLabel: string; hours: string; label: string };
 
-const path = '/api/me/bookings?view=pages';
-type Slice = { rows: Booking[]; next: string | null };
-function visibleRow(booking: Booking): Row {
+const path = '/api/me/bookings?view=family';
+type Slice = { rows: FamilyBooking[]; next: string | null };
+function visibleRow(booking: FamilyBooking): Row {
   const future = booking.startsAt > new Date().toISOString();
   return { ...booking,coachLabel: coachLabel(booking.coachName),hours: datetime(booking.startsAt) + '–' + time(booking.endsAt),
     label: booking.status === 'CANCELLED' ? '已取消' : booking.status === 'REJECTED' ? '未获确认' :
@@ -17,7 +18,7 @@ function visibleRow(booking: Booking): Row {
 
 Page({
   data: {
-    playerName: '', authorized: false,
+    authorized: false,
     upcoming: [] as Row[],
     history: [] as Row[], next: { upcoming: null,history: null } as Record<'upcoming'|'history',string|null>, moreBusy: false,
     loaded: false, loading: true,
@@ -26,7 +27,6 @@ Page({
 
   renderedVersion: 0,
   nextStart: Infinity,
-  displayedPlayer: undefined as string | undefined,
   sequence: 0,
   onUnload() { this.sequence++; },
   onShow() {
@@ -60,12 +60,6 @@ Page({
     const request = ++this.sequence;
     if (this.data.error) this.setData({ error: '', loading: !this.data.loaded });
     try {
-      const { current } = await familyContext();
-      if (request !== this.sequence) return;
-      if (this.data.playerName !== (current?.name ?? '') || this.displayedPlayer !== current?.id) {
-        this.displayedPlayer = current?.id;
-        this.setData({ playerName: current?.name ?? '', loaded: false, loading: true });
-      }
       const pages = await api<{ upcoming: Slice; history: Slice }>(path);
       if (request !== this.sequence) return;
       const upcoming = pages.upcoming.rows.map(visibleRow), history = pages.history.rows.map(visibleRow);
@@ -73,8 +67,7 @@ Page({
       this.nextStart = upcoming.length ? Date.parse(upcoming[0].startsAt) : Infinity;
       this.setData({ upcoming,history,next: { upcoming: pages.upcoming.next,history: pages.history.next },loaded: true });
     } catch (error) {
-      if (request === this.sequence) this.setData({ error: errorMessage(error),
-        ...(error instanceof RequestError && error.code === 'PLAYER_ACCESS_DENIED' ? { loaded: false, playerName: '' } : {}) });
+      if (request === this.sequence) this.setData({ error: errorMessage(error), loaded: false });
     } finally {
       if (request === this.sequence && this.data.loading) this.setData({ loading: false });
     }

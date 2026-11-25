@@ -1,5 +1,5 @@
 import { coachIdentity, coachLabel } from '../../lib/coach-avatar';
-import { choosePlayer, currentPlayerId, familyContext, parentAccountId, hasFreshRead, invalidateRead, readVersion, showParentTab, wechatIdentity } from '../../lib/session';
+import { familyContext, parentAccountId, hasFreshRead, invalidateRead, readVersion, showParentTab, wechatIdentity } from '../../lib/session';
 import type { Booking, BookingQuote, BookingSelection, Coach, Course, FamilyPlayer, PrivateSlot, Schedule } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage, RequestError } from '../../lib/client';
 import { availableRanges, mondayOfWeek } from '../../lib/private-availability';
@@ -35,7 +35,7 @@ Page({
     error: '',
     groups: [] as ReturnType<typeof weekAgenda<VisibleCourse>>['groups'],
     total: 0,
-    players: [] as FamilyPlayer[], playerIndex: 0,
+    playerPrompt: null as { title: string; selection: BookingSelection; players: FamilyPlayer[] } | null,
     coaches: [] as (Coach & ReturnType<typeof coachIdentity>)[],
     coachIndex: 0,
     privateDays: [] as PrivateDay[],
@@ -45,11 +45,13 @@ Page({
     slotError: '',
     detail: null as { heading: string; title: string; body: string } | null,
     confirmation: null as Confirmation | null,
-    registrationPrompt: null as (CourseReminder & { newPlayer: boolean }) | null,
+    registrationPrompt: null as (CourseReminder & { newPlayer: boolean; linkPending: boolean; playerId?: string }) | null,
     booking: false
   },
 
   coursesByDate: new Map<string, Course[]>(),
+  approvedCount: 0,
+  familyVersion: 0,
   scheduleRequest: 0,
   slotsRequest: 0,
   renderedVersion: 0,
@@ -81,7 +83,7 @@ Page({
     if (!authorized) return;
     this.syncTabOverlay();
     this.pendingReminder = takeCourseReminder() ?? this.pendingReminder;
-    if (!this.renderedVersion || this.renderedVersion !== readVersion(this.schedulePath) || this.pendingReminder) {
+    if (!this.renderedVersion || this.renderedVersion !== readVersion(this.schedulePath) || this.familyVersion !== readVersion('/api/me/players') || this.pendingReminder) {
       void this.refresh();
     } else if (Date.now() >= this.nextCourseStart) {
       void this.selectDate(this.data.date);
@@ -107,14 +109,13 @@ Page({
     const request = ++this.scheduleRequest;
     if (this.data.error) this.setData({ error: '', loading: !this.data.today });
     try {
-      const { available, current } = await familyContext();
-      if (request !== this.scheduleRequest) return;
-      this.setData({ players: available, playerIndex: Math.max(0,available.findIndex(row => row.id === current?.id)) });
       const reminder = this.pendingReminder;
       const preferred = reminder?.date || (typeof anchor === 'string' ? anchor : this.data.date) || localTimestamp(Date.now()).slice(0,10);
       const path = weekPath(preferred);
-      const schedule = await api<Omit<Schedule,'coaches'>>(path);
+      const [schedule, family] = await Promise.all([api<Omit<Schedule,'coaches'>>(path), familyContext()]);
       if (request !== this.scheduleRequest) return;
+      this.approvedCount = family.players.filter(row => row.status === 'APPROVED').length;
+      this.familyVersion = readVersion('/api/me/players');
       this.schedulePath = path;
       this.renderedVersion = readVersion(path);
       this.coursesByDate = new Map();
@@ -145,7 +146,7 @@ Page({
     const groups = week.groups.map(day => ({ ...day, lessons: day.lessons.map(course => {
       if (course.startsAt > now) this.nextCourseStart = Math.min(this.nextCourseStart, Date.parse(course.startsAt));
       let action = '预约';
-      if (course.bookedByMe) action = '该队员已预约';
+      if (course.bookedByMe && this.approvedCount === 1) action = '该队员已预约';
       else if (course.startsAt <= now) action = '已开课';
       else if (course.bookedCount >= course.capacity) action = '已满员';
       return { ...course, coachLabel: coachLabel(course.coachName), hours: timeRange(course.startsAt, course.endsAt), action, unavailable: action !== '预约' };
@@ -167,15 +168,6 @@ Page({
   jumpDay(event: WechatMiniprogram.TouchEvent) {
     const day = this.data.dates.find(item => item.date === event.currentTarget.dataset.date);
     if (day && !day.outside && !this.data.booking) goToAgendaDay(day.date, day.count);
-  },
-
-  changePlayer(event: WechatMiniprogram.PickerChange) {
-    const index = Number(event.detail.value);
-    const player = this.data.players[index];
-    if (!player || this.data.booking || player.id === currentPlayerId()) return;
-    choosePlayer(player.id);
-    this.setData({ playerIndex: index, groups: [], total: 0, loading: true });
-    void this.refresh();
   },
 
   changeMode(event: WechatMiniprogram.TouchEvent) {
@@ -280,7 +272,7 @@ Page({
   },
 
   bookGroup(event: WechatMiniprogram.TouchEvent) {
-    void this.book({ type: 'GROUP', classSessionId: String(event.currentTarget.dataset.id) });
+    void this.startBooking({ type: 'GROUP', classSessionId: String(event.currentTarget.dataset.id) });
   },
 
   bookPrivate(event: WechatMiniprogram.TouchEvent) {
@@ -288,18 +280,62 @@ Page({
     const { day, range, start, end } = event.currentTarget.dataset;
     const slot = this.data.privateDays[Number(day)]?.ranges[Number(range)]?.starts[Number(start)]?.options[Number(end)];
     if (!coach || !slot || slot.startsAt !== this.data.selectedStart) return;
-    void this.book({ type: 'PRIVATE', coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt });
+    void this.startBooking({ type: 'PRIVATE', coachId: coach.id, startsAt: slot.startsAt, endsAt: slot.endsAt });
   },
 
+  async startBooking(selection: BookingSelection) {
+    if (this.data.booking || this.data.playerPrompt || this.data.confirmation || this.data.registrationPrompt) return;
+    const sequence = ++this.quoteSequence;
+    this.setData({ booking: true });
+    let family;
+    try {
+      family = await familyContext();
+    } catch (error) {
+      if (sequence === this.quoteSequence) wx.showToast({ title: errorMessage(error), icon: 'none' });
+      return;
+    } finally {
+      this.setData({ booking: false });
+    }
+    if (!this.visible || sequence !== this.quoteSequence) return;
+    const eligible = family.players.filter(row => row.status === 'APPROVED');
+    const course = selection.type === 'GROUP' ? this.data.groups.flatMap(day => day.lessons).find(row => row.id === selection.classSessionId) : null;
+    if (eligible.length > 1) {
+      this.setData({ playerPrompt: { selection, title: course?.title ?? '一对一训练', players: eligible } });
+      this.syncTabOverlay();
+    } else if (eligible.length) {
+      await this.book(selection, eligible[0]);
+    } else {
+      this.promptRegistration(selection, family.available[0]?.id, family.players.some(row => row.kind === 'LINK' && row.status === 'PENDING'));
+    }
+  },
+  pickBookingPlayer(event: WechatMiniprogram.TouchEvent) {
+    const prompt = this.data.playerPrompt;
+    const player = prompt?.players.find(row => row.id === event.currentTarget.dataset.id);
+    if (!prompt || !player || this.data.booking) return;
+    this.dismissQuote();
+    void this.book(prompt.selection, player);
+  },
+  promptRegistration(selection: BookingSelection, playerId?: string, pendingLink = false) {
+    const course = selection.type === 'GROUP' ? this.data.groups.flatMap(day => day.lessons).find(row => row.id === selection.classSessionId) : null;
+    const startsAt = selection.type === 'PRIVATE' ? selection.startsAt : course?.startsAt;
+    const endsAt = selection.type === 'PRIVATE' ? selection.endsAt : course?.endsAt;
+    if (!startsAt || !endsAt) return;
+    const coach = selection.type === 'PRIVATE' ? this.data.coaches.find(row => row.id === selection.coachId)?.name : course?.coachName;
+    this.setData({ registrationPrompt: {
+      selection, playerId, linkPending: pendingLink && !playerId, newPlayer: !playerId && !pendingLink, date: localTimestamp(startsAt).slice(0,10), title: course?.title ?? '一对一训练',
+      when: datetime(startsAt) + '–' + time(endsAt) + (coach ? ' · ' + coachLabel(coach) : '')
+    } });
+    this.syncTabOverlay();
+  },
   syncTabOverlay() {
     const tab = this.getTabBar();
-    const modalOpen = Boolean(this.data.detail || this.data.confirmation || this.data.registrationPrompt);
+    const modalOpen = Boolean(this.data.playerPrompt || this.data.detail || this.data.confirmation || this.data.registrationPrompt);
     if (tab && (tab.data as { modalOpen?: boolean }).modalOpen !== modalOpen) tab.setData({ modalOpen });
   },
   dismissQuote() {
     this.quoteSequence++;
-    if (this.data.confirmation) {
-      this.setData({ confirmation: null });
+    if (this.data.confirmation || this.data.playerPrompt) {
+      this.setData({ confirmation: null, playerPrompt: null });
       this.syncTabOverlay();
     }
   },
@@ -314,34 +350,35 @@ Page({
     if (!course) return;
     saveReminder(course);
     this.dismissRegistration();
-    wx.navigateTo({ url: course.newPlayer ? '/pages/family/index' : '/pages/child/index' });
+    wx.navigateTo({ url: course.playerId ? '/pages/child/index?playerId=' + encodeURIComponent(course.playerId) : '/pages/family/index' });
   },
   async submitQuote() {
     const quote = this.data.confirmation;
-    if (!quote || this.data.booking || quote.playerId !== currentPlayerId()) return;
+    if (!quote || this.data.booking) return;
+    const sequence = this.quoteSequence;
     const identity = wechatIdentity();
     this.setData({ booking: true });
     await requestOnSubmit(this);
     this.setData({ booking: false });
+    if (identity !== wechatIdentity() || !this.visible || sequence !== this.quoteSequence) return;
     this.dismissQuote();
-    if (identity !== wechatIdentity() || quote.playerId !== currentPlayerId()) return;
-    await this.book(quote.selection, quote.revision);
+    await this.book(quote.selection, { id: quote.playerId, name: quote.playerName }, quote.revision);
   },
-  async book(selection: BookingSelection, revision?: string) {
+  async book(selection: BookingSelection, player: Pick<FamilyPlayer, 'id' | 'name'>, revision?: string) {
     if (this.data.booking) return;
     const sequence = ++this.quoteSequence;
     this.setData({ booking: true });
-    const playerId = currentPlayerId();
+    const playerId = player.id;
     const storageKey = 'pending-booking:' + JSON.stringify([parentAccountId(),playerId,selection]);
     try {
       const stored = wx.getStorageSync<string | { requestKey: string; expectedRevision: string }>(storageKey);
       let pending = typeof stored === 'string' ? { requestKey: stored } : stored;
       if (!pending?.requestKey) {
         if (!revision) {
-          const quote = await api<BookingQuote>('/api/bookings/quote', 'POST', selection);
+          const quote = await api<BookingQuote>('/api/bookings/quote', 'POST', selection, playerId);
           if (sequence === this.quoteSequence) {
             this.setData({ confirmation: {
-              playerId, playerName: this.data.players[this.data.playerIndex]?.name ?? '',
+              playerId, playerName: player.name,
               selection, revision: quote.revision, title: quote.title, when: datetime(quote.startsAt) + '–' + time(quote.endsAt),
               coach: coachLabel(quote.coachName), venue: quote.venue, points: quote.points, refundPoints: quote.refundPoints
             } });
@@ -352,7 +389,7 @@ Page({
         pending = { requestKey: Date.now() + '-' + Math.random().toString(36).slice(2), expectedRevision: revision };
         wx.setStorageSync(storageKey, pending);
       }
-      const booking = await api<Booking>('/api/bookings', 'POST', { ...selection, ...pending });
+      const booking = await api<Booking>('/api/bookings', 'POST', { ...selection, ...pending }, playerId);
       wx.removeStorageSync(storageKey);
       wx.showToast({ title: booking.status === 'PENDING' ? '已提交，待确认' :
         booking.status === 'CONFIRMED' ? '预约已确认' : '预约已结束', icon: 'none' });
@@ -362,23 +399,12 @@ Page({
         wx.removeStorageSync(storageKey);
       }
       if (error instanceof RequestError && ['CHILD_PROFILE_REQUIRED', 'REGISTRATION_REQUIRED'].includes(error.code)) {
-        invalidateRead('/api/me/registration');
-        if (sequence !== this.quoteSequence) return;
-        const course = selection.type === 'GROUP' ? this.data.groups.flatMap(day => day.lessons).find(row => row.id === selection.classSessionId) : null;
-        const startsAt = selection.type === 'PRIVATE' ? selection.startsAt : course?.startsAt;
-        const endsAt = selection.type === 'PRIVATE' ? selection.endsAt : course?.endsAt;
-        if (startsAt && endsAt) {
-          const coach = selection.type === 'PRIVATE' ? this.data.coaches.find(row => row.id === selection.coachId)?.name : course?.coachName;
-          this.setData({ registrationPrompt: {
-            selection, date: localTimestamp(startsAt).slice(0, 10), title: course?.title ?? '一对一训练',
-            when: datetime(startsAt) + '–' + time(endsAt) + (coach ? ' · ' + coachLabel(coach) : ''),
-            newPlayer: error.code === 'CHILD_PROFILE_REQUIRED'
-          } });
-          this.syncTabOverlay();
-        } else wx.navigateTo({ url: error.code === 'CHILD_PROFILE_REQUIRED' ? '/pages/family/index' : '/pages/child/index' });
+        invalidateRead('/api/me/registration', playerId);
+        invalidateRead('/api/me/players');
+        if (sequence === this.quoteSequence) this.promptRegistration(selection, error.code === 'REGISTRATION_REQUIRED' ? playerId : undefined);
       } else {
         wx.showToast({ title: errorMessage(error), icon: 'none', duration: 2500 });
-        if (error instanceof RequestError && ['FULL', 'SLOT_TAKEN', 'SCHEDULE_CONFLICT', 'ALREADY_BOOKED', 'QUOTE_CHANGED'].includes(error.code)) {
+        if (error instanceof RequestError && (['FULL', 'SLOT_TAKEN', 'QUOTE_CHANGED'].includes(error.code) || (error.code === 'ALREADY_BOOKED' && this.approvedCount === 1))) {
           if (selection.type === 'GROUP') invalidateRead(this.schedulePath);
           else if (this.slotsPath) invalidateRead(this.slotsPath);
           await this.refresh();

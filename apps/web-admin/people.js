@@ -1,3 +1,4 @@
+import { bindGuardianPicker, guardianLabel, guardianPicker } from './player-links.js';
 import { accountUrl, bookingLabels, box, buttons, confirmAction, datetime, details, field, filter, gender,
   href, html, link, maskedPhone, phoneTail, regLabels, select, stamp, submit, table, tabs, title } from './ui.js';
 
@@ -36,9 +37,11 @@ export async function people(ctx) {
     const rows = await ctx.api('/parents?' + query.toString());
     if (!ctx.active() || request !== revision) return;
     const contents = rows.map(family => [
-      html`<b>${missing ? '账户 · ' + family.id.slice(-8) : nameOf(family)}${family.jerseyNumber ? ' · #' + family.jerseyNumber : ''}</b>`, family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—',
+      html`<b>${missing ? '未提交队员资料' : nameOf(family)}${family.jerseyNumber ? ' · #' + family.jerseyNumber : ''}</b>`, family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—',
       phoneTail(family.contact), stamp(stateOf(family)), family.balance - family.reservedPoints, family.reservedPoints,
-      choosing ? link('选择队员', 'finance', { id: family.id, mode }) : link('查看档案', 'person', { id: family.id, filter: selected, q: form.q.value.trim() })
+      choosing ? link('选择队员', 'finance', { id: family.id, mode }) : family.child ? html`<div class="coach-row-actions">
+        ${link('编辑资料', 'person', { id: family.id, filter: selected, q: form.q.value.trim() })}
+        ${link('调整积分', 'finance', { id: family.id, mode: 'adjust' })}</div>` : '—'
     ]);
     const count = rows.length === 50 ? '显示前 50 名，请搜索缩小范围' : '共 ' + rows.length + (missing ? ' 个账户' : ' 名');
     result.innerHTML = box(missing ? '未提交资料的账户' : '队员名单',
@@ -55,43 +58,94 @@ export async function people(ctx) {
   await search();
 }
 
-async function loadFamily(ctx, id) {
-  const rows = await ctx.api('/parents?q=' + encodeURIComponent(id));
-  const family = rows.find(row => row.id === id);
-  if (!family) throw new Error('找不到该队员，请返回名单重新选择。');
-  return family;
+function loadFamily(ctx, id) {
+  return ctx.api('/parents/' + encodeURIComponent(id));
+}
+
+function guardianTable(guardians) {
+  const rows = guardians.map((row,i) => [guardianLabel(row), html`<button type="button" class="txt" data-remove="${i}">解除关联</button>`]);
+  return table(['关联家长','操作'], rows,'暂无已关联家长');
 }
 
 export async function person(ctx) {
   const id = ctx.query.get('id');
   if (!id) return ctx.navigate('people');
-  const path = accountUrl(id);
-  const family = await loadFamily(ctx, id);
-  const [account, bookings] = family.child ? await Promise.all([ctx.api(path + '?limit=1'), ctx.api(path + '/bookings?limit=12')])
-    : [{ balance: family.balance,reservedPoints: family.reservedPoints },[]];
-  const profile = details([[family.child ? '队员 ID' : '账号 ID',id], ['姓名', nameOf(family)], ['出生年月 / 性别', family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—'],
+  const [family, guardians] = await Promise.all([loadFamily(ctx,id),
+    ctx.api('/player-links?status=APPROVED&playerId=' + encodeURIComponent(id))]);
+  const profile = details([['出生年月 / 性别', family.child ? (family.child.birthMonth || '—') + ' · ' + gender(family.child.gender) : '—'],
     ['联系人', family.contact ? family.contact.name + ' · ' + maskedPhone(family.contact.phone) : '—'], ['注册状态', stamp(stateOf(family))]]);
-  const root = ctx.show(html`${title(nameOf(family) + '的队员档案', link('返回队员名单', 'people', { filter: ctx.query.get('filter'), q: ctx.query.get('q') }))}
-    <div class="split equal">${box('队员资料', html`${profile}${family.child ? html`<form class="form-pad">${field('球衣号码（选填）', 'number', family.jerseyNumber || '', { required: false, maxLength: 4 })}${submit('保存号码')}</form>` : ''}`)}${box('积分账户', html`${balances(account)}
-      ${buttons(...(family.child ? [link('充值', 'finance', { id }, 'wb outline'), link('调整积分', 'finance', { id, mode: 'adjust' }, 'wb outline')] : []))}`)}</div>
-    ${box('近期预约', table(['开课时间', '课程', '教练', '积分', '状态'], bookings.map(b =>
-      [datetime(b.startsAt), b.title, b.coachName, b.points, stamp(bookingLabels[b.status])]), '暂无预约'))}`);
-  const jersey = root?.querySelector('form');
+  const root = ctx.show(html`${title(nameOf(family) + ' · 编辑资料', link('返回队员名单', 'people', { filter: ctx.query.get('filter'), q: ctx.query.get('q') }))}
+    <div class="split equal">${box('队员资料', html`${profile}${family.child ? html`<form id="jersey" class="form-pad">
+      ${field('球衣号码（选填）','number', family.jerseyNumber || '', { required: false, maxLength: 4 })}${buttons(submit('保存号码'))}</form>` : ''}`)}
+    ${box('关联家长', html`${guardianTable(guardians)}
+      ${family.registrationStatus === 'APPROVED' ? html`<form class="form-pad" id="guardian">${guardianPicker}${buttons(submit('添加关联家长'))}</form>` :
+        html`<p class="form-pad">队员审核通过后可添加关联家长。</p>`}`)}
+    </div>${box('积分账户',html`${balances(family)}${family.child ? buttons(link('调整积分','finance',{id,mode:'adjust'},'wb outline')) : ''}`)}
+    <details class="box recent-bookings"><summary>近期预约</summary><div aria-live="polite"></div></details>`);
+  if (!root) return;
+  const recent = root.querySelector('.recent-bookings');
+  let loaded = false;
+  recent.ontoggle = async () => {
+    if (!recent.open || loaded || !family.child) return;
+    loaded = true;
+    try {
+      const bookings = await ctx.api(accountUrl(id) + '/bookings?limit=12');
+      if (ctx.active()) recent.querySelector('div').innerHTML = table(['开课时间','课程','教练','积分','状态'],bookings.map(b =>
+        [datetime(b.startsAt),b.title,b.coachName,b.points,stamp(bookingLabels[b.status])]), '暂无预约').value;
+    } catch (error) { loaded = false; if (ctx.active()) ctx.notice(error.message); }
+  };
+  const jersey = root.querySelector('#jersey');
   if (jersey) jersey.onsubmit = event => {
     event.preventDefault();
     ctx.perform(async () => {
-      await ctx.write('/parents/' + encodeURIComponent(id) + '/jersey', 'PUT', { number: jersey.number.value.trim() });
+      const number = jersey.number.value.trim();
+      if (number !== (family.jerseyNumber || '')) {
+        await ctx.write('/parents/' + encodeURIComponent(id) + '/jersey', 'PUT', { number });
+        family.jerseyNumber = number;
+      }
       ctx.notice('球衣号码已保存');
-      ctx.refresh();
     });
   };
+  const grant = root.querySelector('#guardian');
+  const redrawGuardians = async () => {
+    const updated = await ctx.api('/player-links?status=APPROVED&playerId=' + encodeURIComponent(id));
+    if (!ctx.active()) return;
+    guardians.splice(0, guardians.length, ...updated);
+    const tableNode = root.querySelector('.split .box:nth-child(2) .table-wrap');
+    tableNode.outerHTML = guardianTable(guardians).value;
+  };
+  let selectedGuardian;
+  const resetGuardian = grant && bindGuardianPicker(ctx,grant,row => { selectedGuardian = row; });
+  if (grant) grant.onsubmit = e => {
+    e.preventDefault();
+    ctx.perform(async () => {
+      if (!selectedGuardian) throw Error('请先搜索并选择一位家长');
+      if (!await confirmAction('添加关联家长', guardianLabel(selectedGuardian) + ' 将可为 ' + nameOf(family) + ' 预约课程。') || !ctx.active()) return;
+      await ctx.write('/player-links','POST',{ playerId: id,parentId: selectedGuardian.id });
+      resetGuardian(); await redrawGuardians(); ctx.notice('家长关联已保存');
+    });
+  };
+  root.addEventListener('click', e => {
+    const button = e.target.closest('button[data-remove]');
+    if (!button) return;
+    const row = guardians[Number(button.dataset.remove)];
+    ctx.perform(async () => {
+      if (!await confirmAction('解除关联', '解除 ' + guardianLabel(row) + ' 与' + nameOf(family) + '的关联？') || !ctx.active()) return;
+      await ctx.write('/player-links','PUT',{ playerId: id,parentId: row.parentId,revision: row.revision,status: 'REMOVED' });
+      await redrawGuardians(); ctx.notice('家长关联已解除');
+    });
+  });
 }
 
 export async function finance(ctx) {
   const id = ctx.query.get('id');
   const adjusting = ctx.query.get('mode') === 'adjust';
   const mode = adjusting ? 'adjust' : 'credit';
-  if (!id) return ctx.navigate('people', { choose: 'finance', mode });
+  if (!id) {
+    ctx.show(html`${title('积分调整')}${box('队员账户', html`<div class="finance-selector"><span>选择办理充值或调整的队员</span>
+      ${link('选择队员','people',{ choose: 'finance',mode },'wb outline')}</div>`)}`);
+    return;
+  }
   const path = accountUrl(id);
   const [family, account] = await Promise.all([
     loadFamily(ctx, id), ctx.api(path + '?limit=25' + (ctx.query.get('before') ? '&before=' + encodeURIComponent(ctx.query.get('before')) : ''))

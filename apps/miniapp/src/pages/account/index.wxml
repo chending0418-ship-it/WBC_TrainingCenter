@@ -1,36 +1,26 @@
-<view wx:if="{{authorized}}" class="page-shell parent-tab-page">
-  <text class="page-title" role="heading" aria-level="1">我的账户</text>
-  <navigator class="picker" url="/pages/family/index" hover-class="press"><text>{{playerName || '我的队员'}}</text><text class="accent">管理与切换队员</text></navigator>
-  <view class="utility-links">当前角色 · 队员家长<button wx:if="{{canSwitch}}" size="mini" bindtap="switchRole">切换角色</button></view>
-  <view wx:if="{{loading}}" class="message">正在查询账户…</view>
-  <view wx:elif="{{error}}" class="message">
-    <view>{{error}}</view>
-    <button class="button quiet" bindtap="refresh" hover-class="press">重新查询</button>
+<view wx:if="{{authorized}}" class="page-shell parent-tab-page account-page">
+  <view class="account-heading">
+    <text class="page-title" role="heading" aria-level="1">我的账户</text>
+    <button wx:if="{{canSwitch}}" class="account-action" bindtap="switchRole" hover-class="press">切换角色</button>
   </view>
-  <block wx:if="{{loaded}}">
-    <view class="balance">
-      <view>可用积分</view>
-      <text class="balance-number">{{balance}}</text>
-      <view wx:if="{{reservedPoints}}">{{reservedPoints}} 积分为待确认预约预留</view>
-    </view>
-    <navigator class="picker profile" url="{{playerName ? '/pages/child/index' : '/pages/family/index'}}" hover-class="press">
-      <text>队员注册</text><text class="accent">{{registrationLabel}}</text>
-    </navigator>
-    <navigator class="picker profile" url="/pages/contact/index" hover-class="press">
-      <text>联系人资料</text><text class="accent">查看与编辑</text>
-    </navigator>
-  </block>
-  <view class="utility-links">
-    <text aria-role="button" bindtap="copyAccountId" hover-class="press">复制账号 ID</text>
-    <navigator url="/pages/agreements/index" hover-class="press">使用协议与隐私说明</navigator>
+  <view class="account-heading account-section">
+    <text class="section-title" role="heading" aria-level="2">队员积分</text>
+    <navigator class="account-action" url="/pages/family/index" hover-class="press">管理队员</navigator>
   </view>
-  <block wx:if="{{loaded}}">
-    <view class="section-title" role="heading" aria-level="2">积分流水</view>
-    <view wx:if="{{!ledger.length}}" class="muted">暂无积分变动。</view>
-    <view wx:for="{{ledger}}" wx:key="id" class="list-row">
-      <view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.change}}</text></view>
-      <view class="muted">{{item.date}}</view><view wx:if="{{item.training}}" class="muted">关联训练 {{item.training}}</view>
+  <view wx:if="{{error}}" class="message"><text>{{error}}</text><button class="button quiet" bindtap="refresh">重新查询</button></view>
+  <view wx:elif="{{!loaded}}" class="muted account-empty">正在查询积分…</view>
+  <view wx:elif="{{!wallets.length}}" class="account-panel account-empty">暂无队员积分。可在「管理队员」创建或关联队员。</view>
+  <view wx:else class="account-panel">
+    <view wx:for="{{wallets}}" wx:key="id" class="account-row wallet-row" data-id="{{item.id}}" bindtap="openWallet" aria-role="button" hover-class="press">
+      <view class="account-primary"><text class="wallet-name">{{item.title}}</text><text wx:if="{{item.jerseyNumber}}" class="jersey">#{{item.jerseyNumber}}</text></view>
+      <view class="wallet-value"><text class="wallet-number">{{item.available}}</text><text class="wallet-caption">可用积分</text></view>
+      <view class="account-chevron"></view>
     </view>
-    <button wx:if="{{nextBefore}}" class="button quiet" bindtap="loadMore" disabled="{{moreBusy}}">更早的流水</button>
-  </block>
+  </view>
+  <view class="account-heading account-section"><text class="section-title" role="heading" aria-level="2">账户资料</text></view>
+  <view class="account-panel">
+    <navigator class="account-row" url="/pages/contact/index" hover-class="press"><text class="account-primary">联系人资料</text><text class="row-link">编辑</text><view class="account-chevron"></view></navigator>
+    <view class="account-row" bindtap="copyAccountId" aria-role="button" hover-class="press"><text class="account-primary">家长账号 ID</text><text class="row-link">复制</text><view class="account-chevron"></view></view>
+    <navigator class="account-row" url="/pages/agreements/index" hover-class="press"><text class="account-primary">使用协议与隐私说明</text><text class="row-link">查看</text><view class="account-chevron"></view></navigator>
+  </view>
 </view>

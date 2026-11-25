@@ -6,7 +6,7 @@ import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
 import { applyForPlayer, familyPlayers, searchPlayers, selectedPlayer } from './player-links.ts';
 import { dateInput, expectedRevision, integer, ledgerWindow, object, requiredText, selection } from './input.ts';
-import { readContact, saveContact } from './parent-contact.ts';
+import { parentProfile, readContact, saveContact, saveParentProfile } from './parent-contact.ts';
 import { readRegistration, submitRegistration } from './registration.ts';
 import { registerSubscriptions } from './subscription-api.ts';
 import type { MessageState, Templates } from './subscription-config.ts';
@@ -136,20 +136,24 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     } };
   });
   app.put('/api/me/registration', async request => submitRegistration(db, user(request), request.body, clock(), false, { playerId: request.headers['x-player-id'] }));
+  app.get('/api/me/contact-profile', async request => parentProfile(db,user(request)));
+  app.put('/api/me/contact-profile', async request => saveParentProfile(db,user(request),request.body));
   app.get('/api/me/contact', async request => ({ contact: readContact(db, user(request)) }));
   app.put('/api/me/contact', async request => saveContact(db, user(request), request.body));
   app.delete('/api/me/contact', async (request, reply) => {
     db.prepare('DELETE FROM parent_contacts WHERE user_id = ?').run(user(request));
     return reply.code(204).send();
   });
+  app.get('/api/me/wallets', async request => service.wallets(user(request)));
   app.get('/api/me/account', async request => service.account(player(request),ledgerWindow(object(request.query))));
   app.get('/api/me/bookings', async request => {
-    const id = player(request);
     const { view,period,after } = object(request.query);
-    if (view !== 'pages') return service.bookings(id);
-    if (!period) return { upcoming: service.bookingPage(id,'upcoming'),history: service.bookingPage(id,'history') };
+    const family = view === 'family';
+    const id = family ? user(request) : player(request);
+    if (!family && view !== 'pages') return service.bookings(id);
+    if (!period) return { upcoming: service.bookingPage(id,'upcoming',undefined,family),history: service.bookingPage(id,'history',undefined,family) };
     if (period !== 'upcoming' && period !== 'history') throw new ApiError(400,'VALIDATION_ERROR','请选择预约类型');
-    return service.bookingPage(id,period,after ? requiredText(after) : undefined);
+    return service.bookingPage(id,period,after ? requiredText(after) : undefined,family);
   });
   app.post('/api/bookings/quote', async request => service.quote(player(request), parentSelection(object(request.body))));
   app.post('/api/bookings', async request => {
