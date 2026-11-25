@@ -13,10 +13,10 @@ export async function playerLinks(ctx) {
     : row.status === 'APPROVED' ? html`<button type="button" class="txt" data-index="${index}" data-state="REMOVED">解除关联</button>` : '';
   const root = ctx.show(html`${title('家长关联',link('＋ 新增关联','playerLinks',{ new: '1' },'wb'))}
     <form class="tool-row link-filter" role="search"><label class="web-search"><i aria-hidden="true"></i><input name="q" type="search"
-      value="${query}" maxlength="100" placeholder="队员姓名或家长微信 ID" aria-label="查询关联"></label>
+      value="${query}" maxlength="100" placeholder="队员姓名、家长账号或微信尾号" aria-label="查询关联"></label>
     ${filter('关联状态','status',states,state[0])}${submit('查询')}</form>
-    ${box('家长与队员',table(['队员','微信 OpenID','家长账号 ID','状态','操作'],rows.map((r,i) =>
-      [r.name,r.openId || '—',r.parentId,stamp(state[1]),actions(r,i)]),'暂无符合条件的关联。'),
+    ${box('家长与队员',table(['队员','微信 ID','家长账号 ID','状态','操作'],rows.map((r,i) =>
+      [r.name,r.wechatIdHint || '—',r.parentId,stamp(state[1]),actions(r,i)]),'暂无符合条件的关联。'),
       rows.length === 100 ? '显示最近 100 条，可搜索缩小范围' : html`<span class="secondary">${rows.length} 条</span>`)}`);
   if (!root) return;
   const form = root.querySelector('form');
@@ -29,7 +29,7 @@ export async function playerLinks(ctx) {
     const row = rows[Number(button.dataset.index)];
     ctx.perform(async () => {
       const action = button.textContent.trim();
-      if (!await confirmAction(action,row.name + ' · 家长 ' + (row.openId || row.parentId)) || !ctx.active()) return;
+      if (!await confirmAction(action,row.name + ' · 家长 ' + (row.wechatIdHint || row.parentId)) || !ctx.active()) return;
       await ctx.write('/player-links','PUT',{ parentId: row.parentId,playerId: row.playerId,revision: row.revision,status: button.dataset.state });
       ctx.notice('家长关联已更新'); ctx.refresh();
     });
@@ -39,7 +39,8 @@ export async function playerLinks(ctx) {
 function grant(ctx) {
   const root = ctx.show(html`${title('新增家长关联',link('返回家长关联','playerLinks'))}
     ${box('家长与队员',html`<div class="form-pad">
-      ${field('家长微信 OpenID 或账号 ID','identity','',{ maxLength: 100 })}
+      <label class="w-field"><span>家长账号 ID 或微信 ID</span><input type="password" name="identity"
+        maxlength="100" autocomplete="off" spellcheck="false" required></label>
       <form class="tool-row">${field('队员姓名或球衣号码','keyword','',{ maxLength: 50 })}${submit('查找队员')}</form>
       <div id="matches" aria-live="polite"></div></div>`)}`);
   if (!root) return;
@@ -61,7 +62,8 @@ function grant(ctx) {
         const identity = root.querySelector('[name=identity]').value.trim();
         const player = matches.find(row => row.id === results.querySelector('select').value);
         if (!identity || !player) throw Error('请填写家长微信 ID 并选择队员。');
-        if (!await confirmAction('确认关联',identity + ' 将可为 ' + player.name + ' 预约课程。') || !ctx.active()) return;
+        const hint = identity.length > 4 ? '•••• ' + identity.slice(-4) : '••••';
+        if (!await confirmAction('确认关联','家长 ' + hint + ' 将可为 ' + player.name + ' 预约课程。') || !ctx.active()) return;
         await ctx.write('/player-links','POST',{ identity,playerId: player.id });
         ctx.notice('家长关联已保存'); ctx.navigate('playerLinks',{ status: 'APPROVED',q: player.name });
       });

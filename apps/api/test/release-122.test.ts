@@ -63,6 +63,31 @@ test('两位家长共用同一队员余额，兄弟姐妹分别预留、扣分�
   assert.ok(!('coaches' in week));
 });
 
+test('家长关联与队员审核仅返回微信尾号，短 ID 全部遮盖', async t => {
+  const db = openDatabase(':memory:');
+  const app = createApp(db, () => new Date('2030-12-30T00:00:00Z'));
+  t.after(() => app.close());
+  const bind = db.prepare('INSERT INTO wechat_accounts(user_id,app_id,open_id) VALUES (?, ?, ?)');
+  type IdentityHint = { parentId: string; wechatIdHint: string | null };
+  const raw = 'test-guardian-private-D7k2';
+  bind.run('parent', '', raw);
+  bind.run('other-parent', '', 'k123');
+  const admin = await app.inject({ method: 'POST', url: '/api/admin/session', payload: { password: process.env.WBC_ADMIN_PASSWORD || 'wbc-demo-2026' } });
+  const headers = { authorization: 'Bearer ' + admin.json().token };
+  for (const route of ['/player-links?status=APPROVED', '/registrations?view=processed', '/registrations?page=1&view=processed']) {
+    const res = await app.inject({ url: '/api/admin' + route, headers });
+    assert.equal(res.statusCode, 200);
+    const data = res.json<IdentityHint[] | { rows: IdentityHint[] }>();
+    const rows = Array.isArray(data) ? data : data.rows;
+    assert.equal(rows.find(r => r.parentId === 'parent')?.wechatIdHint, '•••• D7k2');
+    assert.equal(rows.find(r => r.parentId === 'other-parent')?.wechatIdHint, '••••');
+    assert.ok(!res.body.includes(raw) && !res.body.includes('k123'));
+    assert.ok(rows.every(r => !('openId' in r)));
+  }
+  const found = await app.inject({ url: '/api/admin/player-links?status=APPROVED&q=D7k2', headers });
+  assert.deepEqual(found.json<IdentityHint[]>().map(r => r.parentId), ['parent']);
+});
+
 test('旧库经备份恢复后按队员逐笔迁移，保留预约、冲正和没有队员档案的余额', t => {
   const dir = mkdtempSync(join(tmpdir(), 'wbc-122-restore-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const old = legacyDatabase(join(dir, 'source.sqlite'), true);

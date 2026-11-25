@@ -6,11 +6,11 @@ import { audit, transaction } from './database.ts';
 import { object, requiredText } from './input.ts';
 import { contactInput, readContact, saveContact } from './parent-contact.ts';
 import { notifyRegistration } from './notification-events.ts';
-import { selectedPlayer } from './player-links.ts';
+import { selectedPlayer, wechatIdHintSql } from './player-links.ts';
 import { venueDate } from './time.ts';
 
 const fields = (staff = false) => `
-  SELECT ${staff ? 'r.submitted_by AS parentId,(SELECT open_id FROM wechat_accounts WHERE user_id=r.submitted_by) AS openId,' : ''}
+  SELECT ${staff ? `r.submitted_by AS parentId,(SELECT ${wechatIdHintSql} FROM wechat_accounts WHERE user_id=r.submitted_by) AS wechatIdHint,` : ''}
     r.player_id AS userId, r.status, r.submitted_at AS submittedAt, r.reviewed_at AS reviewedAt,
     r.reason, r.revision, c.name, c.birth_month AS birthMonth, c.gender,
     r.contact_name AS contactName, r.contact_phone AS contactPhone

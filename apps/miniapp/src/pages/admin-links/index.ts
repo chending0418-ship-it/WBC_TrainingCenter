@@ -35,7 +35,7 @@ Page({
     if (key === 'keyword') { this.searchSequence++; this.setData({ matches: [], player: null, searched: false }); }
     this.setData({ [key]: event.detail.value });
   },
-  toggle() { this.setData({ adding: !this.data.adding, error: '' }); },
+  toggle() { this.setData({ adding: !this.data.adding, identity: '', error: '' }); },
   async searchPlayers() {
     const q = this.data.keyword.trim();
     if (!q) return;
@@ -53,8 +53,10 @@ Page({
     if (!player || !identity.trim() || busy) return;
     this.setData({ busy: true, error: '' });
     try {
-      if (!await confirmAction('确认关联队员', identity + ' 将可为 ' + player.name + ' 预约课程。', '确认关联')) return;
-      await staffApi('/player-links', 'POST', { playerId: player.id, identity: identity.trim() });
+      const id = identity.trim();
+      const hint = id.length > 4 ? '•••• ' + id.slice(-4) : '••••';
+      if (!await confirmAction('确认关联队员', '家长 ' + hint + ' 将可为 ' + player.name + ' 预约课程。', '确认关联')) return;
+      await staffApi('/player-links', 'POST', { playerId: player.id, identity: id });
       this.setData({ adding: false, index: 1, q: player.name, rows: [], identity: '', player: null, keyword: '', matches: [], searched: false });
       await this.load();
     } catch (error) { this.setData({ error: errorMessage(error) }); }
@@ -67,7 +69,7 @@ Page({
     const action = status === 'APPROVED' ? '通过' : status === 'RETURNED' ? '退回' : '解除关联';
     this.setData({ busy: true, error: '' });
     try {
-      if (!await confirmAction(action, row.name + ' · 家长 ' + (row.openId || row.parentId), action)) return;
+      if (!await confirmAction(action, row.name + ' · 家长 ' + (row.wechatIdHint || row.parentId), action)) return;
       await staffApi('/player-links', 'PUT', { playerId: row.playerId, parentId: row.parentId, revision: row.revision, status });
       await this.load();
     } catch (error) { this.setData({ error: errorMessage(error) }); }

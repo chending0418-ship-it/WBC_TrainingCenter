@@ -5,6 +5,10 @@ import { ApiError } from './booking.ts';
 import { audit, transaction } from './database.ts';
 import { object, requiredText } from './input.ts';
 
+// Use only this display value in staff responses. A short ID has no visible suffix.
+export const wechatIdHintSql = `CASE WHEN open_id IS NULL THEN NULL
+  WHEN length(open_id) <= 4 THEN '••••' ELSE '•••• ' || substr(open_id,-4) END`;
+
 const accessible = "(status='APPROVED' OR (kind='CREATE' AND status IN ('PENDING','RETURNED')))";
 export function familyPlayers(db: DatabaseSync, parent: string) {
   return db.prepare(`SELECT c.player_id AS id,c.name,c.jersey_number AS jerseyNumber,l.kind,l.status
@@ -54,9 +58,9 @@ export function registerLinkAdmin(routes: FastifyInstance, db: DatabaseSync, act
     const state = status ? requiredText(status, 20) : 'PENDING';
     if (!['PENDING', 'APPROVED', 'RETURNED', 'REMOVED'].includes(state)) throw new ApiError(400, 'VALIDATION_ERROR', '请选择关联状态');
     return db.prepare(`SELECT l.parent_id AS parentId,l.player_id AS playerId,c.name,l.kind,l.status,l.revision,
-      a.open_id AS openId FROM parent_players l JOIN children c USING(player_id) LEFT JOIN wechat_accounts a ON a.user_id=l.parent_id
+      ${wechatIdHintSql} AS wechatIdHint FROM parent_players l JOIN children c USING(player_id) LEFT JOIN wechat_accounts a ON a.user_id=l.parent_id
       WHERE l.status=? AND (l.kind='LINK' OR l.status IN ('APPROVED','REMOVED')) AND
-        (?='' OR instr(c.name,?) OR c.jersey_number=? OR l.parent_id=? OR l.player_id=? OR a.open_id=?)
+        (?='' OR instr(c.name,?) OR c.jersey_number=? OR l.parent_id=? OR l.player_id=? OR (length(a.open_id)>4 AND substr(a.open_id,-4)=?))
       ORDER BY l.changed_at DESC,l.parent_id,l.player_id LIMIT 100`).all(state, term, term, term, term, term, term);
   });
   routes.get('/player-search', async request => searchPlayers(db, object(request.query).q));

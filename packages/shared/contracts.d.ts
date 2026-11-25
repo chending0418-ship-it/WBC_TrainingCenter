@@ -266,7 +266,7 @@ export interface FamilyPlayer extends PlayerSummary {
 }
 export interface ManagedLink {
   parentId: string;
-  openId: string | null;
+  wechatIdHint: string | null;
   playerId: string;
   name: string;
   kind: 'CREATE' | 'LINK';
