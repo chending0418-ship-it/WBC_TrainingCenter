@@ -6,7 +6,7 @@ import { ApiError, bookingStatus, cancellationLeadMs, templateAllowsBooking } fr
 import type { bookingService } from './booking.ts';
 import { sessionRoster } from './class-coaches.ts';
 import { audit, transaction } from './database.ts';
-import { dateInput, expectedRevision, integer, ledgerWindow, object, requiredText, selection } from './input.ts';
+import { dateInput, expectedRevision, integer, jerseyNumberInput, ledgerWindow, object, requiredText, selection } from './input.ts';
 import { registerLinkAdmin } from './player-links.ts';
 import { searchParents } from './parent-contact.ts';
 import { registrations, reviewRegistration } from './registration.ts';
@@ -339,9 +339,8 @@ export function registerStaffRoutes(
       return db.prepare(pastTrainingSql + ' ORDER BY startsAt DESC, id').all(now, now);
     });
     routes.put('/parents/:id/jersey', async (request, reply) => {
-      const { number } = object(request.body);
-      if (typeof number !== 'string' || !/^\d{0,4}$/.test(number)) throw new ApiError(400, 'VALIDATION_ERROR', '球衣号码可填写一至四位数字或留空');
-      if (!db.prepare('UPDATE children SET jersey_number = ? WHERE player_id = ?').run(number || null, requiredText(object(request.params).id)).changes)
+      const number = jerseyNumberInput(object(request.body).number);
+      if (!db.prepare('UPDATE children SET jersey_number = ? WHERE player_id = ?').run(number, requiredText(object(request.params).id)).changes)
         throw new ApiError(404, 'NOT_FOUND', '未找到队员档案');
       return reply.code(204).send();
     });

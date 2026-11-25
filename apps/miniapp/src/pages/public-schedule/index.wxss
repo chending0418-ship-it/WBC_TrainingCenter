@@ -22,3 +22,9 @@
 .public-course .public-actions { justify-content: flex-end; }
 
 .service-intro { margin: 12px 0 20px; color: #64575a; font-size: 14px; line-height: 1.6; }
+
+.public-services { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 4px 0 10px; color: #66595c; font-size: 14px; }
+.public-services .service-link { width: auto; min-height: 40px; margin: 0; padding: 8px 0 8px 12px; border: 0; background: transparent; color: #761f32; font-size: 14px; line-height: 24px; }
+.service-link::after { border: 0; }
+.service-intro { padding: 12px 14px; border-radius: 9px; background: #fff; }
+.service-intro .row-name { margin-top: 10px; }

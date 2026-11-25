@@ -24,6 +24,9 @@
     </picker>
     </view>
     <block wx:if="{{!registration || registration.status !== 'APPROVED'}}">
+      <label class="form-field"><text>背号（选填）</text>
+        <input class="field" type="number" maxlength="4" value="{{jerseyNumber}}" data-field="jerseyNumber" bindinput="changeField" disabled="{{saving}}" placeholder="1 至 4 位数字，例如 07" />
+      </label>
       <view class="en-sub">联系人（选填）</view>
       <label class="form-field"><text>联系人姓名</text><input class="field" value="{{contactName}}" data-field="contactName" bindinput="changeField" maxlength="40" disabled="{{saving}}" /></label>
       <label class="form-field"><text>联系电话</text><input class="field" value="{{phone}}" data-field="phone" bindinput="changeField" maxlength="24" disabled="{{saving}}" /></label>
@@ -32,8 +35,11 @@
     <view class="en-actions"><button size="mini" class="button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">{{registration && registration.status === 'APPROVED' ? '保存资料' : '提交注册申请'}}</button></view>
   </form>
   <block wx:elif="{{registration}}">
-    <text class="page-title" role="heading" aria-level="1">队员注册</text>
-    <view class="en-state">
+    <view class="screen-heading">
+      <text class="page-title" role="heading" aria-level="1">{{registration.status === 'APPROVED' ? registration.child.name : '队员注册'}}</text>
+      <button wx:if="{{registration.status === 'APPROVED'}}" class="button quiet" bindtap="edit" hover-class="press">编辑资料</button>
+    </view>
+    <view class="en-state {{registration.status === 'APPROVED' ? 'approved-state' : ''}}">
       <view class="en-state-title">{{registration.status === 'PENDING' ? '等待管理员审核' : (registration.status === 'RETURNED' ? '请补充资料' : '注册已通过')}}</view>
       <view class="en-state-note">{{registration.status === 'PENDING' ? '申请已提交。审核结果可在「我的账户」查看。' : (registration.status === 'RETURNED' ? registration.reason : registration.child.name + '已取得团课和私教的预约资格。')}}</view>
     </view>
@@ -41,12 +47,13 @@
       <view class="en-sub">本次申请</view>
       <view class="en-summary">
         <view class="en-meta"><text>队员</text><text>{{registration.child.name}}</text></view>
+        <view wx:if="{{registration.child.jerseyNumber}}" class="en-meta"><text>背号</text><text>{{registration.child.jerseyNumber}}</text></view>
         <view class="en-meta"><text>提交时间</text><text>{{registration.submittedLabel}}</text></view>
       </view>
       <view class="en-hint">审核通过后，即可申请团课和私教。</view>
     </block>
     <block wx:else>
-      <view class="en-heading"><text>{{registration.status === 'RETURNED' ? '申请资料' : '队员资料'}}</text><text wx:if="{{registration.status === 'APPROVED'}}" class="en-link" bindtap="edit" role="button">编辑</text></view>
+      <view class="en-heading"><text>{{registration.status === 'RETURNED' ? '申请资料' : '队员资料'}}</text></view>
       <template is="registrationDetails" data="{{row: registration}}" />
       <block wx:if="{{registration.status === 'APPROVED' && reminder}}">
         <view class="en-sub">上次查看的课程</view>
@@ -55,7 +62,7 @@
     </block>
     <view class="en-actions">
       <button size="mini" wx:if="{{registration.status === 'RETURNED'}}" class="button" bindtap="edit">修改并重新提交</button>
-      <button size="mini" wx:else class="button {{registration.status === 'PENDING' ? 'quiet' : ''}}" bindtap="continueBrowsing">{{registration.status === 'APPROVED' && reminder ? '返回课程查看余位' : '继续看课'}}</button>
+      <button size="mini" wx:else class="button {{registration.status === 'APPROVED' && reminder ? '' : 'quiet'}}" bindtap="continueBrowsing">{{registration.status === 'APPROVED' && reminder ? '返回课程查看余位' : '继续看课'}}</button>
     </view>
   </block>
   <subscription-reminder id="resultReminder" topic="registration" manual="{{!editing && registration.status === 'PENDING'}}" />

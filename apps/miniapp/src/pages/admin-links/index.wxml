@@ -3,10 +3,10 @@
   <view wx:if="{{error}}" class="form-error">{{error}}</view>
   <block wx:if="{{adding}}">
     <guardian-search bind:pick="pickedGuardian" disabled="{{busy}}"/>
-    <form bindsubmit="searchPlayers"><view class="player-search"><input class="field" value="{{keyword}}" data-field="keyword" bindinput="input" placeholder="队员姓名或球衣号码"/><button class="button quiet row-action" form-type="submit">查找队员</button></view></form>
+    <form bindsubmit="searchPlayers"><label for="link-player" class="subheading link-player-label">查找队员</label><view class="player-search"><input id="link-player" class="field" value="{{keyword}}" data-field="keyword" bindinput="input" placeholder="队员姓名或球衣号码"/><button class="button quiet row-action" form-type="submit">查找队员</button></view></form>
     <view wx:if="{{searched && !matches.length}}" class="message">未找到已通过审核的队员。</view>
     <button wx:for="{{matches}}" wx:key="id" class="picker" data-id="{{item.id}}" bindtap="pick"><text>{{item.name}} {{item.jerseyNumber ? '#' + item.jerseyNumber : ''}}</text><text class="accent">{{player.id === item.id ? '已选' : '选择'}}</text></button>
-    <button class="button row-action grant-button" disabled="{{busy || !guardian || !player}}" bindtap="grant">确认关联</button>
+    <view class="section-actions form-actions"><button class="button" disabled="{{busy || !guardian || !player}}" bindtap="grant">确认关联</button></view>
   </block>
   <block wx:else>
     <picker range="{{states}}" range-key="name" value="{{index}}" bindchange="filter" disabled="{{busy}}"><view class="picker"><text>关联状态</text><text class="picker-value">{{states[index].name}}</text><view class="chevron"></view></view></picker>

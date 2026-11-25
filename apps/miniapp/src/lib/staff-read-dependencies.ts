@@ -16,7 +16,8 @@ export function staffReadAffected(writePath: string, readPath: string): boolean 
     case 'account-roles':
       return resource === 'account-roles' || resource === 'guardian-search';
     case 'parents':
-      return (resource === 'parents' && (!readId || readId === id)) || resource === 'player-search';
+      return (resource === 'parents' && (!readId || readId === id)) || resource === 'player-search' ||
+        (field === 'jersey' && resource === 'registrations');
     case 'accounts':
       return field === 'ledger' && (['parents', 'users'].includes(resource) ||
         (resource === 'accounts' && readId === id && !readField));

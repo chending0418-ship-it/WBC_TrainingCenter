@@ -124,7 +124,11 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
   }
 
   function child(user: string): Child | null {
-    return (db.prepare('SELECT name, birth_month AS birthMonth, gender FROM children WHERE player_id = ?').get(user) as Child | undefined) ?? null;
+    const row = db.prepare('SELECT name, birth_month AS birthMonth, gender, jersey_number AS number FROM children WHERE player_id = ?')
+      .get(user) as (Child & { number: string | null }) | undefined;
+    if (!row) return null;
+    const { number, ...profile } = row;
+    return number ? { ...profile, jerseyNumber: number } : profile;
   }
 
   function requireEligible(user: string) {

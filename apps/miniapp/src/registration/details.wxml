@@ -1,6 +1,7 @@
 <template name="registrationDetails">
   <view class="en-summary">
     <view class="en-meta"><text>队员姓名</text><text>{{row.child.name}}</text></view>
+    <view wx:if="{{row.child.jerseyNumber}}" class="en-meta"><text>背号</text><text>{{row.child.jerseyNumber}}</text></view>
     <view class="en-meta"><text>出生年月</text><text>{{row.child.birthMonth}}</text></view>
     <view class="en-meta"><text>性别</text><text>{{row.genderLabel}}</text></view>
     <view wx:if="{{row.parentId}}" class="en-meta"><text>申请家长</text><text>{{row.parentName || '未填写称呼'}}</text></view>

@@ -1,6 +1,5 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">授课日程</text>
-  <view class="utility-links">当前角色 · 教练<button wx:if="{{canSwitch}}" size="mini" bindtap="switchRole">切换角色</button></view>
   <view class="row-line coach-toolbar">
     <view wx:if="{{!loading && !error && !hasProfile}}" class="muted">尚未绑定本人教练档案。</view>
     <button wx:if="{{hasProfile}}" class="profile-avatar" open-type="chooseAvatar" bindchooseavatar="setAvatar" disabled="{{uploading}}" hover-class="press" aria-label="更换{{identity.label}}的头像">
@@ -10,6 +9,7 @@
       </view>
       <view><view class="row-name">{{identity.label}}</view><view class="card-note">{{uploading ? '保存中…' : '更换头像'}}</view></view>
     </button>
+    <button wx:if="{{canSwitch}}" class="button quiet role-link" bindtap="switchRole" hover-class="press">切换角色</button>
   </view>
   <view class="section-actions review-tabs">
     <button size="mini" class="button {{period === 'today' ? '' : 'quiet'}}" data-period="today" bindtap="changePeriod"
@@ -17,14 +17,20 @@
     <button size="mini" class="button {{period === 'week' ? '' : 'quiet'}}" data-period="week" bindtap="changePeriod"
       aria-pressed="{{period === 'week'}}" hover-class="press">本周</button>
   </view>
-  <view wx:if="{{period === 'week'}}" class="section-actions"><button size="mini" disabled="{{loading}}" data-step="-1" bindtap="changeWeek">上一周</button><button size="mini" disabled="{{loading}}" data-step="1" bindtap="changeWeek">下一周</button></view>
+  <view wx:if="{{period === 'week'}}" class="coach-week">
+    <text class="week-range">{{rangeLabel}}</text>
+    <view class="week-controls">
+      <button disabled="{{loading}}" aria-label="上一周" data-step="-1" bindtap="changeWeek" hover-class="press"><view class="chevron previous"></view></button>
+      <button disabled="{{loading}}" aria-label="下一周" data-step="1" bindtap="changeWeek" hover-class="press"><view class="chevron"></view></button>
+    </view>
+  </view>
   <view wx:if="{{loading}}" class="message">正在查询授课日程…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view>
     <button class="button quiet" bindtap="refresh" hover-class="press">重新查询</button>
   </view>
   <block wx:else>
-    <view class="muted">{{rangeLabel}}</view>
+    <view wx:if="{{period === 'today'}}" class="muted">{{rangeLabel}}</view>
     <view wx:if="{{!days.length}}" class="message">{{period === 'today' ? '今天没有授课安排。' : '这一周没有授课安排。'}}</view>
     <view wx:for="{{days}}" wx:key="date" wx:for-item="day">
       <view wx:if="{{period === 'week'}}" class="section-title" role="heading" aria-level="2">{{day.label}}</view>
@@ -32,9 +38,13 @@
         <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state">{{item.type === 'GROUP' ? '团课' : '私教'}}</text></view>
         <view class="card-head"><text class="card-title">{{item.title}}</text></view>
         <view class="card-note">{{item.venue}}</view>
-        <view wx:if="{{item.trainingPlan}}" class="card-note training-plan">训练计划 · {{item.trainingPlan}}</view>
-        <view class="card-footer">已预约 {{item.bookedCount}} 人</view>
-        <view wx:if="{{item.names}}" class="details">{{item.names}}</view>
+        <view class="card-footer coach-roster"><text>已预约 {{item.bookedCount}} 人</text><text wx:if="{{item.names}}">{{item.names}}</text></view>
+        <view wx:if="{{item.trainingPlan}}" class="plan-block">
+          <view class="plan-heading"><text>训练计划</text>
+            <button class="plan-toggle" data-key="{{item.key}}" bindtap="togglePlan" aria-expanded="{{expandedPlan === item.key}}" hover-class="press">{{expandedPlan === item.key ? '收起计划' : '查看完整计划'}}</button>
+          </view>
+          <view class="training-plan {{expandedPlan === item.key ? '' : 'plan-preview'}}">{{item.trainingPlan}}</view>
+        </view>
       </view>
     </view>
   </block>

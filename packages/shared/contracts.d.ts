@@ -96,6 +96,7 @@ export interface Child {
   name: string;
   birthMonth: string | null;
   gender: 'MALE' | 'FEMALE' | null;
+  jerseyNumber?: string;
 }
 
 export interface ParentContact {
@@ -245,6 +246,7 @@ export interface RoleSession {
 export interface WechatLogin {
   accountId: string;
   roles: SessionRole[];
+  hasCoachProfile: boolean;
   token: string;
 }
 

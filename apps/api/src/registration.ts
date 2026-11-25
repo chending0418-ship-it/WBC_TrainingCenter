@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Child, Registration } from '../../../packages/shared/contracts.js';
 import { ApiError } from './booking.ts';
 import { audit, transaction } from './database.ts';
-import { object, requiredText } from './input.ts';
+import { jerseyNumberInput, object, requiredText } from './input.ts';
 import { contactInput, readContact, saveContact } from './parent-contact.ts';
 import { notifyRegistration } from './notification-events.ts';
 import { selectedPlayer, wechatIdHintSql } from './player-links.ts';
@@ -14,14 +14,15 @@ const fields = (staff = false) => `
     coalesce((SELECT nickname FROM parent_display_names WHERE user_id=r.submitted_by),
       (SELECT name FROM parent_contacts WHERE user_id=r.submitted_by)) AS parentName,(SELECT ${wechatIdHintSql} FROM wechat_accounts WHERE user_id=r.submitted_by) AS wechatIdHint,` : ''}
     r.player_id AS userId, r.status, r.submitted_at AS submittedAt, r.reviewed_at AS reviewedAt,
-    r.reason, r.revision, c.name, c.birth_month AS birthMonth, c.gender,
+    r.reason, r.revision, c.name, c.birth_month AS birthMonth, c.gender, c.jersey_number AS jerseyNumber,
     r.contact_name AS contactName, r.contact_phone AS contactPhone
   FROM registrations r JOIN children c ON c.player_id = r.player_id
 `;
-type Row = Omit<Registration, 'child' | 'contact'> & Child & { contactName: string | null; contactPhone: string | null };
+type Row = Omit<Registration, 'child' | 'contact'> & Omit<Child, 'jerseyNumber'> & { jerseyNumber: string | null; contactName: string | null; contactPhone: string | null };
 function registration(row: Row): Registration {
-  const { name, birthMonth, gender, contactName, contactPhone, ...review } = row;
-  return { ...review, child: { name, birthMonth, gender }, contact: contactName && contactPhone ? { name: contactName, phone: contactPhone } : null };
+  const { name, birthMonth, gender, jerseyNumber, contactName, contactPhone, ...review } = row;
+  const child = { name, birthMonth, gender, ...(jerseyNumber ? { jerseyNumber } : {}) };
+  return { ...review, child, contact: contactName && contactPhone ? { name: contactName, phone: contactPhone } : null };
 }
 
 export function readRegistration(db: DatabaseSync, user: string) {
@@ -57,7 +58,8 @@ export function registrations(db: DatabaseSync, view: unknown, paged = false, af
 
 export function submitRegistration(db: DatabaseSync, user: string, input: unknown, now: Date, legacy = false, options: { playerId?: unknown; newKey?: string } = {}) {
   const body = object(input);
-  const { name, birthMonth, gender } = legacy ? body : object(body.child);
+  const { name, birthMonth, gender, jerseyNumber } = legacy ? body : object(body.child);
+  const number = jerseyNumber === undefined ? undefined : jerseyNumberInput(jerseyNumber);
   const month = requiredText(birthMonth, 7);
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < '1900-01' || month > venueDate(now).slice(0, 7)) {
     throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的出生年月');
@@ -71,7 +73,8 @@ export function submitRegistration(db: DatabaseSync, user: string, input: unknow
       if (previous) {
         const id = selectedPlayer(db,user,previous.id);
         const row = readRegistration(db,id)!;
-        if (row.child.name !== child.name || row.child.birthMonth !== month || row.child.gender !== gender)
+        if (row.child.name !== child.name || row.child.birthMonth !== month || row.child.gender !== gender ||
+            (number !== undefined && number !== (row.child.jerseyNumber ?? null)))
           throw new ApiError(409,'REQUEST_KEY_REUSED','队员申请已变更，请重新核对');
         return { ...row, contact: readContact(db,user) };
       }
@@ -86,11 +89,15 @@ export function submitRegistration(db: DatabaseSync, user: string, input: unknow
     const current = readRegistration(db, player);
     const editsContact = !legacy && body.contact !== undefined;
     const contact = editsContact ? (body.contact === null ? null : contactInput(body.contact)) : readContact(db, user);
-    const sameChild = current && child.name === current.child.name && child.birthMonth === current.child.birthMonth && child.gender === current.child.gender;
+    const sameNumber = number === undefined || number === (current?.child.jerseyNumber ?? null);
+    const sameChild = current && sameNumber && child.name === current.child.name && child.birthMonth === current.child.birthMonth && child.gender === current.child.gender;
     const sameContact = !editsContact || (contact?.name === current?.contact?.name && contact?.phone === current?.contact?.phone);
     if (sameChild && sameContact && current.status !== 'RETURNED') return { ...current, contact };
     if (!legacy && current && current.revision !== body.revision) {
       throw new ApiError(409, 'REGISTRATION_CHANGED', '申请已更新，请刷新后重试');
+    }
+    if (current?.status === 'APPROVED' && !sameNumber) {
+      throw new ApiError(403, 'JERSEY_ADMIN_REQUIRED', '注册通过后，请联系俱乐部管理员修改背号');
     }
     if (editsContact) {
       if (contact) saveContact(db, user, contact);
@@ -98,9 +105,10 @@ export function submitRegistration(db: DatabaseSync, user: string, input: unknow
     }
     const when = now.toISOString();
     db.prepare(`
-      INSERT INTO children (player_id, name, birth_month, gender) VALUES (?, ?, ?, ?)
-      ON CONFLICT(player_id) DO UPDATE SET name=excluded.name, birth_month=excluded.birth_month, gender=excluded.gender
-    `).run(player, child.name, month, gender);
+      INSERT INTO children (player_id, name, birth_month, gender, jersey_number) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(player_id) DO UPDATE SET name=excluded.name, birth_month=excluded.birth_month, gender=excluded.gender,
+        jersey_number=CASE WHEN ? THEN excluded.jersey_number ELSE children.jersey_number END
+    `).run(player, child.name, month, gender, number ?? null, Number(number !== undefined));
     db.prepare(`
       INSERT INTO registrations(player_id,status,submitted_at,revision,contact_name,contact_phone,submitted_by) VALUES (?,'PENDING',?,?,?,?,?)
       ON CONFLICT(player_id) DO UPDATE SET status='PENDING', submitted_at=excluded.submitted_at, revision=excluded.revision,

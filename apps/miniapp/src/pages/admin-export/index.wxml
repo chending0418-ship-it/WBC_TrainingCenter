@@ -1,8 +1,8 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title">信息导出</text>
-  <picker range="{{categories}}" range-key="label" value="{{category}}" bindchange="select" data-field="category" disabled="{{busy}}"><view class="picker">数据类别<text>{{categories[category].label}}</text></view></picker>
-  <picker range="{{formats}}" value="{{format}}" bindchange="select" data-field="format" disabled="{{busy}}"><view class="picker">文件格式<text>{{formats[format]}}</text></view></picker>
-  <button class="button" bindtap="open" loading="{{busy}}" disabled="{{busy}}">导出并打开</button>
+  <picker range="{{categories}}" range-key="label" value="{{category}}" bindchange="select" data-field="category" disabled="{{busy}}"><view class="picker"><text class="picker-label">数据类别</text><text class="picker-value">{{categories[category].label}}</text><view class="chevron"></view></view></picker>
+  <picker range="{{formats}}" value="{{format}}" bindchange="select" data-field="format" disabled="{{busy}}"><view class="picker"><text class="picker-label">文件格式</text><text class="picker-value">{{formats[format]}}</text><view class="chevron"></view></view></picker>
+  <view class="section-actions form-actions"><button class="button" bindtap="open" loading="{{busy}}" disabled="{{busy}}">导出并打开</button></view>
   <view wx:if="{{error}}" class="form-error">{{error}}</view>
   <block wx:if="{{headers.length}}">
     <view class="section-title">CSV · 共 {{total}} 条记录</view>

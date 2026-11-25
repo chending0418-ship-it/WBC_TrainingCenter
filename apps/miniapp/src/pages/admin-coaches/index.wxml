@@ -41,7 +41,7 @@
       </view>
       <view class="admin-row-actions"><navigator wx:if="{{item.enabled && !busy}}" class="button quiet" url="/pages/admin-schedule/index?coachId={{item.id}}" hover-class="press">查看开放时间</navigator>
         <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑资料</button>
-        <button class="button quiet" data-id="{{item.id}}" bindtap="toggle" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用' : '启用'}}</button>
+        <button class="button quiet {{item.enabled ? 'deemphasized' : ''}}" data-id="{{item.id}}" bindtap="toggle" disabled="{{busy}}" hover-class="press">{{item.enabled ? '停用' : '启用'}}</button>
       </view>
     </view>
   </block>

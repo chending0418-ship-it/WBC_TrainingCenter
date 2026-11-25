@@ -34,7 +34,7 @@ export async function roles(ctx) {
     ${select('本人教练档案', 'coach', [['', '未绑定'], ...coaches.filter(c => c.enabled || c.id === selected.coachId).map(c => [c.id, c.name])], selected.coachId)}
     ${buttons(submit('保存角色'))}</form>`);
   const rows = accounts.map(a => [a.parentName || '未填写称呼', a.name || '未填写队员资料', a.wechatIdHint || '—',
-    a.admin ? '俱乐部管理员' : [a.parent && '队员家长', a.coachId && '教练'].filter(Boolean).join('、'),
+    [a.parent && '队员家长', a.coachId && '教练', a.admin && '俱乐部管理员'].filter(Boolean).join('、'),
     html`<button class="txt" data-id="${a.id}">编辑角色</button>`]);
   const root = ctx.show(html`${title('用户管理')}<form role="search" class="tool-row user-toolbar">
     <label class="web-search"><input type="search" name="q" value="${q}" placeholder="昵称、姓名或尾号" aria-label="搜索用户" maxlength="50"></label>

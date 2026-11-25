@@ -4,3 +4,6 @@ button.family-choice { display: flex; align-items: center; gap: 10px; width: 100
 .family-choice::after { border: 0; }
 .family-choice-name { margin-left: auto; font-size: 14px; font-weight: 650; color: #761f32; text-align: right; }
 .list-row > view:nth-child(2) { color: #761f32; margin: 5px 0 2px; font-size: 14px; }
+
+.booking-status { flex: none; color: #66595c; font-size: 13px; }
+.list-row .item-actions { justify-content: flex-end; }

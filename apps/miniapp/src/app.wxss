@@ -122,8 +122,8 @@ button.button[disabled] {
 }
 
 .list-row {
-  padding: 12px 14px;
-  margin: 8px 0;
+  padding: 14px 15px;
+  margin: 9px 0;
   border: 1px solid #ded5d3;
   border-radius: 9px;
   background: #fff;
@@ -347,7 +347,7 @@ button.button.row-action.save-profile {
   margin-right: 0;
 }
 
-.section-actions.form-actions {
+.section-actions.item-actions, .section-actions.form-actions {
   justify-content: flex-end;
 }
 
@@ -408,3 +408,10 @@ form > .form-field:first-child, .form-field.first-field, .lesson-card > .form-fi
 
 .admin-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 12px; }
 .admin-row-actions .button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: auto; min-height: 34px; margin: 0; padding: 6px 10px; font-size: 13px; line-height: 1.45; white-space: nowrap; }
+
+.form-panel { padding: 14px 16px; border: 1px solid #ded5d3; border-radius: 10px; background: #fff; }
+.form-panel > .form-field:first-child { margin-top: 0; }
+.form-panel > .form-field:last-child { margin-bottom: 0; }
+.field-hint { margin: -7px 0 16px; color: #66595c; font-size: 13px; line-height: 1.5; }
+.row-line > .row-name, .screen-heading > .page-title { min-width: 0; overflow-wrap: anywhere; }
+.admin-row-actions .deemphasized, .item-actions .deemphasized { color: #66595c; border-color: #dbd5d2; }

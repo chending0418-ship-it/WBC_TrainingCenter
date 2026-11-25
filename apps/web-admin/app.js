@@ -101,7 +101,7 @@ function invalidateAfterWrite(path, data) {
       affected = (name === 'player-links' && (!player || player === data?.playerId)) ||
         name === 'account-roles' || (name === 'parents' && (!readId || readId === encodeURIComponent(data?.playerId)));
     } else if (resource === 'parents' && field === 'jersey') {
-      affected = (name === 'parents' && (!readId || readId === id)) || name === 'player-search';
+      affected = (name === 'parents' && (!readId || readId === id)) || name === 'player-search' || name === 'registrations';
     } else if (resource === 'account-roles') {
       affected = name === 'account-roles' || name === 'guardian-search';
     } else {

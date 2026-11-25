@@ -3,7 +3,7 @@
   <view wx:if="{{error}}" class="message">{{error}}<button class="button quiet" bindtap="refresh">重新查询</button></view>
   <view wx:elif="{{!loaded}}" class="message">正在查询积分…</view>
   <block wx:else>
-    <view class="balance"><view>可用积分</view><text class="balance-number">{{available}}</text><view wx:if="{{reserved}}">待确认预约已预留 {{reserved}} 积分</view></view>
+    <view class="balance"><view class="balance-line"><text>可用积分</text><text class="balance-number">{{available}}</text></view><view wx:if="{{reserved}}" class="balance-reserved">待确认预约已预留 {{reserved}} 积分</view></view>
     <view class="section-title">积分流水</view>
     <view wx:if="{{!rows.length}}" class="muted">暂无积分变动。</view>
     <view wx:for="{{rows}}" wx:key="id" class="list-row"><view class="row-line"><text class="row-name">{{item.reason}}</text><text class="accent">{{item.change}}</text></view>

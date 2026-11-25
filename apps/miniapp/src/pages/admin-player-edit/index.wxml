@@ -9,6 +9,7 @@
       <view class="admin-row-actions"><button class="button quiet" bindtap="saveNumber" disabled="{{busy || number === (family.jerseyNumber || '')}}">保存号码</button></view></view>
     <view class="section-title">关联家长</view>
     <view class="list-row editor-panel">
+      <view wx:if="{{guardians.length}}" class="guardian-caption">已关联家长</view>
       <view wx:for="{{guardians}}" wx:key="parentId" class="guardian-line"><text>{{item.parentName || '未填写称呼'}} <text class="muted">{{item.wechatIdHint}}</text></text>
         <button class="button quiet" bindtap="editLink" data-revision="{{item.revision}}" disabled="{{busy}}">解除关联</button></view>
       <view wx:if="{{!guardians.length}}" class="muted">暂无已关联家长。</view>

@@ -37,7 +37,7 @@ Page({
   data: {
     authorized: false,
     identity: coachIdentity(''), hasProfile: false, uploading: false, period: 'week' as Period, date: '', weekStart: '', canSwitch: false,
-    rangeLabel: '', days: [] as Day[], loading: true, error: ''
+    expandedPlan: '', rangeLabel: '', days: [] as Day[], loading: true, error: ''
   },
   requestNumber: 0,
   shownVersion: 0,
@@ -82,6 +82,10 @@ Page({
     } finally {
       this.setData({ uploading: false });
     }
+  },
+  togglePlan(event: WechatMiniprogram.TouchEvent) {
+    const key = event.currentTarget.dataset.key;
+    this.setData({ expandedPlan: this.data.expandedPlan === key ? '' : key });
   },
   switchRole,
   changeWeek(event: WechatMiniprogram.TouchEvent) {

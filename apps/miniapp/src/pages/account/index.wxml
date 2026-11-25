@@ -1,7 +1,6 @@
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page account-page">
   <view class="account-heading">
     <text class="page-title" role="heading" aria-level="1">我的账户</text>
-    <button wx:if="{{canSwitch}}" class="account-action" bindtap="switchRole" hover-class="press">切换角色</button>
   </view>
   <view class="account-heading account-section">
     <text class="section-title" role="heading" aria-level="2">队员积分</text>
@@ -22,5 +21,9 @@
     <navigator class="account-row" url="/pages/contact/index" hover-class="press"><text class="account-primary">联系人资料</text><text class="row-link">编辑</text><view class="account-chevron"></view></navigator>
     <view class="account-row" bindtap="copyAccountId" aria-role="button" hover-class="press"><text class="account-primary">家长账号 ID</text><text class="row-link">复制</text><view class="account-chevron"></view></view>
     <navigator class="account-row" url="/pages/agreements/index" hover-class="press"><text class="account-primary">使用协议与隐私说明</text><text class="row-link">查看</text><view class="account-chevron"></view></navigator>
+  </view>
+  <view wx:if="{{canEnterAdmin || canEnterCoach}}" class="account-role-actions">
+    <button wx:if="{{canEnterAdmin}}" class="button quiet role-entry" data-role="ADMIN" disabled="{{enteringRole}}" bindtap="enterRole" hover-class="press">进入管理端</button>
+    <button wx:if="{{canEnterCoach}}" class="button quiet role-entry" data-role="COACH" disabled="{{enteringRole}}" bindtap="enterRole" hover-class="press">进入教练端</button>
   </view>
 </view>

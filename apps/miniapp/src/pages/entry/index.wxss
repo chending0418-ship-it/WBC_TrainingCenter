@@ -34,14 +34,14 @@
 .portal-signature { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 26px; padding: 19px 0 max(17px, env(safe-area-inset-bottom)); border-top: 1px solid #d9d1c9; color: #514950; font: 12px/1.4 Arial, sans-serif; }
 .portal-signature image { width: 42px; height: 24px; flex: none; }
 
-.club-home .portal-hero { flex: none; min-height: 0; height: clamp(232px, 83vw, 44vh); }
+.club-home .portal-hero { flex: none; min-height: 0; height: clamp(220px, 70vw, 38vh); }
 .club-home .portal-title { padding: 24px 6vw; }
 .club-home .portal-title text:first-child { font-size: clamp(64px, 18vw, 90px); }
 .club-home .portal-title text:last-child { font-size: clamp(24px, 7.6vw, 36px); }
 .portal-hero .member-link {
   position: absolute; top: 17px; right: 5vw; width: auto; margin: 0; padding: 0 10px;
   color: #fff7e9; background: #4e1921; border: 1px solid #956e70; border-radius: 6px;
-  font-size: 13px; font-weight: 500; line-height: 35px;
+  font-size: 13px; font-weight: 500; line-height: 42px;
 }
 .member-link::after { border: 0; }
 .home-schedule { padding: 24px 6vw 20px; }
@@ -62,3 +62,9 @@
 .home-course-title { margin: 2px 0; font-size: 18px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
 .week-status { padding: 16px 0; border-top: 1px solid #d9d1c9; }
 .retry-week { display: block; width: max-content; margin: 10px 0 0; }
+
+.identity-choices { padding: 0 16px; border: 1px solid #ded5d3; border-radius: 10px; background: #fff; }
+.identity-choices .identity-choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 56px; margin: 0; padding: 8px 2px; border-radius: 0; background: #fff; color: #272327; font-size: 16px; font-weight: 600; }
+.identity-choice::after { border: 0; }
+.identity-choice + .identity-choice { border-top: 1px solid #ebe5e1; }
+.home-week-heading { align-items: baseline; }

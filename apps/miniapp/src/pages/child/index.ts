@@ -18,10 +18,10 @@ Page({
     authorized: false, loaded: false, loading: true, saving: false, editing: false,
     confirmEdit: false, registration: null as ReturnType<typeof registrationView> | null,
     reminder: null as CourseReminder | null,
-    name: '', birthMonth: '', maxMonth: localTimestamp(Date.now()).slice(0, 7),
+    name: '', jerseyNumber: '', birthMonth: '', maxMonth: localTimestamp(Date.now()).slice(0, 7),
     genderIndex: -1, genders, contactName: '', phone: '', error: '', saveError: ''
   },
-  courseId: '', newKey: '', playerId: '',
+  courseId: '', newKey: '', playerId: '', savedJerseyNumber: '',
   sequence: 0,
   registrationVersion: 0,
   onUnload() { this.sequence++; },
@@ -82,9 +82,10 @@ Page({
         contact = details.contact;
       }
       this.registrationVersion = readVersion(registrationPath, this.playerId);
+      this.savedJerseyNumber = profile?.jerseyNumber ?? '';
       this.setData({
         loaded: true, registration: registration ? registrationView(registration) : null, editing: !registration,
-        reminder, name: profile?.name ?? '', birthMonth: profile?.birthMonth ?? '',
+        reminder, name: profile?.name ?? '', jerseyNumber: this.savedJerseyNumber, birthMonth: profile?.birthMonth ?? '',
         genderIndex: genders.findIndex(g => g.value === profile?.gender), contactName: contact?.name ?? '', phone: contact?.phone ?? ''
       });
     } catch (error) {
@@ -109,10 +110,11 @@ Page({
   cancelEdit() { this.setData({ confirmEdit: false }); },
   async save() {
     if (this.data.saving) return;
-    const { birthMonth, genderIndex, registration } = this.data;
+    const { birthMonth, genderIndex, jerseyNumber, registration } = this.data;
     const name = this.data.name.trim(), contactName = this.data.contactName.trim(), phone = this.data.phone.trim();
     const gender = genders[genderIndex]?.value;
     if (!name || !birthMonth || !gender) return this.setData({ saveError: '请填写姓名或昵称、出生年月和性别' });
+    if (!/^\d{0,4}$/.test(jerseyNumber)) return this.setData({ saveError: '背号可填 1 至 4 位数字，或留空' });
     if (!!contactName !== !!phone && registration?.status !== 'APPROVED') return this.setData({ saveError: '请同时填写联系人姓名和电话，或同时留空' });
     const revised = registration?.status === 'APPROVED' && (registration.child.name !== name ||
       registration.child.birthMonth !== birthMonth || registration.child.gender !== gender);
@@ -126,14 +128,17 @@ Page({
       if (registration?.status !== 'APPROVED' || revised) await requestOnSubmit(this);
       if (identity !== wechatIdentity()) return;
       const contact = contactName ? { name: contactName, phone } : null;
+      const editsNumber = registration?.status !== 'APPROVED' && jerseyNumber !== this.savedJerseyNumber;
       const row = await api<Registration>(this.newKey ? '/api/me/players' : '/api/me/registration', this.newKey ? 'POST' : 'PUT', {
         ...(this.newKey ? { requestKey: this.newKey } : {}),
-        child: { name, birthMonth, gender }, revision: registration?.revision,
+        child: { name, birthMonth, gender, ...(editsNumber ? { jerseyNumber } : {}) },
+        revision: registration?.revision,
         ...(registration?.status === 'APPROVED' || (this.newKey && !contact) ? {} : { contact })
       }, this.playerId);
       this.newKey = '';
       this.playerId = row.userId;
-      this.setData({ registration: registrationView(row), editing: false });
+      this.savedJerseyNumber = row.child.jerseyNumber ?? '';
+      this.setData({ registration: registrationView(row), jerseyNumber: this.savedJerseyNumber, editing: false });
     } catch (error) {
       if (error instanceof RequestError && error.code === 'REGISTRATION_CHANGED') {
         this.setData({ editing: false });
