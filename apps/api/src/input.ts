@@ -46,3 +46,9 @@ export function integer(value: unknown, min: number, max: number, message = '请
 export function expectedRevision(value: unknown): string | undefined {
   return value === undefined ? undefined : requiredText(value, 64);
 }
+
+export function ledgerWindow(query: Record<string,unknown>) {
+  const limit = query.limit === undefined ? -1 : integer(Number(query.limit),1,100);
+  const before = query.before === undefined ? null : integer(Number(query.before),1,Number.MAX_SAFE_INTEGER);
+  return { limit,before };
+}

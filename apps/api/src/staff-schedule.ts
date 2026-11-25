@@ -52,8 +52,8 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       ORDER BY s.starts_at, s.title
     `).all(dateAt(firstDate), dateAt(addDays(firstDate, days))) as unknown as StoredOccurrence[];
     const attendees = db.prepare(`
-      SELECT b.user_id AS userId, c.name AS childName FROM bookings b
-      JOIN children c ON c.guardian_id = b.user_id WHERE b.class_id = ? AND b.status = 'CONFIRMED' AND b.approval_pending = 0
+      SELECT b.player_id AS userId, c.name AS childName FROM bookings b
+      JOIN children c ON c.player_id = b.player_id WHERE b.class_id = ? AND b.status = 'CONFIRMED' AND b.approval_pending = 0
       ORDER BY b.created_at
     `);
     return rows.map(row => {
@@ -69,7 +69,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
     const privateLessons = db.prepare(`
       SELECT 'PRIVATE' AS type, b.id, b.title, b.venue, b.coach_id AS coachId, c.name AS coachName,
         b.starts_at AS startsAt, b.ends_at AS endsAt, child.name AS childName
-      FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.guardian_id = b.user_id
+      FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.player_id = b.player_id
       WHERE b.type = 'PRIVATE' AND b.status = 'CONFIRMED' AND b.approval_pending = 0
         AND b.starts_at >= ? AND b.starts_at < ? ORDER BY b.starts_at, b.id
     `).all(dateAt(firstDate), dateAt(addDays(firstDate, days))) as unknown as Omit<Extract<ManagedLesson, { type: 'PRIVATE' }>, 'date'>[];
@@ -233,7 +233,7 @@ export function staffSchedule(db: DatabaseSync, clock: () => Date) {
       }
       if (current.booked && (startsAt !== current.starts_at || endsAt !== current.ends_at)) {
         const overlap = db.prepare(`
-          SELECT 1 FROM bookings attendee JOIN bookings other ON other.user_id = attendee.user_id
+          SELECT 1 FROM bookings attendee JOIN bookings other ON other.player_id = attendee.player_id
           WHERE attendee.class_id = ? AND attendee.status = 'CONFIRMED' AND other.status = 'CONFIRMED'
             AND other.id <> attendee.id AND other.starts_at < ? AND other.ends_at > ?
           LIMIT 1

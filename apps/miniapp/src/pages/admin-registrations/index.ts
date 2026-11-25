@@ -22,50 +22,50 @@ function groupByDate(registrations: Registration[], processed: boolean) {
 Page({
   data: {
     authorized: false, loading: true, busy: false, error: '', saveError: '',
-    processed: false, pendingCount: 0, groups: [] as ReturnType<typeof groupByDate>,
+    next: null as string | null, processed: false, pendingCount: 0, groups: [] as ReturnType<typeof groupByDate>,
     selected: null as ReviewRow | null, returning: false, reason: ''
   },
   requestNumber: 0,
-  pendingVersion: 0,
-  processedVersion: 0,
+  version: 0,
+  entries: [] as Registration[],
+  path() { return '/registrations?page=1&view=' + (this.data.processed ? 'processed' : 'pending'); },
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
-    if (authorized && (!this.pendingVersion || this.pendingVersion !== readVersion('/api/admin/registrations?view=pending') ||
-        (this.data.processed && this.processedVersion !== readVersion('/api/admin/registrations?view=processed')))) void this.refresh();
+    if (authorized && (!this.version || this.version !== readVersion('/api/admin' + this.path()))) void this.refresh();
   },
   onUnload() { this.requestNumber++; },
   async onPullDownRefresh() {
     try {
       if (!this.data.authorized || this.data.busy) return;
-      invalidateRead('/api/admin/registrations?view=pending');
-      if (this.data.processed) invalidateRead('/api/admin/registrations?view=processed');
+      invalidateRead('/api/admin' + this.path());
       await this.refresh();
     } finally { wx.stopPullDownRefresh(); }
   },
-  async refresh() {
+  async refresh(more?: boolean | WechatMiniprogram.TouchEvent) {
+    const append = more === true;
     const request = ++this.requestNumber;
-    this.setData({ loading: !this.pendingVersion || this.data.loading, error: '' });
+    const path = this.path();
+    this.setData({ loading: true, error: '' });
     try {
-      const { processed, selected } = this.data;
-      const pending = staffApi<Registration[]>('/registrations?view=pending');
-      const [rows, queue] = await Promise.all([processed ? staffApi<Registration[]>('/registrations?view=processed') : pending, pending]);
+      const page = await staffApi<{ rows: Registration[]; next: string | null; pendingCount: number }>(
+        path + (append ? '&after=' + encodeURIComponent(this.data.next!) : ''));
       if (request !== this.requestNumber) return;
-      this.pendingVersion = readVersion('/api/admin/registrations?view=pending');
-      if (processed) this.processedVersion = readVersion('/api/admin/registrations?view=processed');
-      const groups = groupByDate(rows, processed);
+      this.version = readVersion('/api/admin' + path);
+      this.entries = append ? [...this.entries,...page.rows] : page.rows;
+      const groups = groupByDate(this.entries, this.data.processed);
+      const selected = this.data.selected;
       const current = selected ? groups.flatMap(day => day.rows).find(row => row.userId === selected.userId) ?? null : null;
-      this.setData({ groups, pendingCount: queue.length, selected: current,
+      this.setData({ groups, pendingCount: page.pendingCount, next: page.next, selected: current,
         ...(selected && current?.revision !== selected.revision ? { reason: '', returning: false } : {}) });
     } catch (error) { if (request === this.requestNumber) this.setData({ error: errorMessage(error) }); }
     finally { if (request === this.requestNumber) this.setData({ loading: false }); }
   },
+  more() { if (this.data.next && !this.data.loading) void this.refresh(true); },
   tab(event: WechatMiniprogram.TouchEvent) {
     const processed = event.currentTarget.dataset.view === 'processed';
     if (processed === this.data.processed) return;
-    const ready = readVersion('/api/admin/registrations?view=pending') &&
-      (!processed || readVersion('/api/admin/registrations?view=processed'));
-    this.setData({ processed, selected: null, loading: !ready });
+    this.setData({ processed, selected: null });
     void this.refresh();
   },
   open(event: WechatMiniprogram.TouchEvent) {
@@ -94,7 +94,7 @@ Page({
       await this.refresh();
     } catch (error) {
       if (error instanceof RequestError && error.code === 'REGISTRATION_CHANGED') {
-        invalidateRead('/api/admin/registrations?view=pending');
+        invalidateRead('/api/admin' + this.path());
         await this.refresh();
         wx.showToast({ title: '申请已更新，请核对', icon: 'none' });
       } else this.setData({ saveError: errorMessage(error) });

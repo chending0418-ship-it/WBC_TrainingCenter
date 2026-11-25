@@ -10,6 +10,7 @@
 
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page">
   <text class="page-title" role="heading" aria-level="1">我的预约</text>
+  <navigator class="picker" url="/pages/family/index" hover-class="press"><text>{{playerName || '我的队员'}}</text><text class="accent">管理与切换队员</text></navigator>
   <view wx:if="{{loading}}" class="message">正在查询预约…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view>
@@ -20,10 +21,12 @@
     <view wx:if="{{upcoming.length}}" class="muted">如需取消，请在开课前至少 6 小时联系俱乐部管理员。</view>
     <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去排课页选择课程。</view>
     <block wx:for="{{upcoming}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
+    <button wx:if="{{next.upcoming}}" class="button quiet" disabled="{{moreBusy}}" bindtap="more" data-period="upcoming">查看更多预约</button>
 
     <subscription-reminder topic="booking" />
     <view class="section-title" role="heading" aria-level="2">历史预约</view>
     <view wx:if="{{!history.length}}" class="muted">暂无历史预约。</view>
     <block wx:for="{{history}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
+    <button wx:if="{{next.history}}" class="button quiet" disabled="{{moreBusy}}" bindtap="more" data-period="history">查看更多预约</button>
   </block>
 </view>

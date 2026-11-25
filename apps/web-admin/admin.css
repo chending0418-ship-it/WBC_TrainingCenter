@@ -572,3 +572,8 @@ dialog .w-field { margin-top: 16px; }
 
 .private-hours th:first-child, .private-hours td:first-child, .private-hours th:last-child, .private-hours td:last-child { white-space: nowrap; }
 .hours-range { display: inline-block; margin-inline-end: 8px; }
+
+.link-filter .web-search { flex: 1; max-width: 440px; }
+.link-filter .select-filter { margin-left: auto; }
+.link-filter + .box td:last-child, .link-filter + .box th:last-child { text-align: right; }
+.link-filter + .box .txt + .txt { margin-left: 12px; }

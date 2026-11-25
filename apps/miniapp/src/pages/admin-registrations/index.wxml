@@ -14,6 +14,7 @@
         <text class="en-status">{{item.at}} {{processed ? item.statusLabel : '提交'}}</text>
       </view></view>
     </view>
+    <button wx:if="{{next}}" class="button quiet row-action" bindtap="more">更早的申请</button>
   </block>
   <block wx:elif="{{returning}}">
     <view class="en-hint">告诉家长要改哪项资料。家长修改后可以重新提交。</view>

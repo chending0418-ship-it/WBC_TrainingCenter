@@ -4,7 +4,7 @@ import { localTimestamp } from '../../lib/display';
 import { groupReminder, lastCourse, registrationView, returnToSchedule, saveReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
 import { invalidatePublicRead, publicRead, publicSchedulePath } from '../../lib/public-read';
-import { allowPage, invalidateRead, readVersion, wechatIdentity } from '../../lib/session';
+import { allowPage, choosePlayer, familyContext, invalidateRead, readVersion, wechatIdentity } from '../../lib/session';
 import { requestOnSubmit } from '../../lib/subscription-request';
 
 const registrationPath = '/api/me/registration';
@@ -21,14 +21,16 @@ Page({
     name: '', birthMonth: '', maxMonth: localTimestamp(Date.now()).slice(0, 7),
     genderIndex: -1, genders, contactName: '', phone: '', error: '', saveError: ''
   },
-  courseId: '',
+  courseId: '', newKey: '',
   sequence: 0,
   registrationVersion: 0,
   onUnload() { this.sequence++; },
-  onLoad(options) { this.courseId = options.course?.slice(0, 100) ?? ''; },
+  onLoad(options) { this.courseId = options.course?.slice(0, 100) ?? '';
+    if (options.create === '1') this.newKey = Date.now() + '-' + Math.random().toString(36).slice(2); },
   onShow() {
     const authorized = allowPage('PARENT');
     if (authorized !== this.data.authorized) this.setData({ authorized });
+    if (authorized && this.newKey) { this.setData({ loaded: true, loading: false, editing: true }); return; }
     if (authorized && !this.data.editing && !this.data.saving &&
         (!this.registrationVersion || this.registrationVersion !== readVersion(registrationPath))) void this.refresh();
   },
@@ -44,6 +46,7 @@ Page({
     const sequence = ++this.sequence;
     if (this.data.error) this.setData({ loading: !this.data.loaded, error: '' });
     try {
+      await familyContext();
       const [{ registration, draft }, schedule] = await Promise.all([
         api<RegistrationResponse>(registrationPath),
         this.courseId ? publicRead<PublicSchedule>(publicSchedulePath) : null
@@ -114,10 +117,13 @@ Page({
       if (registration?.status !== 'APPROVED' || revised) await requestOnSubmit(this);
       if (identity !== wechatIdentity()) return;
       const contact = contactName ? { name: contactName, phone } : null;
-      const row = await api<Registration>('/api/me/registration', 'PUT', {
+      const row = await api<Registration>(this.newKey ? '/api/me/players' : '/api/me/registration', this.newKey ? 'POST' : 'PUT', {
+        ...(this.newKey ? { requestKey: this.newKey } : {}),
         child: { name, birthMonth, gender }, revision: registration?.revision,
-        ...(registration?.status === 'APPROVED' ? {} : { contact })
+        ...(registration?.status === 'APPROVED' || (this.newKey && !contact) ? {} : { contact })
       });
+      this.newKey = '';
+      choosePlayer(row.userId);
       this.setData({ registration: registrationView(row), editing: false });
     } catch (error) {
       if (error instanceof RequestError && error.code === 'REGISTRATION_CHANGED') {

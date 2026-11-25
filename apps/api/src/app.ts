@@ -4,7 +4,8 @@ import type { FastifyRequest } from 'fastify';
 import { ApiError, bookingService } from './booking.ts';
 import { registerCoachRoutes } from './coach.ts';
 import { mockProfiles, seedDemo } from './database.ts';
-import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
+import { applyForPlayer, familyPlayers, searchPlayers, selectedPlayer } from './player-links.ts';
+import { dateInput, expectedRevision, integer, ledgerWindow, object, requiredText, selection } from './input.ts';
 import { readContact, saveContact } from './parent-contact.ts';
 import { readRegistration, submitRegistration } from './registration.ts';
 import { registerSubscriptions } from './subscription-api.ts';
@@ -61,6 +62,10 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     return (auth ? auth.authorize(authorization, 'PARENT') : parents.authorize(authorization)).subject;
   }
 
+  function player(request: FastifyRequest) {
+    return selectedPlayer(db,user(request),request.headers['x-player-id']);
+  }
+
   function parentSelection(body: Record<string, unknown>) {
     const requested = selection(body);
     if (requested.type === 'PRIVATE' && requested.courseTypeId !== undefined) {
@@ -95,8 +100,23 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     });
   }
 
+  app.get('/api/me/players', async request => {
+    const parent = user(request);
+    return { players: familyPlayers(db, parent), defaultId: selectedPlayer(db, parent, undefined) };
+  });
+  app.get('/api/me/player-search', async request => { user(request); return searchPlayers(db,object(request.query).q); });
+  app.post('/api/me/player-links', async (request,reply) => {
+    applyForPlayer(db,user(request),requiredText(object(request.body).playerId),clock().toISOString());
+    return reply.code(204).send();
+  });
+  app.post('/api/me/players', async request => submitRegistration(db,user(request),request.body,clock(),false,
+    { newKey: requiredText(object(request.body).requestKey) }));
   app.get('/api/public/schedule', async () => service.publicSchedule());
-  app.get('/api/schedule', async request => service.schedule(user(request), object(request.query).view === 'week'));
+  app.get('/api/schedule', async request => {
+    const id = player(request), query = object(request.query);
+    return query.week ? service.weekSchedule(id,dateInput(query.week)) : service.schedule(id,query.view === 'week');
+  });
+  app.get('/api/me/private-coaches', async request => { user(request); return service.activeCoaches(); });
   app.get('/api/coaches/:id/slots', async request => {
     user(request);
     const query = object(request.query);
@@ -105,30 +125,38 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
     const days = query.days === undefined ? 1 : integer(Number(requiredText(query.days, 1)), 1, 7, '请选择 1 至 7 天的时段');
     return Array.from({ length: days }, (_, offset) => service.listSlots(coach, addDays(start, offset))).flat();
   });
-  app.get('/api/me/child', async request => ({ child: service.child(user(request)) }));
-  app.put('/api/me/child', async request => submitRegistration(db, user(request), request.body, clock(), true).child);
+  app.get('/api/me/child', async request => ({ child: service.child(player(request)) }));
+  app.put('/api/me/child', async request => submitRegistration(db, user(request), request.body, clock(), true, { playerId: request.headers['x-player-id'] }).child);
   app.get('/api/me/registration', async request => {
     const profile = user(request);
-    const registration = readRegistration(db, profile);
-    return registration ? { registration } : { registration: null, draft: {
-      child: service.child(profile), contact: readContact(db, profile)
+    const id = player(request);
+    const registration = readRegistration(db, id);
+    return registration ? { registration: { ...registration, contact: readContact(db,profile) } } : { registration: null, draft: {
+      child: service.child(id), contact: readContact(db, profile)
     } };
   });
-  app.put('/api/me/registration', async request => submitRegistration(db, user(request), request.body, clock()));
+  app.put('/api/me/registration', async request => submitRegistration(db, user(request), request.body, clock(), false, { playerId: request.headers['x-player-id'] }));
   app.get('/api/me/contact', async request => ({ contact: readContact(db, user(request)) }));
   app.put('/api/me/contact', async request => saveContact(db, user(request), request.body));
   app.delete('/api/me/contact', async (request, reply) => {
     db.prepare('DELETE FROM parent_contacts WHERE user_id = ?').run(user(request));
     return reply.code(204).send();
   });
-  app.get('/api/me/account', async request => service.account(user(request)));
-  app.get('/api/me/bookings', async request => service.bookings(user(request)));
-  app.post('/api/bookings/quote', async request => service.quote(user(request), parentSelection(object(request.body))));
+  app.get('/api/me/account', async request => service.account(player(request),ledgerWindow(object(request.query))));
+  app.get('/api/me/bookings', async request => {
+    const id = player(request);
+    const { view,period,after } = object(request.query);
+    if (view !== 'pages') return service.bookings(id);
+    if (!period) return { upcoming: service.bookingPage(id,'upcoming'),history: service.bookingPage(id,'history') };
+    if (period !== 'upcoming' && period !== 'history') throw new ApiError(400,'VALIDATION_ERROR','请选择预约类型');
+    return service.bookingPage(id,period,after ? requiredText(after) : undefined);
+  });
+  app.post('/api/bookings/quote', async request => service.quote(player(request), parentSelection(object(request.body))));
   app.post('/api/bookings', async request => {
     const profile = user(request);
     const body = object(request.body);
-    return service.book(profile, parentSelection(body), requiredText(body.requestKey), {
-      expectedRevision: expectedRevision(body.expectedRevision)
+    return service.book(player(request), parentSelection(body), requiredText(body.requestKey), {
+      parentId: profile, expectedRevision: expectedRevision(body.expectedRevision)
     });
   });
   app.delete('/api/me/bookings/:id', async request => {

@@ -1,4 +1,5 @@
 export interface Coach {
+  introduction?: string;
   avatarKey?: string | null;
   id: string;
   name: string;
@@ -77,6 +78,7 @@ export interface Booking extends Quote {
 }
 
 export interface Account {
+  nextBefore?: number | null;
   balance: number;
   reservedPoints: number;
   ledger: { id: number; delta: number; reason: string; createdAt: string; trainingTitle: string | null; trainingStart: string | null }[];
@@ -249,5 +251,25 @@ export interface Registration {
   submittedAt: string;
   reviewedAt: string | null;
   reason: string | null;
+  revision: string;
+}
+
+
+export interface PlayerSummary {
+  id: string;
+  name: string;
+  jerseyNumber: string | null;
+}
+export interface FamilyPlayer extends PlayerSummary {
+  kind: 'CREATE' | 'LINK';
+  status: 'PENDING' | 'APPROVED' | 'RETURNED';
+}
+export interface ManagedLink {
+  parentId: string;
+  wechatIdHint: string | null;
+  playerId: string;
+  name: string;
+  kind: 'CREATE' | 'LINK';
+  status: FamilyPlayer['status'] | 'REMOVED';
   revision: string;
 }

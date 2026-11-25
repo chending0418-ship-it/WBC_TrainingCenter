@@ -1,0 +1,25 @@
+<view class="page-shell">
+  <view class="screen-heading"><text class="page-title">家长关联</text><button size="mini" class="button quiet row-action" bindtap="toggle" disabled="{{busy}}">{{adding ? '返回列表' : '新增关联'}}</button></view>
+  <view wx:if="{{error}}" class="form-error">{{error}}</view>
+  <block wx:if="{{adding}}">
+    <label class="form-field">家长账号 ID 或微信 ID<input password class="field" value="{{identity}}" data-field="identity" bindinput="input" maxlength="100" /></label>
+    <form bindsubmit="searchPlayers"><view class="player-search"><input class="field" value="{{keyword}}" data-field="keyword" bindinput="input" placeholder="队员姓名或球衣号码"/><button class="button quiet row-action" form-type="submit">查找队员</button></view></form>
+    <view wx:if="{{searched && !matches.length}}" class="message">未找到已通过审核的队员。</view>
+    <button wx:for="{{matches}}" wx:key="id" class="picker" data-id="{{item.id}}" bindtap="pick"><text>{{item.name}} {{item.jerseyNumber ? '#' + item.jerseyNumber : ''}}</text><text class="accent">{{player.id === item.id ? '已选' : '选择'}}</text></button>
+    <button class="button row-action grant-button" disabled="{{busy || !identity || !player}}" bindtap="grant">确认关联</button>
+  </block>
+  <block wx:else>
+    <picker range="{{states}}" range-key="name" value="{{index}}" bindchange="filter" disabled="{{busy}}"><view class="picker"><text>关联状态</text><text class="picker-value">{{states[index].name}}</text><view class="chevron"></view></view></picker>
+    <form bindsubmit="load"><view class="player-search"><input class="field" data-field="q" value="{{q}}" bindinput="input" placeholder="队员姓名、家长账号或微信尾号" maxlength="100"/><button class="button quiet row-action" form-type="submit">查询</button></view></form>
+    <view wx:if="{{!rows.length && !error}}" class="message">暂无符合条件的关联。</view>
+    <view wx:for="{{rows}}" wx:for-index="ri" wx:key="revision" class="list-row"><view class="player-row"><text class="row-name">{{item.name}}</text><text class="muted">{{states[index].name}}</text></view>
+      <view class="card-note">家长账号 ID · <text user-select>{{item.parentId}}</text></view>
+      <view wx:if="{{item.wechatIdHint}}" class="card-note">微信 ID · <text>{{item.wechatIdHint}}</text></view>
+      <view class="link-actions" wx:if="{{index < 2}}">
+        <button size="mini" class="button quiet row-action" data-index="{{ri}}" data-status="{{item.status === 'PENDING' ? 'RETURNED' : 'REMOVED'}}" bindtap="review" disabled="{{busy}}">{{item.status === 'PENDING' ? '退回' : '解除关联'}}</button>
+        <button wx:if="{{index === 0}}" size="mini" class="button row-action" data-index="{{ri}}" data-status="APPROVED" bindtap="review" disabled="{{busy}}">通过</button>
+      </view>
+    </view>
+    <view wx:if="{{rows.length === 100}}" class="card-note">显示最近 100 条，请输入姓名或微信尾号缩小范围。</view>
+  </block>
+</view>

@@ -19,7 +19,7 @@
       <button size="mini" class="button {{type === 'PRIVATE' ? '' : 'quiet'}}" data-type="PRIVATE" bindtap="changeType" aria-pressed="{{type === 'PRIVATE'}}" hover-class="press">私教</button>
     </view>
     <button size="mini" class="family-choice" bindtap="chooseFamily" disabled="{{busy}}" hover-class="press">
-      <text class="muted">家长账户</text><text class="family-choice-name">{{family ? family.label : '搜索并选择家长'}}</text><view class="chevron"></view>
+      <text class="muted">队员账户</text><text class="family-choice-name">{{family ? family.label : '搜索并选择队员'}}</text><view class="chevron"></view>
     </button>
     <picker wx:if="{{type === 'PRIVATE'}}" class="filter-row" range="{{privateTypes}}" range-key="name"
       value="{{privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">

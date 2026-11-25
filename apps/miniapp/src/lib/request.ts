@@ -14,14 +14,14 @@ export class RequestError extends Error {
   }
 }
 
-export function send<T>(path: string, method: Method, data?: object, token?: string): Promise<T> {
+export function send<T>(path: string, method: Method, data?: object, token?: string, playerId?: string): Promise<T> {
   return new Promise((resolve, reject) => {
     wx.request({
       url: config.apiBase + path,
       method,
       // 微信会给无正文请求带 JSON 请求头，DELETE 传空对象供服务端解析。
       data: method === 'DELETE' ? (data ?? {}) : data,
-      header: token ? { Authorization: 'Bearer ' + token } : {},
+      header: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(playerId ? { 'X-Player-ID': playerId } : {}) },
       timeout: 8000,
       success(result) {
         if (result.statusCode >= 200 && result.statusCode < 300) {

@@ -5,6 +5,9 @@
   </view>
   <form wx:if="{{editor}}" class="lesson-card" bindsubmit="save">
     <label class="form-field first-field"><text>教练姓名</text><input class="field" value="{{editor.name}}" maxlength="40" data-field="name" bindinput="change" disabled="{{busy}}" /></label>
+    <label class="form-field"><text>教练介绍（选填）</text>
+      <textarea class="field" value="{{editor.introduction}}" maxlength="500" data-field="introduction" bindinput="change"
+        disabled="{{busy}}" placeholder="填写教练经历或擅长的训练项目" /></label>
     <view class="price-heading">私教积分</view>
     <view class="price-grid">
       <label wx:for="{{prices}}" wx:key="field" class="form-field"><text>{{item.minutes}} 分钟</text>

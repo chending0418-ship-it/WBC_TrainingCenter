@@ -24,25 +24,24 @@ function decision(note, secondary, primary) {
 
 export async function registrations(ctx) {
   const processed = ctx.query.get('view') === 'processed';
-  const [pending, history] = await Promise.all([
-    ctx.api('/registrations?view=pending'), processed ? ctx.api('/registrations?view=processed') : null
-  ]);
-  const entries = history ?? pending;
+  const view = processed ? 'processed' : 'pending';
+  const after = ctx.query.get('after');
+  const { rows: entries, pendingCount, next } = await ctx.api('/registrations?page=1&view=' + view + (after ? '&after=' + encodeURIComponent(after) : ''));
   const rows = entries.map(row => ({ ...row, id: row.userId, name: row.child.name }));
   const selected = rows.find(row => row.id === ctx.query.get('id')) || rows[0];
   const list = selectableTable(['队员', '联系人 · 尾号', '提交时间'], rows, selected, row =>
     [phoneTail(row.contact), datetime(row.submittedAt)], processed ? '暂无已处理申请' : '暂无待审核申请');
   const info = selected ? html`${details([
     ['队员姓名', selected.name], ['出生年月', selected.child.birthMonth], ['性别', gender(selected.child.gender)],
-    ['联系人', selected.contact?.name], ['联系电话', maskedPhone(selected.contact?.phone)], ['申请状态', stamp(regLabels[selected.status])],
+    ['家长账号 ID',selected.parentId], ['微信 ID',selected.wechatIdHint], ['联系人', selected.contact?.name], ['联系电话', maskedPhone(selected.contact?.phone)], ['申请状态', stamp(regLabels[selected.status])],
     ...(selected.reason ? [['退回原因', selected.reason]] : []),
     ...(selected.reviewedAt ? [['审核时间', datetime(selected.reviewedAt)]] : [])
   ])}${selected.status === 'PENDING' ? decision('批准后，家长可为' + selected.name + '提交预约。', '退回补充', '批准注册') : ''}` : empty('暂无申请详情');
   const root = ctx.show(html`${title('队员注册审核')}
-    ${tabs([['待审核（' + pending.length + '）', href('registrations'), !processed], ['已处理', href('registrations', { view: 'processed' }), processed]])}
-    <div class="split queue">${box('注册申请', list)}${box(selected ? selected.name + '的注册申请' : '申请详情', info)}</div>`);
+    ${tabs([['待审核（' + pendingCount + '）', href('registrations'), !processed], ['已处理', href('registrations', { view: 'processed' }), processed]])}
+    <div class="split queue">${box('注册申请', list, html`<span>${after ? link('最近申请','registrations',{ view }) : ''} ${next ? link('更早申请','registrations',{ view,after: next }) : ''}</span>`)}${box(selected ? selected.name + '的注册申请' : '申请详情', info)}</div>`);
   if (!root) return;
-  bindRows(root, selected?.id, id => ctx.navigate('registrations', { view: processed ? 'processed' : null, id }));
+  bindRows(root, selected?.id, id => ctx.navigate('registrations', { view,after,id }));
   for (const button of root.querySelectorAll('[data-action]')) {
     const approve = button.dataset.action === 'approve';
     button.onclick = () => ctx.perform(async () => {

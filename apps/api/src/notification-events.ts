@@ -46,7 +46,9 @@ export function notifyRegistration(db: DatabaseSync, row: Registration, now: str
     RETURNED: ['REGISTRATION_RETURNED', '待补充', row.reason ?? '请查看审核意见并补充资料']
   } as const;
   const [kind, status, remark] = events[row.status];
-  enqueue(db, row.userId, kind, row.revision, {
+  const parent = db.prepare('SELECT submitted_by FROM registrations WHERE player_id=?').get(row.userId)?.submitted_by;
+  if (!parent) return;
+  enqueue(db, String(parent), kind, row.revision, {
     childName: row.child.name, title: '队员注册', status, remark, time: now
   }, now);
 }
@@ -55,8 +57,9 @@ export function notifyBooking(db: DatabaseSync, id: string, kind: BookingEvent, 
   if (kind !== 'BOOKING_SUBMITTED') supersede(db, 'BOOKING_SUBMITTED:' + id, now);
   if (kind === 'BOOKING_CANCELLED') supersede(db, 'BOOKING_CONFIRMED:' + id, now);
   const row = db.prepare(`
-    SELECT b.user_id AS userId, c.name AS childName, b.title, b.venue, b.starts_at AS startsAt
-    FROM bookings b JOIN children c ON c.guardian_id = b.user_id WHERE b.id = ?
+    SELECT coalesce((SELECT parent_id FROM parent_players WHERE player_id=b.player_id AND parent_id=b.booked_by AND status='APPROVED'),
+      (SELECT parent_id FROM parent_players WHERE player_id=b.player_id AND status='APPROVED' ORDER BY kind,parent_id LIMIT 1)) AS userId, c.name AS childName, b.title, b.venue, b.starts_at AS startsAt
+    FROM bookings b JOIN children c ON c.player_id = b.player_id WHERE b.id = ?
   `).get(id) as { userId: string; childName: string; title: string; venue: string; startsAt: string };
   const details = {
     BOOKING_SUBMITTED: ['待确认', '请查看并处理新预约申请'],
@@ -65,6 +68,7 @@ export function notifyBooking(db: DatabaseSync, id: string, kind: BookingEvent, 
     BOOKING_CANCELLED: ['已取消', '预约已取消，请查看我的预约']
   } as const;
   const [status, remark] = details[kind];
+  if (!row.userId) return;
   enqueue(db, row.userId, kind, id, {
     childName: row.childName, title: row.title, status, remark, time: row.startsAt, venue: row.venue
   }, now);

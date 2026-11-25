@@ -2,7 +2,6 @@
   <view class="agenda-line"><text class="agenda-time">{{item.hours}}</text><text wx:if="{{showBooking && item.unavailable}}" class="agenda-state">{{item.action}}</text><text wx:elif="{{item.hasStarted}}" class="agenda-state">已开课</text></view>
   <text class="agenda-name">{{item.title}}</text>
   <view class="agenda-note">{{item.venue}} · {{item.coachLabel}}{{item.courseTypeName && item.courseTypeName !== item.title ? ' · ' + item.courseTypeName : ''}}</view>
-  <view wx:if="{{showBooking && item.trainingPlan}}" class="agenda-note training-plan">训练计划 · {{item.trainingPlan}}</view>
 </template>
 
 <template name="groups">
@@ -26,7 +25,10 @@
           <template is="courseSummary" data="{{item, showBooking}}" />
           <view class="agenda-bottom">
             <text class="agenda-facts">{{item.points}} 积分 · 余 {{item.capacity - item.bookedCount}}/{{item.capacity}} 位</text>
-            <button wx:if="{{!item.unavailable}}" class="reserve" data-id="{{item.id}}" bindtap="bookGroup" disabled="{{booking}}" hover-class="press" aria-label="预约{{item.title}}">预约</button>
+            <view class="agenda-buttons">
+              <button class="agenda-action plan-action" data-id="{{item.id}}" bindtap="openPlan" disabled="{{booking}}" hover-class="press" aria-label="查看{{item.title}}的训练计划">详情</button>
+              <button wx:if="{{!item.unavailable}}" class="agenda-action reserve" data-id="{{item.id}}" bindtap="bookGroup" disabled="{{booking}}" hover-class="press" aria-label="预约{{item.title}}">预约</button>
+            </view>
           </view>
         </view>
       </block>

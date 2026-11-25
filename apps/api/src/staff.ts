@@ -6,14 +6,15 @@ import { ApiError, bookingStatus, cancellationLeadMs, templateAllowsBooking } fr
 import type { bookingService } from './booking.ts';
 import { sessionRoster } from './class-coaches.ts';
 import { audit, transaction } from './database.ts';
-import { dateInput, expectedRevision, integer, object, requiredText, selection } from './input.ts';
+import { dateInput, expectedRevision, integer, ledgerWindow, object, requiredText, selection } from './input.ts';
+import { registerLinkAdmin } from './player-links.ts';
 import { searchParents } from './parent-contact.ts';
 import { registrations, reviewRegistration } from './registration.ts';
 import { roleSessions } from './role-session.ts';
 import { businessExport } from './business-export.ts';
 import { accountRoles, saveRoles } from './account-roles.ts';
 import { addCoach, coachDraft, listCoaches, updateCoach } from './staff-coaches.ts';
-import { pastTrainingSql, ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
+import { pastTrainingSql, ledgerChoices, ledgerActions, ledgerInstruction, postLedgerEntry, readStaffAccount } from './staff-ledger.ts';
 import type { staffSchedule } from './staff-schedule.ts';
 import { addDays, dateAt, venueDate, weekday } from './time.ts';
 import type { Authorize } from './wechat-auth.ts';
@@ -126,14 +127,14 @@ export function registerStaffRoutes(
   function users(): ManagedUser[] {
     return db.prepare(`
       SELECT u.id, c.name AS childName,
-        (SELECT COALESCE(SUM(l.delta), 0) FROM ledger l WHERE l.user_id = u.id) AS balance
-      FROM users u LEFT JOIN children c ON c.guardian_id = u.id ORDER BY u.id = 'parent' DESC, u.id
+        (SELECT COALESCE(SUM(l.delta), 0) FROM ledger l WHERE l.player_id = u.id) AS balance
+      FROM players u LEFT JOIN children c ON c.player_id = u.id ORDER BY u.id = 'parent' DESC, u.id
     `).all() as unknown as ManagedUser[];
   }
 
   function requireUser(id: string): void {
-    if (!db.prepare('SELECT 1 FROM users WHERE id = ?').get(id)) {
-      throw new ApiError(404, 'NOT_FOUND', '未找到该家长账户');
+    if (!db.prepare('SELECT 1 FROM players WHERE id = ?').get(id)) {
+      throw new ApiError(404, 'NOT_FOUND', '未找到该队员账户');
     }
   }
 
@@ -150,10 +151,16 @@ export function registerStaffRoutes(
         return reply.code(204).send();
       });
     }
+    registerLinkAdmin(routes,db,actor,clock,appId,demo);
     routes.get('/context', async () => booking.scheduleContext());
-    routes.get('/overview', async () => {
+    routes.get('/overview', async request => {
       const now = clock().toISOString();
       const date = venueDate(now);
+      if (object(request.query).queue === '1') {
+        const applications = db.prepare("SELECT count(*) AS total,min(submitted_at) AS first FROM registrations WHERE status='PENDING'").get();
+        const bookings = db.prepare("SELECT count(*) AS total,min(starts_at) AS first FROM bookings WHERE status='CONFIRMED' AND approval_pending=1 AND starts_at>?").get(now);
+        return { applications,bookings };
+      }
       const pending = db.prepare(`
         SELECT COUNT(*) AS total FROM bookings WHERE status = 'CONFIRMED' AND approval_pending = 1 AND starts_at > ?
       `).get(now);
@@ -171,6 +178,11 @@ export function registerStaffRoutes(
       return { pendingRegistrations, pending: Number(pending?.total), todayClasses: Number(classes?.total), todayAppointments: Number(appointments?.total) };
     });
     routes.get('/coaches', async () => listCoaches(db));
+    routes.get('/coaches/:id', async request => {
+      const coach = listCoaches(db, requiredText(object(request.params).id))[0];
+      if (!coach) throw new ApiError(404,'NOT_FOUND','未找到该教练');
+      return coach;
+    });
     routes.post('/coaches', async request => {
       const body = object(request.body);
       const draft = coachDraft(body);
@@ -301,7 +313,10 @@ export function registerStaffRoutes(
       return reply.code(204).send();
     });
     routes.get('/users', async () => users());
-    routes.get('/registrations', async request => registrations(db, object(request.query).view));
+    routes.get('/registrations', async request => {
+      const { view,page,after } = object(request.query);
+      return registrations(db, view, page === '1', after);
+    });
     routes.post('/registrations/:id/review', async request => reviewRegistration(db, requiredText(object(request.params).id),
       request.body, actor(request), clock()));
     routes.get('/exports/:category', async (request, reply) => {
@@ -317,14 +332,16 @@ export function registerStaffRoutes(
       saveRoles(db, appId, requiredText(object(request.params).id), request.body, actor(request), clock().toISOString());
       return reply.code(204).send();
     });
-    routes.get('/past-training', async () => {
+    routes.get('/past-training', async request => {
       const now = clock().toISOString();
+      const { view, after } = object(request.query);
+      if (view === 'choices') return ledgerChoices(db, null, now, after);
       return db.prepare(pastTrainingSql + ' ORDER BY startsAt DESC, id').all(now, now);
     });
     routes.put('/parents/:id/jersey', async (request, reply) => {
       const { number } = object(request.body);
       if (typeof number !== 'string' || !/^\d{0,4}$/.test(number)) throw new ApiError(400, 'VALIDATION_ERROR', '球衣号码可填写一至四位数字或留空');
-      if (!db.prepare('UPDATE children SET jersey_number = ? WHERE guardian_id = ?').run(number || null, requiredText(object(request.params).id)).changes)
+      if (!db.prepare('UPDATE children SET jersey_number = ? WHERE player_id = ?').run(number || null, requiredText(object(request.params).id)).changes)
         throw new ApiError(404, 'NOT_FOUND', '未找到队员档案');
       return reply.code(204).send();
     });
@@ -334,12 +351,14 @@ export function registerStaffRoutes(
     });
     routes.get('/accounts/:id', async request => {
       const userId = requiredText(object(request.params).id);
-      return readStaffAccount(db, userId, clock().toISOString());
+      return readStaffAccount(db, userId, clock().toISOString(),ledgerWindow(object(request.query)));
     });
     routes.get('/accounts/:id/bookings', async request => {
       const userId = requiredText(object(request.params).id);
       requireUser(userId);
-      return booking.bookings(userId);
+      const { limit, view, after } = object(request.query);
+      if (view === 'choices') return ledgerChoices(db, userId, clock().toISOString(), after);
+      return booking.bookings(userId,limit === undefined ? -1 : integer(Number(limit),1,100));
     });
     routes.post('/accounts/:id/ledger', async request => {
       const userId = requiredText(object(request.params).id);
@@ -361,11 +380,11 @@ export function registerStaffRoutes(
       const weekly = !pendingOnly && query.view === 'week';
       const start = weekly ? addDays(date, -((weekday(date) + 6) % 7)) : date;
       const rows = db.prepare(`
-        SELECT b.id, b.type, ${bookingStatus} AS status, b.title, COALESCE(b.group_coach_names, c.name) AS coachName, b.venue, b.points, b.user_id AS userId,
+        SELECT b.id, b.type, ${bookingStatus} AS status, b.title, COALESCE(b.group_coach_names, c.name) AS coachName, b.venue, b.points, b.player_id AS userId,
           b.starts_at AS startsAt, b.ends_at AS endsAt, b.refund_points AS refundPoints, child.name AS childName,
           EXISTS(SELECT 1 FROM audit_logs WHERE entity_id = b.id AND action = 'BOOKING_CREATED') AS staffCreated,
           EXISTS(SELECT 1 FROM audit_logs WHERE entity_id = b.id AND action = 'BOOKING_CANCELLED') AS staffCancelled
-        FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.guardian_id = b.user_id
+        FROM bookings b JOIN coaches c ON c.id = b.coach_id JOIN children child ON child.player_id = b.player_id
         WHERE ${pendingOnly ? "b.status = 'CONFIRMED' AND b.approval_pending = 1 AND b.starts_at > ?" : 'b.starts_at >= ? AND b.starts_at < ?'}
         ORDER BY b.starts_at, b.created_at
       `).all(...(pendingOnly ? [now] : [dateAt(start), dateAt(addDays(start, weekly ? 7 : 1))])) as unknown as

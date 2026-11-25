@@ -10,7 +10,7 @@ const prices = [
   { minutes: 120, field: 'points120', max: 50000 }
 ] as const;
 type CoachEditor = Record<typeof prices[number]['field'], string> & {
-  id: string; name: string; enabled: boolean; privateTypeIndex: number
+  id: string; name: string; introduction: string; enabled: boolean; privateTypeIndex: number
 };
 
 Page({
@@ -54,7 +54,7 @@ Page({
     this.setData({
       saveError: '',
       editor: {
-        id: coach?.id ?? '', name: coach?.name ?? '', enabled: coach?.enabled ?? true, privateTypeIndex,
+        introduction: coach?.introduction ?? '', id: coach?.id ?? '', name: coach?.name ?? '', enabled: coach?.enabled ?? true, privateTypeIndex,
         pointsPerSlot: coach ? String(coach.pointsPerSlot) : '',
         points90: coach ? String(coach.points90) : '', points120: coach ? String(coach.points120) : ''
       }
@@ -85,7 +85,7 @@ Page({
     this.setData({ busy: true, saveError: '' });
     try {
       const privateCourseTypeId = this.data.privateTypes[editor.privateTypeIndex]?.id ?? null;
-      const coach = { name, ...amounts, privateCourseTypeId };
+      const coach = { name, introduction: editor.introduction.trim(), ...amounts, privateCourseTypeId };
       if (editor.id) {
         await staffApi('/coaches/' + editor.id, 'PUT', { ...coach, enabled: editor.enabled });
       } else {
