@@ -180,3 +180,11 @@
 .detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .detail-heading .button.detail-close { flex: none; width: auto; min-width: 48px; margin: 0; }
 .agenda-heading button.button.row-action { margin: 0 0 0 auto; }
+
+.chooser-course { color: #66595c; margin: 10px 0 14px; font-size: 14px; }
+.chooser-list { max-height: 48vh; }
+.chooser-list button.chooser-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 12px 2px; margin: 0; border-radius: 0; border-top: 1rpx solid #e0d8d5; background: transparent; text-align: left; line-height: 1.5; }
+.chooser-list button.chooser-row::after { border: 0; }
+.chooser-name { flex: 1; min-width: 0; font-size: 17px; font-weight: 650; overflow-wrap: anywhere; }
+.chooser-jersey { font-size: 14px; font-weight: 400; color: #74676a; }
+.chooser-chevron { flex: none; width: 7px; height: 7px; margin-right: 3px; transform: rotate(45deg); border-top: 1.5px solid #761f32; border-right: 1.5px solid #761f32; }

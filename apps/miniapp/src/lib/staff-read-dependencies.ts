@@ -10,13 +10,13 @@ export function staffReadAffected(writePath: string, readPath: string): boolean 
     case 'course-types':
       return resource === 'course-types' || resource === 'coaches';
     case 'registrations':
-      return ['registrations', 'parents', 'overview', 'player-links','player-search'].includes(resource);
+      return ['registrations', 'parents', 'overview', 'player-links','player-search','account-roles'].includes(resource);
     case 'player-links':
       return ['player-links', 'parents', 'account-roles'].includes(resource);
     case 'account-roles':
-      return resource === 'account-roles';
+      return resource === 'account-roles' || resource === 'guardian-search';
     case 'parents':
-      return resource === 'parents';
+      return (resource === 'parents' && (!readId || readId === id)) || resource === 'player-search';
     case 'accounts':
       return field === 'ledger' && (['parents', 'users'].includes(resource) ||
         (resource === 'accounts' && readId === id && !readField));

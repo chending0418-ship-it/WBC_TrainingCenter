@@ -22,8 +22,7 @@ const sessionKey = 'wbc.web.admin.session';
 const retryPrefix = 'wbc.web.admin.retry.';
 let token = sessionStorage.getItem(sessionKey);
 let generation = 0;
-let currentPage = '';
-// Reuse data only while navigating within the same screen (e.g. one week's days).
+// Reads and in-flight requests are shared within the signed-in browser session.
 const reads = new Map();
 const freshForMs = 15_000;
 let pendingWrite;
@@ -39,7 +38,6 @@ function notice(message) {
 
 function clearSession() {
   token = null;
-  currentPage = '';
   reads.clear();
   pendingWrite = undefined;
   document.querySelector('dialog[open]')?.close();
@@ -91,6 +89,26 @@ function read(path) {
   });
   reads.set(path, entry);
   return entry.promise;
+}
+
+function invalidateAfterWrite(path, data) {
+  const [resource, id, field] = path.slice(1).split('/');
+  for (const key of reads.keys()) {
+    const [name, readId] = key.split('?')[0].slice(1).split('/');
+    let affected;
+    if (resource === 'player-links') {
+      const player = new URLSearchParams(key.split('?')[1]).get('playerId');
+      affected = (name === 'player-links' && (!player || player === data?.playerId)) ||
+        name === 'account-roles' || (name === 'parents' && (!readId || readId === encodeURIComponent(data?.playerId)));
+    } else if (resource === 'parents' && field === 'jersey') {
+      affected = (name === 'parents' && (!readId || readId === id)) || name === 'player-search';
+    } else if (resource === 'account-roles') {
+      affected = name === 'account-roles' || name === 'guardian-search';
+    } else {
+      affected = true;
+    }
+    if (affected) reads.delete(key);
+  }
 }
 
 async function write(path, method, payload, idempotent = false) {
@@ -185,8 +203,6 @@ async function render() {
   if (!token) return login();
   const [requested, query] = location.hash.slice(1).split('?');
   const page = Object.hasOwn(pages, requested) ? requested : 'dashboard';
-  if (currentPage !== page) reads.clear();
-  currentPage = page;
   const section = ({ person: 'people', newClass: 'schedule', classTemplates: 'schedule', classCoaches: 'schedule',
     privateHours: 'schedule', editCoach: 'coaches', newBooking: 'bookings', bookingDay: 'bookings' })[page] || page;
   const sectionName = menu.find(([id]) => id === section)[1];
@@ -215,13 +231,13 @@ async function render() {
     },
     async write(...args) {
       if (!active()) throw new Error('页面已切换');
-      reads.clear();
+      invalidateAfterWrite(args[0], args[2]);
       const request = write(...args);
       pendingWrite = request;
       try { return await request; }
       finally {
         if (pendingWrite === request) {
-          reads.clear();
+          invalidateAfterWrite(args[0], args[2]);
           pendingWrite = undefined;
         }
       }

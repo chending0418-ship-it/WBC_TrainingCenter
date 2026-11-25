@@ -2,8 +2,8 @@
   <view class="screen-heading"><text class="page-title">我的队员</text><navigator class="button quiet row-action" url="/pages/child/index?create=1">创建队员</navigator></view>
   <view wx:if="{{!players.length}}" class="card-note">可以创建队员，或搜索已有队员并申请关联。</view>
   <view wx:for="{{players}}" wx:key="id" class="list-row player-row">
-    <view><view class="row-name">{{item.name}}{{item.jerseyNumber ? ' · #' + item.jerseyNumber : ''}}</view><view class="muted">{{item.label}}{{item.id === current ? ' · 当前队员' : ''}}</view></view>
-    <button wx:if="{{item.status === 'APPROVED' || item.kind === 'CREATE'}}" size="mini" class="button quiet row-action" data-id="{{item.id}}" bindtap="select">{{item.status === 'APPROVED' ? '去约课' : '查看申请'}}</button>
+    <view><view class="row-name">{{item.name}}{{item.jerseyNumber ? ' · #' + item.jerseyNumber : ''}}</view><view class="muted">{{item.label}}</view></view>
+    <button wx:if="{{item.status === 'APPROVED' || item.kind === 'CREATE'}}" size="mini" class="button quiet row-action" data-id="{{item.id}}" bindtap="select">{{item.status === 'APPROVED' ? '查看资料' : '查看申请'}}</button>
   </view>
   <view class="section-title">关联已有队员</view>
   <form bindsubmit="search"><view class="player-search"><input class="field" value="{{query}}" bindinput="input" bindconfirm="search" maxlength="50" placeholder="队员姓名或球衣号码" confirm-type="search" />

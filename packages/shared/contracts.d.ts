@@ -77,6 +77,14 @@ export interface Booking extends Quote {
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'REJECTED';
 }
 
+export interface PlayerWallet {
+  id: string;
+  name: string | null;
+  jerseyNumber: string | null;
+  balance: number;
+  reservedPoints: number;
+}
+
 export interface Account {
   nextBefore?: number | null;
   balance: number;
@@ -264,7 +272,13 @@ export interface FamilyPlayer extends PlayerSummary {
   kind: 'CREATE' | 'LINK';
   status: 'PENDING' | 'APPROVED' | 'RETURNED';
 }
+export interface GuardianChoice {
+  id: string;
+  parentName: string | null;
+  wechatIdHint: string | null;
+}
 export interface ManagedLink {
+  parentName: string | null;
   parentId: string;
   wechatIdHint: string | null;
   playerId: string;

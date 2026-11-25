@@ -1,18 +1,21 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { ApiError } from './booking.ts';
 import { audit, transaction } from './database.ts';
+import { accessiblePlayerLink, wechatIdHintSql } from './player-links.ts';
 import { object, requiredText } from './input.ts';
 
-export function accountRoles(db: DatabaseSync, appId: string, query: string) {
-  return db.prepare(`
-    SELECT a.user_id AS id, names.name, a.is_parent AS parent, a.is_admin AS admin, a.coach_id AS coachId
-    FROM wechat_accounts a LEFT JOIN (
-      SELECT l.parent_id,group_concat(c.name,'、') AS name FROM parent_players l JOIN children c USING(player_id)
-      WHERE l.status='APPROVED' GROUP BY l.parent_id
-    ) names ON names.parent_id = a.user_id
-    WHERE a.app_id = ? AND (instr(a.user_id, ?) OR instr(names.name, ?) OR ? = '')
-    ORDER BY a.user_id LIMIT 50
-  `).all(appId, query, query, query);
+export function accountRoles(db: DatabaseSync, appId: string, query: string, profile?: unknown) {
+  if (profile !== undefined && profile !== 'submitted' && profile !== 'missing')
+    throw new ApiError(400, 'VALIDATION_ERROR', '请选择资料筛选范围');
+  const links = `FROM parent_players l JOIN children c USING(player_id)
+    WHERE l.parent_id=a.user_id AND ${accessiblePlayerLink}`;
+  const scope = profile ? ' AND ' + (profile === 'missing' ? 'NOT ' : '') + 'EXISTS (SELECT 1 ' + links + ')' : '';
+  return db.prepare(`SELECT a.user_id AS id, (SELECT group_concat(c.name,'、') ${links}) AS name,
+    coalesce(d.nickname,pc.name) AS parentName, ${wechatIdHintSql} AS wechatIdHint, a.is_parent AS parent, a.is_admin AS admin, a.coach_id AS coachId
+    FROM wechat_accounts a LEFT JOIN parent_display_names d ON d.user_id=a.user_id
+    LEFT JOIN parent_contacts pc ON pc.user_id=a.user_id WHERE a.app_id=? ${scope}
+    AND (?='' OR instr(d.nickname,?) OR instr(pc.name,?) OR instr(a.user_id,?) OR (length(a.open_id)>4 AND substr(a.open_id,-4)=?)
+      OR EXISTS (SELECT 1 ${links} AND instr(c.name,?))) ORDER BY a.user_id LIMIT 50`).all(appId,query,query,query,query,query,query);
 }
 
 export function saveRoles(db: DatabaseSync, appId: string, id: string, payload: unknown, actor: string, now: string) {

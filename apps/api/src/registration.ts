@@ -10,7 +10,9 @@ import { selectedPlayer, wechatIdHintSql } from './player-links.ts';
 import { venueDate } from './time.ts';
 
 const fields = (staff = false) => `
-  SELECT ${staff ? `r.submitted_by AS parentId,(SELECT ${wechatIdHintSql} FROM wechat_accounts WHERE user_id=r.submitted_by) AS wechatIdHint,` : ''}
+  SELECT ${staff ? `r.submitted_by AS parentId,
+    coalesce((SELECT nickname FROM parent_display_names WHERE user_id=r.submitted_by),
+      (SELECT name FROM parent_contacts WHERE user_id=r.submitted_by)) AS parentName,(SELECT ${wechatIdHintSql} FROM wechat_accounts WHERE user_id=r.submitted_by) AS wechatIdHint,` : ''}
     r.player_id AS userId, r.status, r.submitted_at AS submittedAt, r.reviewed_at AS reviewedAt,
     r.reason, r.revision, c.name, c.birth_month AS birthMonth, c.gender,
     r.contact_name AS contactName, r.contact_phone AS contactPhone

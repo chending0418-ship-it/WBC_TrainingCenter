@@ -1,19 +1,19 @@
 import type { FamilyPlayer, PlayerSummary } from '../../../../../packages/shared/contracts.js';
 import { api, errorMessage } from '../../lib/client';
-import { allowPage, choosePlayer, familyContext, invalidateRead } from '../../lib/session';
+import { allowPage, familyContext, invalidateRead } from '../../lib/session';
 
 const labels = { APPROVED: '已关联', PENDING: '待审核', RETURNED: '已退回' };
 Page({
   data: {
-    players: [] as (FamilyPlayer & { label: string })[], current: '', query: '', searched: false,
+    players: [] as (FamilyPlayer & { label: string })[], query: '', searched: false,
     results: [] as (PlayerSummary & { linked: string })[], busy: false, searching: false, error: ''
   },
   sequence: 0,
   onShow() { if (allowPage('PARENT')) void this.load(); },
   async load() {
     try {
-      const { players, current } = await familyContext();
-      this.setData({ players: players.map(row => ({ ...row, label: labels[row.status] })), current: current?.id || '' });
+      const { players } = await familyContext();
+      this.setData({ players: players.map(row => ({ ...row, label: labels[row.status] })) });
     } catch (error) { this.setData({ error: errorMessage(error) }); }
   },
   async onPullDownRefresh() {
@@ -24,9 +24,7 @@ Page({
     const row = this.data.players.find(p => p.id === event.currentTarget.dataset.id);
     if (!row || this.data.busy) return;
     if (row.kind !== 'CREATE' && row.status !== 'APPROVED') return;
-    choosePlayer(row.id);
-    if (row.status === 'APPROVED') wx.switchTab({ url: '/pages/schedule/index' });
-    else wx.navigateTo({ url: '/pages/child/index' });
+    wx.navigateTo({ url: '/pages/child/index?playerId=' + encodeURIComponent(row.id) });
   },
   input(event: WechatMiniprogram.Input) {
     this.sequence++;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { PlayerWallet, GuardianChoice } from '../../../packages/shared/contracts.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -52,10 +53,22 @@ test('两位家长共用同一队员余额，兄弟姐妹分别预留、扣分�
   assert.equal((await account(b, 'parent')).balance, 280);
   assert.equal((await account(a, sibling)).balance, 80);
   assert.equal((await account(a, sibling)).reservedPoints, 40);
+  const familyWallets = async (token: string) => (await call('GET', '/api/me/wallets', token)).json<PlayerWallet[]>();
+  const familyBookings = async (token: string) => (await call('GET', '/api/me/bookings?view=family', token)).json<{ upcoming: { rows: { playerName: string }[] } }>().upcoming.rows;
+  const wallets = await familyWallets(a);
+  assert.deepEqual(wallets.map(row => [row.id,row.balance,row.reservedPoints]).sort(), [
+    ['parent',280,0],[sibling,80,40]
+  ].sort());
+  assert.ok(wallets.every(row => !('ledger' in row)));
+  assert.deepEqual((await familyBookings(a)).map(row => row.playerName).sort(), ['陈同学','第二名队员'].sort());
+  assert.deepEqual((await familyBookings(b)).map(row => row.playerName), ['陈同学']);
+  assert.ok(!(await familyWallets(b)).some(row => row.id === sibling));
   const active = (await call('GET', '/api/admin/player-links?status=APPROVED&q=new-parent', admin)).json()[0];
   assert.equal((await call('PUT', '/api/admin/player-links', admin, { ...change, revision: active.revision, status: 'REMOVED' })).statusCode, 204);
   assert.equal((await call('POST', '/api/bookings/quote', b, group2, 'parent')).statusCode, 403);
   assert.equal((await call('GET', '/api/me/bookings', b, undefined, 'parent')).statusCode, 403);
+  assert.deepEqual(await familyBookings(b), []);
+  assert.ok(!(await familyWallets(b)).some(row => row.id === 'parent'));
   assert.equal((await account(a, 'parent')).balance, 280);
   const week = (await call('GET', '/api/schedule?week=2031-01-06', a, undefined, sibling)).json();
   assert.equal(week.courses.length, 14);
@@ -84,6 +97,16 @@ test('家长关联与队员审核仅返回微信尾号，短 ID 全部遮盖', a
     assert.ok(!res.body.includes(raw) && !res.body.includes('k123'));
     assert.ok(rows.every(r => !('openId' in r)));
   }
+  bind.run('new-parent', '', 'empty-account-1708');
+  const list = async (query: string) => (await app.inject({ url: '/api/admin/account-roles?' + query, headers })).json<GuardianChoice[]>();
+  assert.deepEqual((await list('profile=submitted')).map(row => row.id).sort(), ['other-parent','parent']);
+  assert.deepEqual((await list('profile=missing')).map(row => row.id), ['new-parent']);
+  assert.deepEqual((await list('profile=missing&q=1708')).map(row => row.wechatIdHint), ['•••• 1708']);
+  assert.ok(!JSON.stringify(await list('profile=submitted')).includes(raw));
+  const scoped = await app.inject({ url: '/api/admin/player-links?status=APPROVED&playerId=parent', headers });
+  assert.deepEqual(scoped.json<IdentityHint[]>().map(row => row.parentId), ['parent']);
+  const profile = await app.inject({ url: '/api/admin/parents/parent', headers });
+  assert.equal(profile.json().childName, '陈同学');
   const found = await app.inject({ url: '/api/admin/player-links?status=APPROVED&q=D7k2', headers });
   assert.deepEqual(found.json<IdentityHint[]>().map(r => r.parentId), ['parent']);
 });
@@ -144,4 +167,32 @@ test('队员流水和预约分批读取，翻页仍返回完整余额，两个�
   assert.equal(firstChoices.rows.length,25);
   assert.equal(nextChoices.rows.length,25);
   assert.equal(new Set([...firstChoices.rows,...nextChoices.rows].map(row=>row.id)).size,50);
+});
+
+test('家长昵称单独保存，双端按家长称呼查找，清空后回退联系人姓名', async t => {
+  const db = openDatabase(':memory:');
+  const app = createApp(db, () => new Date('2030-12-30T00:00:00Z'));
+  t.after(() => app.close());
+  const bind = db.prepare("INSERT INTO wechat_accounts(user_id,app_id,open_id) VALUES (?,'',?)");
+  bind.run('parent','private-parent-Ab12');
+  bind.run('other-parent','private-other-3388');
+  const parent = (await app.inject({ method:'POST', url:'/api/dev/session',payload:{ profile:'parent' } })).json().token;
+  const admin = (await app.inject({ method:'POST',url:'/api/admin/session',payload:{ password:process.env.WBC_ADMIN_PASSWORD || 'wbc-demo-2026' } })).json().token;
+  const mine = { authorization: 'Bearer ' + parent }, staff = { authorization: 'Bearer ' + admin };
+  const save = (payload: object) => app.inject({ method:'PUT',url:'/api/me/contact-profile',headers:mine,payload });
+  const search = (q: string) => app.inject({ url:'/api/admin/guardian-search?q=' + encodeURIComponent(q),headers:staff });
+  assert.equal((await save({ nickname:'星野妈妈',contact:null })).statusCode,200);
+  assert.equal((await app.inject({ url:'/api/me/contact',headers:mine })).json().contact,null);
+  assert.deepEqual((await search('星野')).json(), [{ id:'parent',parentName:'星野妈妈',wechatIdHint:'•••• Ab12' }]);
+  const grant = await app.inject({ method:'POST',url:'/api/admin/player-links',headers:staff,payload:{ parentId:'parent',playerId:'other-parent' } });
+  assert.equal(grant.statusCode,204);
+  const links = await app.inject({url:'/api/admin/player-links?status=APPROVED&playerId=other-parent&q=' + encodeURIComponent('星野'),headers:staff});
+  assert.equal(links.json().length,1);
+  assert.equal(links.json()[0].parentName,'星野妈妈');
+  assert.ok(!links.body.includes('private-parent'));
+  assert.equal((await save({ nickname:'',contact:{name:'周静',phone:'13800001234'} })).statusCode,200);
+  assert.equal((await search('Ab12')).json()[0].parentName,'周静');
+  assert.deepEqual((await search('星野')).json(),[]);
+  assert.deepEqual((await search('周静')).json().map((row: GuardianChoice) => row.id),['parent']);
+  assert.equal((await app.inject({url:'/api/admin/guardian-search?q=Ab12',headers:mine})).statusCode,401);
 });

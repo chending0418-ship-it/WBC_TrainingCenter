@@ -405,3 +405,6 @@ form > .form-field:first-child, .form-field.first-field, .lesson-card > .form-fi
 .review-time-line .card-time { margin: 0; }
 
 .compact-switch { transform: scale(.78); transform-origin: right center; }
+
+.admin-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 12px; }
+.admin-row-actions .button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: auto; min-height: 34px; margin: 0; padding: 6px 10px; font-size: 13px; line-height: 1.45; white-space: nowrap; }

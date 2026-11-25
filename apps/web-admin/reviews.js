@@ -33,7 +33,7 @@ export async function registrations(ctx) {
     [phoneTail(row.contact), datetime(row.submittedAt)], processed ? '暂无已处理申请' : '暂无待审核申请');
   const info = selected ? html`${details([
     ['队员姓名', selected.name], ['出生年月', selected.child.birthMonth], ['性别', gender(selected.child.gender)],
-    ['家长账号 ID',selected.parentId], ['微信 ID',selected.wechatIdHint], ['联系人', selected.contact?.name], ['联系电话', maskedPhone(selected.contact?.phone)], ['申请状态', stamp(regLabels[selected.status])],
+    ['申请家长',selected.parentName || '未填写称呼'], ['识别尾号',selected.wechatIdHint], ['联系人', selected.contact?.name], ['联系电话', maskedPhone(selected.contact?.phone)], ['申请状态', stamp(regLabels[selected.status])],
     ...(selected.reason ? [['退回原因', selected.reason]] : []),
     ...(selected.reviewedAt ? [['审核时间', datetime(selected.reviewedAt)]] : [])
   ])}${selected.status === 'PENDING' ? decision('批准后，家长可为' + selected.name + '提交预约。', '退回补充', '批准注册') : ''}` : empty('暂无申请详情');

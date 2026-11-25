@@ -1,0 +1,8 @@
+.guardian-picker { margin: 12px 0; }
+.guardian-label { display: block; margin-bottom: 5px; font-size: 14px; }
+.guardian-search-bar { display: grid; grid-template-columns: minmax(0,1fr) 48px; gap: 7px; align-items: center; }
+.guardian-search-bar .field { width: 100%; font-size: 14px; }
+.guardian-picker button.button { width: 48px; min-height: 34px; margin: 0; padding: 6px 0; font-size: 13px; }
+.guardian-selected, .guardian-picker button.guardian-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.guardian-picker button.guardian-result { width: 100%; max-width: 100%; margin: 0; padding: 10px 3px; border-radius: 0; border-bottom: 1px solid #ebe4e2; background: white; font-size: 15px; line-height: 1.5; }
+.guardian-result::after { border: 0; }

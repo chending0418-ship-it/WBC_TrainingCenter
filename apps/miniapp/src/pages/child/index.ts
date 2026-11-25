@@ -4,7 +4,7 @@ import { localTimestamp } from '../../lib/display';
 import { groupReminder, lastCourse, registrationView, returnToSchedule, saveReminder } from '../../lib/registration';
 import type { CourseReminder } from '../../lib/registration';
 import { invalidatePublicRead, publicRead, publicSchedulePath } from '../../lib/public-read';
-import { allowPage, choosePlayer, familyContext, invalidateRead, readVersion, wechatIdentity } from '../../lib/session';
+import { allowPage, familyContext, invalidateRead, readVersion, wechatIdentity } from '../../lib/session';
 import { requestOnSubmit } from '../../lib/subscription-request';
 
 const registrationPath = '/api/me/registration';
@@ -21,23 +21,24 @@ Page({
     name: '', birthMonth: '', maxMonth: localTimestamp(Date.now()).slice(0, 7),
     genderIndex: -1, genders, contactName: '', phone: '', error: '', saveError: ''
   },
-  courseId: '', newKey: '',
+  courseId: '', newKey: '', playerId: '',
   sequence: 0,
   registrationVersion: 0,
   onUnload() { this.sequence++; },
-  onLoad(options) { this.courseId = options.course?.slice(0, 100) ?? '';
+  onLoad(options) { this.playerId = options.playerId || '';
+    this.courseId = options.course?.slice(0, 100) ?? '';
     if (options.create === '1') this.newKey = Date.now() + '-' + Math.random().toString(36).slice(2); },
   onShow() {
     const authorized = allowPage('PARENT');
     if (authorized !== this.data.authorized) this.setData({ authorized });
     if (authorized && this.newKey) { this.setData({ loaded: true, loading: false, editing: true }); return; }
     if (authorized && !this.data.editing && !this.data.saving &&
-        (!this.registrationVersion || this.registrationVersion !== readVersion(registrationPath))) void this.refresh();
+        (!this.registrationVersion || this.registrationVersion !== readVersion(registrationPath, this.playerId))) void this.refresh();
   },
   async onPullDownRefresh() {
     try {
       if (this.data.saving || this.data.editing || !this.data.authorized) return;
-      invalidateRead(registrationPath);
+      invalidateRead(registrationPath, this.playerId);
       if (this.courseId) invalidatePublicRead(publicSchedulePath);
       await this.refresh();
     } finally { wx.stopPullDownRefresh(); }
@@ -46,9 +47,17 @@ Page({
     const sequence = ++this.sequence;
     if (this.data.error) this.setData({ loading: !this.data.loaded, error: '' });
     try {
-      await familyContext();
+      if (!this.playerId) {
+        const { available } = await familyContext();
+        if (sequence !== this.sequence) return;
+        if (available.length > 1 && !this.courseId) {
+          wx.redirectTo({ url: '/pages/family/index' });
+          return;
+        }
+        this.playerId = (available.find(row => row.status === 'APPROVED') || available[0])?.id ?? '';
+      }
       const [{ registration, draft }, schedule] = await Promise.all([
-        api<RegistrationResponse>(registrationPath),
+        api<RegistrationResponse>(registrationPath, 'GET', undefined, this.playerId),
         this.courseId ? publicRead<PublicSchedule>(publicSchedulePath) : null
       ]);
       if (sequence !== this.sequence) return;
@@ -67,12 +76,12 @@ Page({
       let profile = registration?.child ?? draft?.child ?? null;
       let contact = registration?.contact ?? draft?.contact ?? null;
       if (!registration && !draft) {
-        const [existing, details] = await Promise.all([api<{ child: Child | null }>('/api/me/child'), api<{ contact: ParentContact | null }>('/api/me/contact')]);
+        const [existing, details] = await Promise.all([api<{ child: Child | null }>('/api/me/child', 'GET', undefined, this.playerId), api<{ contact: ParentContact | null }>('/api/me/contact')]);
         if (sequence !== this.sequence) return;
         profile = existing.child;
         contact = details.contact;
       }
-      this.registrationVersion = readVersion(registrationPath);
+      this.registrationVersion = readVersion(registrationPath, this.playerId);
       this.setData({
         loaded: true, registration: registration ? registrationView(registration) : null, editing: !registration,
         reminder, name: profile?.name ?? '', birthMonth: profile?.birthMonth ?? '',
@@ -121,14 +130,14 @@ Page({
         ...(this.newKey ? { requestKey: this.newKey } : {}),
         child: { name, birthMonth, gender }, revision: registration?.revision,
         ...(registration?.status === 'APPROVED' || (this.newKey && !contact) ? {} : { contact })
-      });
+      }, this.playerId);
       this.newKey = '';
-      choosePlayer(row.userId);
+      this.playerId = row.userId;
       this.setData({ registration: registrationView(row), editing: false });
     } catch (error) {
       if (error instanceof RequestError && error.code === 'REGISTRATION_CHANGED') {
         this.setData({ editing: false });
-        invalidateRead(registrationPath);
+        invalidateRead(registrationPath, this.playerId);
         await this.refresh();
         wx.showToast({ title: '申请已更新，请核对', icon: 'none' });
       } else this.setData({ saveError: errorMessage(error) });

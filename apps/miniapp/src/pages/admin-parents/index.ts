@@ -15,7 +15,7 @@ function pathFor(query: string, index: number) {
 Page({
   shownVersion: 0,
   requestNumber: 0,
-  data: { authorized: false, filters, filterIndex: 0, editing: '', number: '', saving: false, query: '', loading: true, error: '', searched: '', parents: [] as ManagedParent[] },
+  data: { authorized: false, filters, filterIndex: 0, query: '', loading: true, error: '', searched: '', parents: [] as ManagedParent[] },
   onShow() {
     const authorized = allowPage('ADMIN');
     this.setData({ authorized });
@@ -23,22 +23,6 @@ Page({
     if (authorized && (!version || version !== this.shownVersion)) void this.load(this.data.searched);
   },
   onUnload() { this.requestNumber++; },
-  editNumber(event: WechatMiniprogram.TouchEvent) {
-    const family = this.data.parents.find(row => row.id === event.currentTarget.dataset.id);
-    if (family) this.setData({ editing: family.id, number: family.jerseyNumber || '' });
-  },
-  numberChanged(event: WechatMiniprogram.Input) { this.setData({ number: event.detail.value }); },
-  async saveNumber() {
-    if (this.data.saving) return;
-    this.setData({ saving: true });
-    try {
-      await staffApi('/parents/' + encodeURIComponent(this.data.editing) + '/jersey', 'PUT', { number: this.data.number.trim() });
-      this.setData({ editing: '' });
-      await this.search();
-      wx.showToast({ title: '球衣号码已保存' });
-    } catch (error) { wx.showToast({ title: errorMessage(error), icon: 'none' }); }
-    finally { this.setData({ saving: false }); }
-  },
   changeQuery(event: WechatMiniprogram.Input) {
     this.setData({ query: event.detail.value });
   },
