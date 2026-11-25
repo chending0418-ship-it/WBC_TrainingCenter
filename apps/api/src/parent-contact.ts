@@ -34,16 +34,21 @@ export function searchParents(db: DatabaseSync, query: string, now: string, stat
   if (profile !== undefined && profile !== 'submitted' && profile !== 'missing') {
     throw new ApiError(400, 'VALIDATION_ERROR', '请选择有效的队员资料范围');
   }
-  const profileCondition = profile === 'submitted' ? 'AND c.guardian_id IS NOT NULL'
-    : profile === 'missing' ? 'AND c.guardian_id IS NULL' : '';
+  const profileCondition = profile === 'submitted' ? 'AND c.player_id IS NOT NULL'
+    : profile === 'missing' ? 'AND c.player_id IS NULL' : '';
   const rows = db.prepare(`
     SELECT u.id, c.name AS childName, c.jersey_number AS jerseyNumber, c.birth_month AS birthMonth, c.gender, p.name AS contactName, p.phone, r.status AS registrationStatus,
-      (SELECT COALESCE(SUM(b.points), 0) FROM bookings b WHERE b.user_id = u.id AND b.status = 'CONFIRMED'
+      (SELECT COALESCE(SUM(b.points), 0) FROM bookings b WHERE b.player_id = u.id AND b.status = 'CONFIRMED'
         AND b.approval_pending = 1 AND b.starts_at > ?) AS reservedPoints,
-      (SELECT COALESCE(SUM(l.delta), 0) FROM ledger l WHERE l.user_id = u.id) AS balance
-    FROM users u LEFT JOIN children c ON c.guardian_id = u.id
-    LEFT JOIN parent_contacts p ON p.user_id = u.id
-    LEFT JOIN registrations r ON r.user_id = u.id
+      (SELECT COALESCE(SUM(l.delta), 0) FROM ledger l WHERE l.player_id = u.id) AS balance
+    FROM (SELECT id,legacy_parent_id FROM players UNION ALL
+      SELECT id,id FROM users WHERE NOT EXISTS (SELECT 1 FROM players WHERE legacy_parent_id=users.id)
+        AND NOT EXISTS (SELECT 1 FROM parent_players WHERE parent_id=users.id AND status<>'REMOVED')
+    ) u LEFT JOIN children c ON c.player_id = u.id
+    LEFT JOIN parent_contacts p ON p.user_id = CASE WHEN c.player_id IS NULL THEN u.legacy_parent_id ELSE
+      (SELECT parent_id FROM parent_players WHERE player_id=u.id AND (status='APPROVED' OR (kind='CREATE' AND status<>'REMOVED'))
+       ORDER BY status='APPROVED' DESC,kind,parent_id LIMIT 1) END
+    LEFT JOIN registrations r ON r.player_id = u.id
     WHERE (? = '' OR coalesce(r.status, 'UNREGISTERED') = ?) ${profileCondition} AND (? = '' OR instr(lower(u.id), lower(?)) > 0 OR instr(lower(c.name), lower(?)) > 0
       OR instr(lower(p.name), lower(?)) > 0 OR instr(p.phone, ?) > 0 OR c.jersey_number = ?)
     ORDER BY u.id = 'parent' DESC, u.id LIMIT 50

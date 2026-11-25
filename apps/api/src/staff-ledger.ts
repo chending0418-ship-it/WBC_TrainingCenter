@@ -47,18 +47,21 @@ export const ledgerActions: Record<StaffLedgerSource, string> = {
   REVERSAL: 'POINTS_REVERSED'
 };
 
-export function readStaffAccount(db: DatabaseSync, userId: string, now: string): StaffAccount {
+export function readStaffAccount(db: DatabaseSync, userId: string, now: string, { limit,before }: {limit: number;before: number | null} = { limit: -1,before: null }): StaffAccount {
   const user = db.prepare(`
-    SELECT c.name AS childName FROM users u LEFT JOIN children c ON c.guardian_id = u.id WHERE u.id = ?
+    SELECT c.name AS childName FROM players u LEFT JOIN children c ON c.player_id = u.id WHERE u.id = ?
   `).get(userId) as { childName: string | null } | undefined;
-  if (!user) throw new ApiError(404, 'NOT_FOUND', '未找到该家长账户');
+  if (!user) throw new ApiError(404, 'NOT_FOUND', '未找到该队员账户');
   const ledger = db.prepare(`
     SELECT l.id, l.delta, l.reason, l.created_at AS createdAt, l.source, l.reference, l.operator,
       l.training_title AS trainingTitle, l.training_start AS trainingStart, l.booking_id AS bookingId, l.reversal_of AS reversalOf, undo.id AS reversalId
     FROM ledger l LEFT JOIN ledger undo ON undo.reversal_of = l.id
-    WHERE l.user_id = ? ORDER BY l.id DESC
-  `).all(userId) as unknown as StaffAccount['ledger'];
-  return { childName: user.childName, ledger, balance: ledger.reduce((sum, entry) => sum + entry.delta, 0), reservedPoints: reservedPoints(db, userId, now) };
+    WHERE l.player_id = ? AND (? IS NULL OR l.id < ?) ORDER BY l.id DESC LIMIT ?
+  `).all(userId,before,before,limit < 0 ? -1 : limit+1) as unknown as StaffAccount['ledger'];
+  const more = limit >= 0 && ledger.length > limit;
+  if (more) ledger.pop();
+  const balance = Number(db.prepare('SELECT coalesce(sum(delta),0) AS n FROM ledger WHERE player_id=?').get(userId)?.n);
+  return { childName: user.childName, ledger, balance, ...(limit < 0 ? {} : { nextBefore: more ? ledger.at(-1)!.id : null }), reservedPoints: reservedPoints(db, userId, now) };
 }
 
 // The staff request transaction also stores the idempotency result and holds the write
@@ -71,7 +74,7 @@ export function postLedgerEntry(db: DatabaseSync, userId: string, input: Instruc
   let reason = input.reason;
   if (input.source === 'REVERSAL') {
     const original = db.prepare(`
-      SELECT delta, source, booking_id FROM ledger WHERE id = ? AND user_id = ?
+      SELECT delta, source, booking_id FROM ledger WHERE id = ? AND player_id = ?
     `).get(input.reversalOf, userId);
     if (!original || (original.source !== 'OFFLINE_CREDIT' && original.source !== 'ADJUSTMENT')) {
       throw new ApiError(404, 'NOT_FOUND', '没有找到可冲正的入账或调整流水');
@@ -84,6 +87,8 @@ export function postLedgerEntry(db: DatabaseSync, userId: string, input: Instruc
     reversalOf = input.reversalOf;
     reason = '积分冲正 · ' + reason;
   } else {
+    if (!db.prepare('SELECT 1 FROM children WHERE player_id=?').get(userId))
+      throw new ApiError(409, 'CHILD_PROFILE_REQUIRED', '请先选择已建档的队员');
     delta = input.delta;
     if (input.source === 'ADJUSTMENT') {
       if (input.trainingId) {
@@ -92,21 +97,39 @@ export function postLedgerEntry(db: DatabaseSync, userId: string, input: Instruc
         if (!training) throw new ApiError(400, 'INVALID_TRAINING', '请选择已结束的俱乐部训练');
       }
       bookingId = input.bookingId;
-      if (bookingId && !db.prepare('SELECT 1 FROM bookings WHERE id = ? AND user_id = ?').get(bookingId, userId)) {
+      if (bookingId && !db.prepare('SELECT 1 FROM bookings WHERE id = ? AND player_id = ?').get(bookingId, userId)) {
         throw new ApiError(404, 'NOT_FOUND', '未找到这个账户的关联预约');
       }
       reason = '人工调整 · ' + reason;
     }
   }
-  const balance = Number(db.prepare('SELECT COALESCE(SUM(delta), 0) AS balance FROM ledger WHERE user_id = ?').get(userId)?.balance);
+  const balance = Number(db.prepare('SELECT COALESCE(SUM(delta), 0) AS balance FROM ledger WHERE player_id = ?').get(userId)?.balance);
   if (balance + delta < reservedPoints(db, userId, now)) {
     throw new ApiError(409, 'INSUFFICIENT_POINTS', '可用积分不足，无法完成本次操作');
   }
   const entry = db.prepare(`
-    INSERT INTO ledger (user_id, source, delta, reason, created_at, operator, reference, booking_id, reversal_of, training_title, training_start)
+    INSERT INTO ledger (player_id, source, delta, reason, created_at, operator, reference, booking_id, reversal_of, training_title, training_start)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(userId, input.source, delta, reason, now, actor, input.reference, bookingId, reversalOf, training?.title ?? null, training?.startsAt ?? null);
   const id = Number(entry.lastInsertRowid);
   audit(db, actor, ledgerActions[input.source], String(id), now);
   return { id };
+}
+
+// Both admin clients page through optional attachments independently of the ledger.
+export function ledgerChoices(db: DatabaseSync, player: string | null, now: string, after: unknown) {
+  const source = player === null ? pastTrainingSql :
+    'SELECT id, title, starts_at AS startsAt FROM bookings WHERE player_id = ?';
+  const params = player === null ? [now, now] : [player];
+  const cursor = after === undefined ? null : requiredText(after, 256);
+  const separator = cursor?.indexOf('|') ?? -1;
+  if (cursor && separator < 1) throw new ApiError(400, 'INVALID_CURSOR', '请重新加载可关联的记录');
+  const rows = db.prepare('SELECT id, title, startsAt FROM (' + source + ') ' +
+    (cursor ? 'WHERE (startsAt, id) < (?, ?) ' : '') + 'ORDER BY startsAt DESC, id DESC LIMIT 26')
+    .all(...params, ...(cursor ? [cursor.slice(0, separator), cursor.slice(separator + 1)] : [])) as
+    { id: string; title: string; startsAt: string }[];
+  const more = rows.length > 25;
+  if (more) rows.pop();
+  const last = rows.at(-1);
+  return { rows, next: more && last ? last.startsAt + '|' + last.id : null };
 }

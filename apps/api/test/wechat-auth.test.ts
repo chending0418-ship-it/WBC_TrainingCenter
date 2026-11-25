@@ -81,19 +81,20 @@ test('wechat login uses server config, binds existing identities and issues role
     method: 'PUT', url: '/api/me/child', headers: headers(parent.token),
     payload: { name: '小王', birthMonth: '2017-12', gender: 'MALE' }
   })).statusCode, 200);
+  const { registration } = (await app.inject({ url: '/api/me/registration', headers: headers(parent.token) })).json();
+  assert.notEqual(registration.userId, first.accountId);
   assert.equal((await app.inject({
-    method: 'POST', url: '/api/admin/accounts/' + first.accountId + '/ledger', headers: headers(admin.token),
+    method: 'POST', url: '/api/admin/accounts/' + registration.userId + '/ledger', headers: headers(admin.token),
     payload: { points: 30, reason: '线下充值', reference: 'dev', requestKey: 'same-account-credit' }
   })).statusCode, 200);
   db.prepare(`
     INSERT INTO class_sessions (id, coach_id, title, venue, starts_at, ends_at, points, capacity)
     VALUES ('real-login-class', ?, '棒球课', '训练室 A', ?, ?, 10, 4)
   `).run(coachId, dateAt('2026-11-18', 960), dateAt('2026-11-18', 990));
-  const reviewPath = '/api/admin/registrations/' + first.accountId + '/review';
-  const { registration } = (await app.inject({ url: '/api/me/registration', headers: headers(parent.token) })).json();
+  const reviewPath = '/api/admin/registrations/' + registration.userId + '/review';
   assert.equal(registration.status, 'PENDING');
   const approve = { decision: 'APPROVE', revision: registration.revision };
-  const staffBooking = { type: 'GROUP', classSessionId: 'real-login-class', userId: first.accountId, requestKey: 'same-account-booking' };
+  const staffBooking = { type: 'GROUP', classSessionId: 'real-login-class', userId: registration.userId, requestKey: 'same-account-booking' };
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/bookings', headers: headers(admin.token), payload: staffBooking })).json().code,
     'REGISTRATION_REQUIRED');
   assert.equal((await app.inject({ method: 'POST', url: reviewPath, headers: headers(parent.token), payload: approve })).statusCode, 401);

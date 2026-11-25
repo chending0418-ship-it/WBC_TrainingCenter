@@ -213,15 +213,15 @@ test('a real registration targets the administrator review screen and suppresses
   } });
   await worker.runOne();
   assert.equal(sent, 1);
-  reviewRegistration(env.db, env.user, { decision: 'RETURN', reason: '测试', revision: registration.revision }, env.user, new Date(at));
-  const returned = env.db.prepare('SELECT revision FROM registrations WHERE user_id = ?').get(env.user)!;
+  reviewRegistration(env.db, registration.userId, { decision: 'RETURN', reason: '测试', revision: registration.revision }, env.user, new Date(at));
+  const returned = env.db.prepare('SELECT revision FROM registrations WHERE submitted_by = ?').get(env.user)!;
   await env.accept('second');
   const revision = submitRegistration(env.db, env.user, { child: { name: '测试2', birthMonth: '2017-05', gender: 'FEMALE' },
     revision: returned.revision }, new Date(at));
   // Consume the preceding unconfigured parent-result entry first.
   await worker.runOne();
   const superseded = env.createWorker({ token: async () => {
-    reviewRegistration(env.db, env.user, { decision: 'APPROVE', revision: revision.revision }, env.user, new Date(at));
+    reviewRegistration(env.db, registration.userId, { decision: 'APPROVE', revision: revision.revision }, env.user, new Date(at));
     return 'access-token';
   }, send: async () => { sent++; return 0; } });
   await superseded.runOne();

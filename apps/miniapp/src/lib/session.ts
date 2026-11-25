@@ -1,5 +1,5 @@
 import { config } from './config';
-import type { RoleSession, SessionRole, WechatLogin } from '../../../../packages/shared/contracts.js';
+import type { FamilyPlayer, RoleSession, SessionRole, WechatLogin } from '../../../../packages/shared/contracts.js';
 import { demoCoachProfilesPath, invalidatePublicRead, publicSchedulePath } from './public-read';
 import { ReadCache } from './read-cache';
 import { staffReadAffected } from './staff-read-dependencies';
@@ -22,7 +22,7 @@ const entry = '/pages/entry/index';
 const noticePages = {
   'admin-bookings': { role: 'ADMIN', read: '/api/admin/bookings?pending=1' },
   'admin-registrations': { role: 'ADMIN', read: '/api/admin/registrations?view=pending' },
-  bookings: { role: 'PARENT', read: '/api/me/bookings' },
+  bookings: { role: 'PARENT', read: '/api/me/bookings?view=pages' },
   child: { role: 'PARENT', read: '/api/me/registration' }
 } as const;
 export type NoticePage = keyof typeof noticePages;
@@ -39,7 +39,7 @@ let wechat: WechatLogin | undefined;
 function openCurrentHome(courseId?: string, notice?: NoticePage) {
   if (notice && active?.role === noticePages[notice].role) {
     if (notice === 'bookings') {
-      reads.get(active)?.invalidate(key => parentReadAffected('/api/bookings', key));
+      reads.get(active)?.invalidate(key => parentReadAffected('/api/bookings', key.split('|')[0]));
     } else invalidateRead(noticePages[notice].read);
     wx.reLaunch({ url: '/pages/' + notice + '/index' + (notice === 'admin-bookings' ? '?pending=1' : '') });
     return;
@@ -124,8 +124,30 @@ export function switchRole() {
 
 const reads = new WeakMap<RoleSession, ReadCache>();
 
+const selectedPlayers = new WeakMap<RoleSession,string>();
+export function currentPlayerId() { return active ? selectedPlayers.get(active) || '' : ''; }
+export function choosePlayer(id: string) {
+  if (active?.role !== 'PARENT' || id === currentPlayerId()) return;
+  selectedPlayers.set(active,id);
+}
+export async function familyContext() {
+  const family = await roleRequest<{ players: FamilyPlayer[]; defaultId: string }>('PARENT','/api/me/players');
+  const available = family.players.filter(row => row.status === 'APPROVED' || row.kind === 'CREATE');
+  const current = available.find(row => row.id === currentPlayerId()) ?? available.find(row => row.id === family.defaultId);
+  choosePlayer(current?.id ?? '');
+  return { players: family.players, available, current };
+}
+
+function playerScoped(path: string) {
+  return path.startsWith('/api/schedule') || path.startsWith('/api/bookings') ||
+    ['/api/me/account','/api/me/bookings','/api/me/registration','/api/me/child'].includes(path.split('?')[0]);
+}
+function cacheKey(path: string) {
+  return active?.role === 'PARENT' && playerScoped(path) ? path + '|' + currentPlayerId() : path;
+}
+
 export function readVersion(path: string): number {
-  return active ? reads.get(active)?.version(path) ?? 0 : 0;
+  return active ? reads.get(active)?.version(cacheKey(path)) ?? 0 : 0;
 }
 
 export function hasFreshRead(path: string): boolean {
@@ -133,14 +155,15 @@ export function hasFreshRead(path: string): boolean {
 }
 
 export function invalidateRead(path: string) {
-  if (active) reads.get(active)?.invalidate(key => key === path);
+  if (active) reads.get(active)?.invalidate(key => key === cacheKey(path));
 }
 
 function parentReadAffected(write: string, read: string, data?: object) {
+  if (['/api/me/players','/api/me/player-links','/api/me/registration','/api/me/child'].includes(write))
+    return ['/api/me/players','/api/me/registration','/api/me/child','/api/me/contact'].includes(read);
   if (write === '/api/me/contact') return read === write || read === '/api/me/registration';
-  if (write === '/api/me/registration' || write === '/api/me/child')
-    return ['/api/me/registration', '/api/me/child', '/api/me/contact'].includes(read);
   if (write === '/api/bookings' || write.startsWith('/api/me/bookings/')) {
+    read = read.split('?')[0];
     if (read === '/api/me/bookings' || read === '/api/me/account') return true;
     if (data && 'type' in data && data.type === 'GROUP') return read.startsWith('/api/schedule');
     if (data && 'coachId' in data) return read.startsWith('/api/coaches/' + data.coachId + '/slots?');
@@ -157,14 +180,23 @@ export async function roleRequest<T>(role: SessionRole, path: string, method: Me
     cache = new ReadCache();
     reads.set(session, cache);
   }
+  const scoped = role === 'PARENT' && playerScoped(path);
+  const playerId = scoped ? currentPlayerId() : undefined;
   const perform = async () => {
     if (session !== active) throw new RequestError('NOT_AUTHORIZED', '登录身份已切换', 401);
-    const result = await send<T>(path, method, data, session.token);
+    const result = await send<T>(path, method, data, session.token, playerId);
+    if (scoped && playerId !== currentPlayerId()) throw new RequestError('PLAYER_CHANGED','已切换队员，请重新查看',409);
     if (session !== active) throw new RequestError('NOT_AUTHORIZED', '登录身份已切换', 401);
     return result;
   };
   const invalidateAffected = () => {
-    cache.invalidate(key => role === 'PARENT' ? parentReadAffected(path, key, data) : staffReadAffected(path, key));
+    cache.invalidate(key => {
+      if (role !== 'PARENT') return staffReadAffected(path,key);
+      const [resource,owner] = key.split('|');
+      // A group booking changes capacity for every player, but only one player's balance and history.
+      if (owner !== undefined && owner !== playerId && !resource.startsWith('/api/schedule') && !['/api/me/players','/api/me/contact'].includes(path)) return false;
+      return parentReadAffected(path,resource,data);
+    });
     if (role === 'ADMIN') {
       const coachChanged = /^\/api\/admin\/coaches(?:\/[^/]+)?$/.test(path);
       if (coachChanged) invalidatePublicRead(demoCoachProfilesPath);
@@ -174,12 +206,15 @@ export async function roleRequest<T>(role: SessionRole, path: string, method: Me
   };
   const mutation = method !== 'GET' && !path.endsWith('/quote');
   try {
-    const result = method === 'GET' && !data ? await cache.read(path, perform) : await perform();
+    const result = method === 'GET' && !data ? await cache.read(cacheKey(path), perform) : await perform();
     if (session !== active) throw new RequestError('NOT_AUTHORIZED', '登录身份已切换', 401);
     if (mutation) invalidateAffected();
     return result;
   } catch (error) {
     if (mutation && (!(error instanceof RequestError) || error.status !== 400)) invalidateAffected();
+    if (error instanceof RequestError && error.code === 'PLAYER_ACCESS_DENIED') {
+      cache.invalidate(key => key === '/api/me/players' || key.endsWith('|' + playerId));
+    }
     if (error instanceof RequestError && error.status === 401 && session === active) {
       active = undefined;
       wechat = undefined;

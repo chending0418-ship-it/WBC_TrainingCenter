@@ -7,7 +7,7 @@ const rates = [
 ];
 
 function coachDraft(row) {
-  return { name: row.name.trim(), pointsPerSlot: Number(row.pointsPerSlot), points90: Number(row.points90),
+  return { name: row.name.trim(), introduction: (row.introduction || '').trim(), pointsPerSlot: Number(row.pointsPerSlot), points90: Number(row.points90),
     points120: Number(row.points120), privateCourseTypeId: row.privateCourseTypeId || null };
 }
 
@@ -32,7 +32,7 @@ export async function coaches(ctx) {
       const approved = await confirmAction(action, row.name + (row.enabled ?
         '将从家长端的可约教练和班次中隐藏。' : '将恢复可约。'));
       if (!approved || !ctx.active()) return;
-      const current = (await ctx.api('/coaches', true)).find(item => item.id === row.id);
+      const current = await ctx.api('/coaches/' + encodeURIComponent(row.id), true);
       if (!current) throw Error('未找到这位教练。');
       if (current.enabled === row.enabled) {
         await ctx.write('/coaches/' + encodeURIComponent(row.id), 'PUT', { ...coachDraft(current), enabled: !row.enabled });
@@ -44,15 +44,16 @@ export async function coaches(ctx) {
 
 export async function editCoach(ctx) {
   const id = ctx.query.get('id');
-  const [types, rows] = await Promise.all([ctx.api('/course-types'), id ? ctx.api('/coaches') : []]);
-  const row = rows.find(item => item.id === id);
+  const [types, row] = await Promise.all([ctx.api('/course-types'), id ? ctx.api('/coaches/' + encodeURIComponent(id)) : null]);
   if (id && !row) throw Error('未找到这位教练。');
   const choices = [['', '一对一训练（默认）'], ...types.filter(type => type.maxStudents === 1).map(type => [type.id, type.name])];
   const headline = row ? '编辑教练' : '新增教练';
   const root = ctx.show(html`${title(headline, link('返回教练管理', 'coaches'))}<form class="coach-edit-form">
     ${box('教练资料', html`<div class="form-grid form-pad">
       ${field('教练姓名', 'name', row?.name, { maxLength: 40 })}
-      ${select('私教课程类型', 'privateCourseTypeId', choices, row?.privateCourseTypeId || '')}</div>`)}
+      ${select('私教课程类型', 'privateCourseTypeId', choices, row?.privateCourseTypeId || '')}
+      <label class="w-field plan-field"><span>教练介绍（选填）</span><textarea name="introduction" rows="4" maxlength="500"
+        placeholder="填写教练经历或擅长的训练项目">${row?.introduction}</textarea></label></div>`)}
     ${box('私教积分', html`<div class="form-pad coach-price-inputs">${rates.map(({ key, minutes, max }) =>
       field(minutes + ' 分钟积分', key, row?.[key], { type: 'number', min: 1, max }))}</div>`)}
     ${buttons(link('取消', 'coaches', {}, 'wb outline'), submit('保存教练'))}</form>`);
@@ -63,7 +64,7 @@ export async function editCoach(ctx) {
     const draft = coachDraft(Object.fromEntries(new FormData(form)));
     ctx.perform(async () => {
       if (row) {
-        const latest = (await ctx.api('/coaches', true)).find(item => item.id === id);
+        const latest = await ctx.api('/coaches/' + encodeURIComponent(id), true);
         if (!latest) throw Error('未找到这位教练。');
         const saved = coachDraft(row);
         const updates = Object.entries(draft).filter(([key, value]) => saved[key] !== value);

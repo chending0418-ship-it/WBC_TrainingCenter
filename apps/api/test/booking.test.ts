@@ -7,7 +7,8 @@ import type { TestContext } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { Account, Booking, BookingSelection, ManagedLesson, ManagedCoach, PrivateSlot, PublicSchedule, Registration, Schedule } from '../../../packages/shared/contracts.js';
 import { createApp } from '../src/app.ts';
-import { openDatabase, seedDemo } from '../src/database.ts';
+import { legacyDatabase } from './legacy-database.ts';
+import { openDatabase } from '../src/database.ts';
 import { addDays, dateAt } from '../src/time.ts';
 
 const date = '2030-12-31';
@@ -367,10 +368,10 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   const directory = mkdtempSync(join(tmpdir(), 'wbc-private-prices-'));
   context.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'old.sqlite');
-  const old = openDatabase(path);
-  seedDemo(old, now());
+  const old = legacyDatabase(path,true);
   const short = privateTraining(870, 900, 'wang');
   old.exec(`
+    ALTER TABLE coaches DROP COLUMN introduction;
     ALTER TABLE class_sessions DROP COLUMN training_plan;
     ALTER TABLE class_templates DROP COLUMN training_plan;
     ALTER TABLE children DROP COLUMN jersey_number;
@@ -403,7 +404,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   first.close();
 
   const { app, db } = fixture(context, path);
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 20);
   const admin = await adminSession(app);
   const parent = await login(app);
   const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();
@@ -515,7 +516,7 @@ test('资料和积分校验失败无占用，账户读取与孩子资料按会�
     assert.deepEqual(response.json(), child);
   }
   assert.deepEqual((await app.inject({ url: profileUrl, headers: other })).json(), { child: { name: '张同学', birthMonth: '2017-03', gender: 'FEMALE' } });
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM children WHERE guardian_id = 'new-parent'").get()?.count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM children WHERE player_id = 'new-parent'").get()?.count, 1);
   const admin = await adminSession(app);
   const queue = (await app.inject({ url: '/api/admin/registrations', headers: admin })).json<Registration[]>();
   assert.equal(queue.length, 1);
@@ -523,7 +524,7 @@ test('资料和积分校验失败无占用，账户读取与孩子资料按会�
   const approved = await app.inject({ method: 'POST', url: reviewUrl, headers: admin, payload: { decision: 'APPROVE', revision: queue[0].revision } });
   assert.equal(approved.statusCode, 200);
   db.prepare(`
-    INSERT INTO ledger (user_id, source, delta, reason, created_at)
+    INSERT INTO ledger (player_id, source, delta, reason, created_at)
     VALUES ('new-parent', 'TEST', -270, '测试余额', ?)
   `).run(now().toISOString());
   const result = await Promise.all([
@@ -597,9 +598,10 @@ test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
   const directory = mkdtempSync(join(tmpdir(), 'wbc-registration-'));
   context.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'old.sqlite');
-  const previous = openDatabase(path);
+  const previous = legacyDatabase(path);
   previous.exec(`
     DROP TABLE registrations;
+    ALTER TABLE coaches DROP COLUMN introduction;
     ALTER TABLE class_sessions DROP COLUMN training_plan;
     ALTER TABLE class_templates DROP COLUMN training_plan;
     ALTER TABLE children DROP COLUMN jersey_number;
@@ -621,8 +623,8 @@ test('升级 1.1.0 保留原有完整队员的预约资格', async context => {
   previous.close();
   const upgraded = openDatabase(path);
   try {
-    assert.deepEqual([...upgraded.prepare('SELECT user_id, status FROM registrations').all()].map(row => ({ ...row })),
-      [{ user_id: 'legacy', status: 'APPROVED' }]);
+    assert.deepEqual([...upgraded.prepare('SELECT player_id, status FROM registrations').all()].map(row => ({ ...row })),
+      [{ player_id: 'legacy', status: 'APPROVED' }]);
   } finally { upgraded.close(); }
 });
 

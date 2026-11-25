@@ -10,7 +10,9 @@ export function staffReadAffected(writePath: string, readPath: string): boolean 
     case 'course-types':
       return resource === 'course-types' || resource === 'coaches';
     case 'registrations':
-      return ['registrations', 'parents', 'overview'].includes(resource);
+      return ['registrations', 'parents', 'overview', 'player-links','player-search'].includes(resource);
+    case 'player-links':
+      return ['player-links', 'parents', 'account-roles'].includes(resource);
     case 'account-roles':
       return resource === 'account-roles';
     case 'parents':

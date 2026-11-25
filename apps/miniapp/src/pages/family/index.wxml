@@ -1,0 +1,18 @@
+<view class="page-shell">
+  <view class="screen-heading"><text class="page-title">我的队员</text><navigator class="button quiet row-action" url="/pages/child/index?create=1">创建队员</navigator></view>
+  <view wx:if="{{!players.length}}" class="card-note">可以创建队员，或搜索已有队员并申请关联。</view>
+  <view wx:for="{{players}}" wx:key="id" class="list-row player-row">
+    <view><view class="row-name">{{item.name}}{{item.jerseyNumber ? ' · #' + item.jerseyNumber : ''}}</view><view class="muted">{{item.label}}{{item.id === current ? ' · 当前队员' : ''}}</view></view>
+    <button wx:if="{{item.status === 'APPROVED' || item.kind === 'CREATE'}}" size="mini" class="button quiet row-action" data-id="{{item.id}}" bindtap="select">{{item.status === 'APPROVED' ? '去约课' : '查看申请'}}</button>
+  </view>
+  <view class="section-title">关联已有队员</view>
+  <form bindsubmit="search"><view class="player-search"><input class="field" value="{{query}}" bindinput="input" bindconfirm="search" maxlength="50" placeholder="队员姓名或球衣号码" confirm-type="search" />
+    <button class="button quiet row-action" form-type="submit" disabled="{{!query || busy || searching}}">搜索</button></view></form>
+  <view class="card-note">俱乐部管理员审核通过后，可以为这名队员约课。</view>
+  <view wx:if="{{error}}" class="form-error">{{error}}</view>
+  <view wx:if="{{results.length === 25}}" class="card-note">显示前 25 名，可用球衣号码缩小范围。</view>
+  <view wx:if="{{searched && !results.length}}" class="message">未找到队员，请核对姓名或球衣号码。</view>
+  <view wx:for="{{results}}" wx:key="id" class="list-row player-row"><view class="row-name">{{item.name}}{{item.jerseyNumber ? ' · #' + item.jerseyNumber : ''}}</view>
+    <text wx:if="{{item.linked}}" class="muted">{{item.linked}}</text>
+    <button wx:else size="mini" class="button quiet row-action" data-id="{{item.id}}" bindtap="apply" disabled="{{busy}}">申请关联</button></view>
+</view>

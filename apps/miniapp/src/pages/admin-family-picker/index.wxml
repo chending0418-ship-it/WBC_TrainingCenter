@@ -1,24 +1,24 @@
 <view wx:if="{{authorized}}" class="page-shell">
-  <button size="mini" class="back-link" bindtap="back" hover-class="press"><view class="back-chevron"></view>为家长代约</button>
-  <text class="page-title" role="heading" aria-level="1">选择家长</text>
+  <button size="mini" class="back-link" bindtap="back" hover-class="press"><view class="back-chevron"></view>返回</button>
+  <text class="page-title" role="heading" aria-level="1">选择队员</text>
   <view class="family-search">
     <view class="search-glass"></view>
-    <input value="{{query}}" bindinput="changeQuery" bindconfirm="retry" maxlength="50" confirm-type="search" aria-label="搜索家庭" placeholder="队员姓名、联系人或手机尾号" />
+    <input value="{{query}}" bindinput="changeQuery" bindconfirm="retry" maxlength="50" confirm-type="search" aria-label="搜索队员" placeholder="队员姓名、球衣号码或联系人" />
     <button wx:if="{{query}}" size="mini" class="text-link" bindtap="clear" hover-class="press">清除</button>
   </view>
-  <view wx:if="{{loading}}" class="message">正在查询家庭…</view>
+  <view wx:if="{{loading}}" class="message">正在查询队员…</view>
   <view wx:elif="{{error}}" class="message">
     <text>{{error}}</text><button class="button quiet" bindtap="retry" hover-class="press">重新查询</button>
   </view>
   <block wx:elif="{{hasKeyword}}">
-    <view class="results-heading"><text class="section-title">搜索结果</text><text class="muted">{{matches.length === 50 ? '最多显示 50' : matches.length}} 个家庭</text></view>
+    <view class="results-heading"><text class="section-title">搜索结果</text><text class="muted">{{matches.length === 50 ? '最多显示 50' : matches.length}} 名队员</text></view>
     <view wx:if="{{matches.length}}" class="family-list">
       <button wx:for="{{matches}}" wx:key="id" size="mini" class="family-row" data-id="{{item.id}}" bindtap="choose" hover-class="press">
         <view><view class="row-name">{{item.name}}</view><view class="muted">{{item.contact}}</view></view>
         <view class="family-birth muted">{{item.birthMonth}}生 <view class="chevron"></view></view>
       </button>
     </view>
-    <view class="muted hint">{{matches.length ? '点选家庭后返回代约表单。' : '没有找到已通过队员注册的家庭。'}}</view>
+    <view class="muted hint">{{matches.length ? '点选队员后返回。' : '未找到符合条件的队员。'}}</view>
   </block>
-  <view wx:else class="muted hint">输入关键词查找已通过队员注册的家庭。</view>
+  <view wx:else class="muted hint">输入姓名、球衣号码或联系人信息查找队员。</view>
 </view>

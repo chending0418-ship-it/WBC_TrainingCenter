@@ -6,6 +6,8 @@
     "pages/bookings/index",
     "pages/account/index",
     "pages/child/index",
+    "pages/family/index",
+    "pages/admin-links/index",
     "pages/contact/index",
     "pages/agreements/index",
     "pages/admin/index",

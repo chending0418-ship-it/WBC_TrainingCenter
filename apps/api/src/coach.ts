@@ -78,11 +78,11 @@ export function registerCoachRoutes(app: FastifyInstance, db: DatabaseSync, cloc
       SELECT s.id, 'GROUP' AS type, s.title, s.training_plan AS trainingPlan, s.venue, s.starts_at AS startsAt, s.ends_at AS endsAt, child.name AS childName
       FROM class_coach_assignments a JOIN class_sessions s ON s.id = a.class_id
       LEFT JOIN bookings b ON b.class_id = s.id AND b.status = 'CONFIRMED' AND b.approval_pending = 0
-      LEFT JOIN children child ON child.guardian_id = b.user_id
+      LEFT JOIN children child ON child.player_id = b.player_id
       WHERE a.coach_id = ? AND s.status = 'PUBLISHED' AND s.starts_at >= ? AND s.starts_at < ?
       UNION ALL
       SELECT b.id, 'PRIVATE', b.title, NULL, b.venue, b.starts_at, b.ends_at, child.name
-      FROM bookings b JOIN children child ON child.guardian_id = b.user_id
+      FROM bookings b JOIN children child ON child.player_id = b.player_id
       WHERE b.coach_id = ? AND b.type = 'PRIVATE' AND b.status = 'CONFIRMED' AND b.approval_pending = 0
         AND b.starts_at >= ? AND b.starts_at < ?
       ORDER BY startsAt, id, childName

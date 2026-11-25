@@ -1,0 +1,6 @@
+.player-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.player-row > view { min-width: 0; overflow-wrap: anywhere; }
+.player-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; margin: 12px 0; }
+.player-search .field { width: 100%; }
+.player-row .button, .player-search .button { margin: 0; flex-shrink: 0; }
+.player-row button.button.row-action { margin: 0 0 0 auto; }

@@ -4,3 +4,5 @@
 .price-grid .form-field { margin: 5px 0 14px; }
 .price-grid .field { width: 100%; }
 .price-grid text { display: block; }
+
+.form-field textarea.field { box-sizing: border-box; width: 100%; height: 96px; padding: 8px 12px; }

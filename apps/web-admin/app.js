@@ -1,5 +1,6 @@
 import { html, href, link, title, box, empty, monthDay, weekday, weekdays, datetime } from './ui.js';
 import { exportsPage, roles } from './club.js';
+import { playerLinks } from './player-links.js';
 import { people, person, finance } from './people.js';
 import { schedule, newClass, classTable, classTemplates, classCoaches } from './schedule.js';
 import { coaches, editCoach, courseTypes } from './coaches.js';
@@ -11,9 +12,9 @@ const menu = [
   ['dashboard', '工作台', 'schedule'], ['people', '队员档案', 'parents'], ['finance', '积分调整', 'points'],
   ['schedule', '排课管理', 'schedule'], ['coaches', '教练管理', 'coaches'], ['courseTypes', '课程类型', 'types'],
   ['registrations', '队员注册审核', 'types'], ['bookings', '预约管理', 'bookings'],
-  ['roles', '用户管理', 'parents'], ['exportsPage', '信息导出', 'export']
+  ['playerLinks', '家长关联', 'parents'], ['roles', '用户管理', 'parents'], ['exportsPage', '信息导出', 'export']
 ];
-const pages = { exportsPage, roles, dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
+const pages = { playerLinks, exportsPage, roles, dashboard, people, person, finance, schedule, newClass, classTemplates, classCoaches, privateHours,
   coaches, editCoach, courseTypes, registrations, bookings, newBooking, bookingDay };
 const workspace = document.querySelector('#workspace');
 const identity = document.querySelector('.admin-label');
@@ -140,19 +141,20 @@ function login() {
 
 async function dashboard(ctx) {
   const { today } = await ctx.api('/context');
-  const [classes, applications, pending] = await Promise.all([
-    ctx.api('/schedule?date=' + today), ctx.api('/registrations?view=pending'), ctx.api('/bookings?pending=1')
+  const [classes, queue] = await Promise.all([
+    ctx.api('/schedule?date=' + today), ctx.api('/overview?queue=1')
   ]);
   const live = classes.filter(row => row.bookable);
-  const first = applications.map(r => r.submittedAt).sort()[0];
+  const { applications,bookings: pending } = queue;
+  const first = applications.first;
   const task = (name, count, destination, action, note, params = {}) => box(name, html`<div class="task-line">
     <b>${count}</b>${link(action, destination, params)}</div><p class="quiet-text">${note}</p>`);
   ctx.show(html`${title('工作台', link('＋ 新增团课', 'newClass', {}, 'wb'))}
     <div class="summary-band"><div><small>今日训练</small><h2>${monthDay(today)} <span>${weekdays[weekday(today)]}</span></h2></div>
     <div><small>团课班次</small><b>${live.length}</b></div><div><small>团课已占名额</small><b>${live.reduce((n, row) => n + row.bookedCount, 0)}</b></div></div>
     ${box('今日排课', classTable(classes.filter(row => row.bookable || row.type === 'PRIVATE')), link('查看周课表', 'schedule'))}
-    <div class="split equal">${task('队员注册审核', applications.length + ' 个待审核申请', 'registrations', '去审核', first ? '最早提交于 ' + datetime(first) : '暂无待审核申请')}
-    ${task('预约审核', pending.length + ' 笔预约待确认', 'bookings', '去确认', pending.length ? '下一节课于 ' + datetime(pending[0].startsAt) + ' 开始' : '暂无待确认预约', { view: 'pending' })}</div>`);
+    <div class="split equal">${task('队员注册审核', applications.total + ' 个待审核申请', 'registrations', '去审核', first ? '最早提交于 ' + datetime(first) : '暂无待审核申请')}
+    ${task('预约审核', pending.total + ' 笔预约待确认', 'bookings', '去确认', pending.first ? '下一节课于 ' + datetime(pending.first) + ' 开始' : '暂无待确认预约', { view: 'pending' })}</div>`);
 }
 
 function navigate(page, params = {}) {

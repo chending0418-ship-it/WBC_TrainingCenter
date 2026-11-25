@@ -9,6 +9,7 @@
     <text class="page-title" role="heading" aria-level="1">{{registration && registration.status === 'APPROVED' ? '队员资料' : '注册队员'}}</text>
     <block wx:if="{{!registration || registration.status !== 'APPROVED'}}">
       <view class="en-hint">填写队员资料，提交给俱乐部审核。</view>
+      <navigator wx:if="{{!registration}}" class="picker" url="/pages/family/index" hover-class="press"><text>队员已有档案？</text><text class="accent">搜索并关联</text></navigator>
       <view class="en-sub">队员资料</view>
     </block>
     <label class="form-field"><text>{{registration && registration.status === 'APPROVED' ? '姓名或昵称' : '队员姓名或昵称'}}</text>

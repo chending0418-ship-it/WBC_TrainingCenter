@@ -48,8 +48,8 @@ export async function newBooking(ctx) {
   const requested = ctx.query.get('date');
   const date = requested >= today && requested <= lastDate ? requested : today;
   const familyForm = html`<div class="form-pad">
-    ${field('搜索家庭', 'q', '', { type: 'search', required: false, maxLength: 50, placeholder: '队员姓名、联系人或手机号后四位' })}
-    ${select('已通过注册的家庭', 'family', [], '')}<p class="secondary" data-family-info aria-live="polite"></p></div>`;
+    ${field('搜索队员', 'q', '', { type: 'search', required: false, maxLength: 50, placeholder: '队员姓名、联系人或手机号后四位' })}
+    ${select('已通过注册的队员', 'family', [], '')}<p class="secondary" data-family-info aria-live="polite"></p></div>`;
   const bookingForm = html`<form class="form-pad"><div class="form-grid">
     ${select('预约类型', 'type', [['GROUP', '团课'], ['PRIVATE', '私教']], 'GROUP')}
     ${field('开课日期', 'date', date, { type: 'date', min: today, max: lastDate })}</div>
@@ -58,7 +58,7 @@ export async function newBooking(ctx) {
     ${select('可约课程或时段', 'choice', [], '')}
     ${buttons(html`<button type="submit" class="wb" disabled>核对代约</button>`)}</form>`;
   const root = ctx.show(html`${title('管理员代约', link('返回预约管理', 'bookingDay', { date }))}
-    <div class="split finance">${box('选择家庭', familyForm)}${box('选择课程', bookingForm)}</div>`);
+    <div class="split finance">${box('选择队员', familyForm)}${box('选择课程', bookingForm)}</div>`);
   if (!root) return;
   const form = root.querySelector('form');
   const controls = form.elements;
@@ -80,7 +80,7 @@ export async function newBooking(ctx) {
     const rows = await ctx.api('/parents?status=APPROVED&q=' + encodeURIComponent(search.value.trim()));
     if (!ctx.active() || version !== familyVersion) return;
     families = rows;
-    familySelect.innerHTML = html`${options([['', rows.length ? '请选择家庭' : '没有匹配的已注册家庭'], ...rows.map(r => [r.id, familyLabel(r)])], '')}`.value;
+    familySelect.innerHTML = html`${options([['', rows.length ? '请选择队员' : '没有匹配的已注册队员'], ...rows.map(r => [r.id, familyLabel(r)])], '')}`.value;
     sync();
   }
   search.oninput = () => {

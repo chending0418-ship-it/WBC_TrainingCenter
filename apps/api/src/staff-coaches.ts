@@ -6,8 +6,12 @@ import { audit, transaction } from './database.ts';
 import { integer, requiredText } from './input.ts';
 
 export function coachDraft(body: Record<string, unknown>) {
-  const { privateCourseTypeId } = body;
+  const { privateCourseTypeId, introduction } = body;
+  if (introduction !== undefined && (typeof introduction !== 'string' || introduction.length > 500)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', '教练介绍最多可填写 500 字');
+  }
   return {
+    ...(introduction === undefined ? {} : { introduction: introduction.trim() }),
     name: requiredText(body.name, 40),
     pointsPerSlot: integer(body.pointsPerSlot, 1, 25000, '每 60 分钟积分须为 1 至 25000 的整数'),
     points90: body.points90 === undefined ? undefined : integer(body.points90, 1, 37500, '90 分钟积分须为 1 至 37500 的整数'),
@@ -26,11 +30,11 @@ function requirePrivateType(db: DatabaseSync, id: string | null) {
   }
 }
 
-export function listCoaches(db: DatabaseSync): ManagedCoach[] {
+export function listCoaches(db: DatabaseSync, id?: string): ManagedCoach[] {
   const rows = db.prepare(`
-    SELECT id, name, points_per_slot AS pointsPerSlot, points_90 AS points90, points_120 AS points120, enabled, private_course_type_id AS privateCourseTypeId
-    FROM coaches ORDER BY enabled DESC, name
-  `).all() as unknown as (Omit<ManagedCoach, 'enabled'> & { enabled: number })[];
+    SELECT id, name, introduction, points_per_slot AS pointsPerSlot, points_90 AS points90, points_120 AS points120, enabled, private_course_type_id AS privateCourseTypeId
+    FROM coaches ${id ? 'WHERE id=?' : ''} ORDER BY enabled DESC, name
+  `).all(...(id ? [id] : [])) as unknown as (Omit<ManagedCoach, 'enabled'> & { enabled: number })[];
   return rows.map(row => ({ ...row, enabled: row.enabled === 1 }));
 }
 
@@ -44,10 +48,10 @@ export function addCoach(db: DatabaseSync, draft: ReturnType<typeof coachDraft>,
   // Older clients supply only the base price when creating a coach.
   const points90 = draft.points90 ?? Math.round(draft.pointsPerSlot * 1.5);
   const points120 = draft.points120 ?? draft.pointsPerSlot * 2;
-  db.prepare(`INSERT INTO coaches (id, name, points_per_slot, points_90, points_120, private_course_type_id)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(id, draft.name, draft.pointsPerSlot, points90, points120, privateCourseTypeId);
+  db.prepare(`INSERT INTO coaches (id, name, points_per_slot, points_90, points_120, private_course_type_id, introduction)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, draft.name, draft.pointsPerSlot, points90, points120, privateCourseTypeId, draft.introduction ?? '');
   audit(db, actor, 'COACH_CREATED', id, now);
-  return { id, ...draft, points90, points120, privateCourseTypeId, enabled: true };
+  return { id, ...draft, introduction: draft.introduction ?? '', points90, points120, privateCourseTypeId, enabled: true };
 }
 
 export function updateCoach(db: DatabaseSync, id: string, draft: ReturnType<typeof coachDraft>, enabled: boolean,
@@ -67,8 +71,8 @@ export function updateCoach(db: DatabaseSync, id: string, draft: ReturnType<type
       ? coach.private_course_type_id as string | null : draft.privateCourseTypeId;
     requirePrivateType(db, privateCourseTypeId);
     db.prepare(`UPDATE coaches SET name = ?, points_per_slot = ?, points_90 = COALESCE(?, points_90),
-      points_120 = COALESCE(?, points_120), enabled = ?, private_course_type_id = ? WHERE id = ?`)
-      .run(draft.name, draft.pointsPerSlot, draft.points90 ?? null, draft.points120 ?? null, Number(enabled), privateCourseTypeId, id);
+      points_120 = COALESCE(?, points_120), enabled = ?, private_course_type_id = ?, introduction = COALESCE(?, introduction) WHERE id = ?`)
+      .run(draft.name, draft.pointsPerSlot, draft.points90 ?? null, draft.points120 ?? null, Number(enabled), privateCourseTypeId, draft.introduction ?? null, id);
     audit(db, actor, 'COACH_UPDATED', id, now);
   });
 }

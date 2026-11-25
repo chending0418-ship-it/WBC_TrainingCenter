@@ -1,10 +1,20 @@
 import { DatabaseSync } from 'node:sqlite';
+import { migratePlayers } from './player-migration.ts';
 import { addDays, dateAt, venueDate } from './time.ts';
 
 export const privateVenue = '训练室 B';
 
 export function openDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
+  db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL');
+  if (Number(db.prepare('PRAGMA user_version').get()?.user_version) < 20) {
+    initializeLegacySchema(db);
+    migratePlayers(db);
+  }
+  return db;
+}
+
+export function initializeLegacySchema(db: DatabaseSync) {
   db.exec(`
     PRAGMA foreign_keys = ON;
     PRAGMA busy_timeout = 5000;
@@ -398,7 +408,11 @@ export function openDatabase(path: string): DatabaseSync {
       PRAGMA user_version = 18;
     `);
   });
-  return db;
+  transaction(db, () => {
+    if (Number(db.prepare('PRAGMA user_version').get()?.user_version) >= 19) return;
+    db.exec(`ALTER TABLE coaches ADD COLUMN introduction TEXT NOT NULL DEFAULT '';
+      PRAGMA user_version = 19;`);
+  });
 }
 
 export function transaction<T>(db: DatabaseSync, write: () => T): T {
@@ -418,24 +432,27 @@ export const mockProfiles = ['parent', 'other-parent', 'new-parent'] as const;
 export function seedDemo(db: DatabaseSync, now: Date): void {
   transaction(db, () => {
     const user = db.prepare('INSERT OR IGNORE INTO users VALUES (?)');
-    const child = db.prepare('INSERT OR IGNORE INTO children (guardian_id, name, birth_month, gender) VALUES (?, ?, ?, ?)');
+    const child = db.prepare('INSERT OR IGNORE INTO children (player_id, name, birth_month, gender) VALUES (?, ?, ?, ?)');
     const credit = db.prepare(`
-      INSERT OR IGNORE INTO ledger (user_id, source, delta, reason, created_at)
+      INSERT OR IGNORE INTO ledger (player_id, source, delta, reason, created_at)
       VALUES (?, 'SEED', ?, '演示积分入账', ?)
     `);
     for (const profile of mockProfiles) {
       user.run(profile);
+      db.prepare('INSERT OR IGNORE INTO players(id,legacy_parent_id) VALUES (?,?)').run(profile,profile);
       credit.run(profile, 320, now.toISOString());
     }
     child.run('parent', '陈同学', '2016-08', 'MALE');
     child.run('other-parent', '张同学', '2017-03', 'FEMALE');
 
     const seedRegistration = db.prepare(`
-      INSERT OR IGNORE INTO registrations (user_id, status, submitted_at, reviewed_at, revision)
-      VALUES (?, 'APPROVED', ?, ?, lower(hex(randomblob(16))))
+      INSERT OR IGNORE INTO registrations (player_id, submitted_by, status, submitted_at, reviewed_at, revision)
+      VALUES (?, ?, 'APPROVED', ?, ?, lower(hex(randomblob(16))))
     `);
     for (const userId of ['parent', 'other-parent']) {
-      seedRegistration.run(userId, now.toISOString(), now.toISOString());
+      seedRegistration.run(userId, userId, now.toISOString(), now.toISOString());
+      db.prepare(`INSERT OR IGNORE INTO parent_players VALUES (?, ?, 'CREATE', 'APPROVED', lower(hex(randomblob(16))), ?)`)
+        .run(userId, userId, now.toISOString());
     }
 
     // TODO: product decision — 线下实收换算与课程积分定价，以下均为种子数据。

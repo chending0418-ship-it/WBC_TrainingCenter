@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { bookingService } from '../src/booking.ts';
+import { legacyDatabase } from './legacy-database.ts';
 import { openDatabase, seedDemo } from '../src/database.ts';
 import { reviewRegistration, submitRegistration } from '../src/registration.ts';
 import { notificationWorker } from '../src/subscription-worker.ts';
@@ -170,7 +171,7 @@ test('通知与申请、扣分同一事务提交，入队失败后重试只生�
   END`);
   assert.throws(() => submitRegistration(db, 'new-parent', draft, now), /模拟写入失败/);
   assert.throws(() => booking.book('parent', group, 'retry', { staffActor: 'admin-a' }), /模拟写入失败/);
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM registrations WHERE user_id='new-parent'").get()?.n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM registrations WHERE player_id='new-parent'").get()?.n, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM bookings').get()?.n, 0);
   assert.equal(booking.account('parent').balance, 320);
   db.exec('DROP TRIGGER force_failure');
@@ -208,14 +209,15 @@ test('升级已有数据库时保留队员和历史预约，不补发升级前�
   const directory = mkdtempSync(join(tmpdir(), 'wbc-outbox-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const path = join(directory, 'fixture.sqlite');
-  const previous = openDatabase(path);
-  seedDemo(previous, now);
-  bookingService(previous, () => now).book('parent', group, 'old');
+  const previous = legacyDatabase(path,true);
+  previous.exec(`INSERT INTO bookings (id,user_id,type,class_id,coach_id,title,venue,starts_at,ends_at,points,request_key,request_payload,created_at,approval_pending)
+    SELECT 'old','parent','GROUP',id,coach_id,title,venue,starts_at,ends_at,points,'old','{}',starts_at,1 FROM class_sessions;`);
   previous.exec(`
     DROP TRIGGER invalidate_changed_wechat_subscriptions;
     DROP TRIGGER invalidate_deleted_wechat_subscriptions;
     DROP TABLE wechat_subscription_grants;
     DROP TABLE notification_outbox;
+    ALTER TABLE coaches DROP COLUMN introduction;
     ALTER TABLE class_sessions DROP COLUMN training_plan;
     ALTER TABLE class_templates DROP COLUMN training_plan;
     ALTER TABLE children DROP COLUMN jersey_number;
@@ -235,8 +237,8 @@ test('升级已有数据库时保留队员和历史预约，不补发升级前�
   previous.close();
   const migrated = openDatabase(path);
   try {
-    assert.equal(migrated.prepare('PRAGMA user_version').get()?.user_version, 18);
-    assert.equal(migrated.prepare("SELECT status FROM registrations WHERE user_id='parent'").get()?.status, 'APPROVED');
+    assert.equal(migrated.prepare('PRAGMA user_version').get()?.user_version, 20);
+    assert.equal(migrated.prepare("SELECT status FROM registrations WHERE player_id='parent'").get()?.status, 'APPROVED');
     assert.equal(bookingService(migrated, () => now).bookings('parent')[0].status, 'PENDING');
     assert.equal(migrated.prepare('SELECT COUNT(*) AS n FROM notification_outbox').get()?.n, 0);
   } finally { migrated.close(); }

@@ -8,6 +8,8 @@ Page({
     authorized: false, query: '', hasKeyword: false, loading: false, error: '',
     matches: [] as { id: string; name: string; contact: string; birthMonth: string; label: string }[]
   },
+  finance: false,
+  onLoad(options) { this.finance = options.finance === '1'; },
   searchSequence: 0,
   inputTimer: undefined as ReturnType<typeof setTimeout> | undefined,
   onShow() {
@@ -35,7 +37,7 @@ Page({
     this.setData({ query, hasKeyword: Boolean(keyword), loading: Boolean(keyword), matches: [], error: '' });
     if (!keyword) return;
     try {
-      const parents = await staffApi<ManagedParent[]>('/parents?status=APPROVED&q=' + encodeURIComponent(keyword));
+      const parents = await staffApi<ManagedParent[]>(('/parents?' + (this.finance ? 'profile=submitted' : 'status=APPROVED') + '&q=') + encodeURIComponent(keyword));
       if (sequence !== this.searchSequence) return;
       const matches = parents.map(parent => {
         const name = parent.child?.name ?? '';

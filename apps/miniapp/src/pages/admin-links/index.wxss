@@ -1,0 +1,6 @@
+@import "../../registration/players.wxss";
+.link-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.link-actions .button { margin: 0; }
+.card-note { overflow-wrap: anywhere; }
+.button.grant-button { margin: 12px 0 0 auto; }
+.link-actions button.button.row-action { flex: none; margin: 0; }

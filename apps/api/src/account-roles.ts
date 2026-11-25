@@ -5,9 +5,12 @@ import { object, requiredText } from './input.ts';
 
 export function accountRoles(db: DatabaseSync, appId: string, query: string) {
   return db.prepare(`
-    SELECT a.user_id AS id, c.name, a.is_parent AS parent, a.is_admin AS admin, a.coach_id AS coachId
-    FROM wechat_accounts a LEFT JOIN children c ON c.guardian_id = a.user_id
-    WHERE a.app_id = ? AND (instr(a.user_id, ?) OR instr(c.name, ?) OR ? = '')
+    SELECT a.user_id AS id, names.name, a.is_parent AS parent, a.is_admin AS admin, a.coach_id AS coachId
+    FROM wechat_accounts a LEFT JOIN (
+      SELECT l.parent_id,group_concat(c.name,'、') AS name FROM parent_players l JOIN children c USING(player_id)
+      WHERE l.status='APPROVED' GROUP BY l.parent_id
+    ) names ON names.parent_id = a.user_id
+    WHERE a.app_id = ? AND (instr(a.user_id, ?) OR instr(names.name, ?) OR ? = '')
     ORDER BY a.user_id LIMIT 50
   `).all(appId, query, query, query);
 }

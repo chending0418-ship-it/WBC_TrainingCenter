@@ -1,9 +1,7 @@
 <page-meta page-style="{{original ? 'overflow:hidden' : ''}}" />
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">积分调整</text>
-  <picker wx:if="{{users.length}}" range="{{users}}" range-key="label" value="{{userIndex}}" bindchange="changeUser" disabled="{{busy || targetUserId || original}}">
-    <view class="picker"><text class="picker-label">家长账户</text><text class="picker-value">{{users[userIndex].label}}</text><view wx:if="{{!targetUserId}}" class="chevron" aria-hidden="true"></view></view>
-  </picker>
+  <button class="picker" bindtap="pickPlayer" disabled="{{busy || original}}"><text class="picker-label">队员账户</text><text class="picker-value">{{users[0].label || '搜索并选择队员'}}</text><view class="chevron"></view></button>
   <view wx:if="{{loading}}" class="message">正在查询积分账户…</view>
   <view wx:elif="{{error}}" class="message">
     <view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重新查询</button>
@@ -34,9 +32,13 @@
       <picker wx:if="{{source === 'ADJUSTMENT' && direction === -1}}" range="{{training}}" range-key="label" value="{{trainingIndex}}" bindchange="selectTraining" disabled="{{busy}}">
         <view class="picker"><text class="picker-label">关联历史训练（选填）</text><text class="picker-value">{{training[trainingIndex].label}}</text></view>
       </picker>
+      <button wx:if="{{source === 'ADJUSTMENT' && direction === -1 && choiceNext.training !== null}}" class="button quiet row-action" size="mini"
+        bindtap="loadChoices" data-field="training" loading="{{choiceBusy.training}}" disabled="{{busy || choiceBusy.training}}">{{choiceNext.training ? '加载更早的历史训练' : '查询可关联历史训练'}}</button>
       <picker wx:if="{{source === 'ADJUSTMENT'}}" range="{{bookings}}" range-key="label" value="{{bookingIndex}}" bindchange="selectBooking" disabled="{{busy}}">
         <view class="picker"><text class="picker-label">关联预约</text><text class="picker-value">{{bookings[bookingIndex].label}}</text><view class="chevron" aria-hidden="true"></view></view>
       </picker>
+      <button wx:if="{{source === 'ADJUSTMENT' && choiceNext.bookings !== null}}" class="button quiet row-action" size="mini"
+        bindtap="loadChoices" data-field="bookings" loading="{{choiceBusy.bookings}}" disabled="{{busy || choiceBusy.bookings}}">{{choiceNext.bookings ? '加载更早的预约' : '查询可关联预约'}}</button>
       <label class="form-field">
         <text>{{source === 'OFFLINE_CREDIT' ? '充值备注' : '调整原因'}}</text>
         <input class="field" maxlength="100" placeholder="{{source === 'OFFLINE_CREDIT' ? '例如 线下收款' : '填写原因'}}" value="{{reason}}" data-field="reason" bindinput="changeField" disabled="{{busy}}" />
@@ -63,8 +65,9 @@
       <button wx:if="{{item.canReverse}}" class="button quiet row-action" bindtap="startReversal" data-id="{{item.id}}"
         disabled="{{busy}}" aria-label="撤销流水 {{item.id}}" hover-class="press">撤销这笔记录</button>
     </view>
+    <button wx:if="{{nextBefore}}" class="button quiet" bindtap="loadMore">更早的流水</button>
   </block>
-  <view wx:else class="message">还没有可操作的账户。</view>
+  <view wx:else class="message">选择队员后可办理充值或调整积分。</view>
   <view wx:if="{{original}}" class="undo-overlay">
     <form class="undo-panel" bindsubmit="reverse" aria-role="dialog" aria-label="撤销这笔记录">
       <view class="undo-title">撤销这笔记录？</view>

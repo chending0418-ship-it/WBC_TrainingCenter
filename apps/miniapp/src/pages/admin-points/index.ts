@@ -1,5 +1,5 @@
 import { allowPage } from '../../lib/session';
-import type { Booking, ManagedUser, StaffAccount, StaffLedgerSource } from '../../../../../packages/shared/contracts.js';
+import type { StaffAccount, StaffLedgerSource } from '../../../../../packages/shared/contracts.js';
 import { errorMessage } from '../../lib/client';
 import { datetime } from '../../lib/display';
 import { confirmAction, staffApi, staffWrite } from '../../lib/staff';
@@ -10,6 +10,11 @@ const operations = {
   OFFLINE_CREDIT: { action: '确认充值', success: '积分已充值' },
   ADJUSTMENT: { action: '确认调整', success: '积分已调整' },
   REVERSAL: { action: '确认撤销', success: '记录已撤销' }
+};
+type ChoicePage = { rows: { id: string; title: string; startsAt: string }[]; next: string | null };
+const firstChoice = {
+  training: [{ id: '', label: '不关联训练' }],
+  bookings: [{ id: '', label: '无关联预约' }]
 };
 const emptyForm = { points: '', reason: '', reference: '', saveError: '', trainingIndex: 0, bookingIndex: 0, direction: 1, original: null };
 let request = 0;
@@ -30,8 +35,10 @@ Page({
     reservedPoints: 0,
     source: 'OFFLINE_CREDIT' as Exclude<StaffLedgerSource, 'REVERSAL'>,
     action: operations.OFFLINE_CREDIT.action,
-    training: [] as { id: string; label: string }[],
-    bookings: [] as { id: string; label: string }[],
+    ...firstChoice,
+    choiceNext: { training: '', bookings: '' } as Record<'training' | 'bookings', string | null>,
+    choiceBusy: { training: false, bookings: false },
+    nextBefore: null as number | null,
     ledger: [] as Entry[]
   },
   onLoad(options: Record<string, string | undefined>) {
@@ -46,36 +53,30 @@ Page({
     this.setData({ authorized });
     if (authorized && firstShow) void this.load();
   },
-  async load() {
+  load() {
     if (this.data.targetUserId) return this.refreshAccount();
-    const current = ++request;
-    this.setData({ loading: true, error: '' });
-    try {
-      const users = await staffApi<ManagedUser[]>('/users');
-      if (current !== request) return;
-      this.setData({ users: users.map(user => ({ id: user.id, label: user.childName || '未填写孩子资料' })) });
-      await this.refreshAccount();
-    } catch (error) {
-      if (current === request) this.setData({ loading: false, error: errorMessage(error) });
-    }
+    this.setData({ loading: false });
   },
-  async refreshAccount() {
+  pickPlayer() {
+    if (this.data.busy) return;
+    wx.navigateTo({ url: '/pages/admin-family-picker/index?finance=1',events: {
+      familySelected: (player: { id: string; label: string }) => {
+        this.setData({ ...emptyForm, ...firstChoice, choiceNext: { training: '', bookings: '' },
+          choiceBusy: { training: false, bookings: false }, targetUserId: player.id, users: [player], userIndex: 0 });
+        void this.refreshAccount();
+      }
+    } });
+  },
+  async refreshAccount(before?: number) {
     const current = ++request;
     const id = this.data.targetUserId || this.data.users[this.data.userIndex]?.id;
     if (!id) return this.setData({ loading: false });
     this.setData({ loading: true, error: '' });
     try {
       const path = '/accounts/' + encodeURIComponent(id);
-      const [account, bookings, past] = await Promise.all([
-        staffApi<StaffAccount>(path), staffApi<Booking[]>(path + '/bookings'),
-        staffApi<{ id: string; title: string; startsAt: string }[]>('/past-training')
-      ]);
+      const account = await staffApi<StaffAccount>(path + '?limit=25' + (before ? '&before=' + before : ''));
       if (current !== request) return;
-      const choices = bookings.map(booking => ({
-        id: booking.id,
-        label: datetime(booking.startsAt) + ' · ' + booking.title + (booking.status === 'CANCELLED' ? ' · 已取消' : '')
-      }));
-      const labels = new Map(choices.map(item => [item.id, item.label]));
+      const labels = new Map(this.data.bookings.map(item => [item.id, item.label]));
       const ledger = account.ledger.map(entry => ({
         ...entry, dateLabel: datetime(entry.createdAt), deltaLabel: this.signed(entry.delta),
         trainingLabel: entry.trainingStart ? datetime(entry.trainingStart) + ' · ' + entry.trainingTitle : '',
@@ -85,31 +86,48 @@ Page({
       this.setData({
         ...(this.data.targetUserId ? { users: [{ id, label: account.childName || '未填写孩子资料' }] } : {}),
         balance: account.balance - account.reservedPoints, reservedPoints: account.reservedPoints,
-        training: [{ id: '', label: '不关联训练' }, ...past.map(row => ({ id: row.id, label: datetime(row.startsAt) + ' · ' + row.title }))],
-        bookings: [{ id: '', label: '无关联预约' }, ...choices], ledger });
+        ledger: before ? [...this.data.ledger,...ledger] : ledger, nextBefore: account.nextBefore ?? null });
     } catch (error) {
       if (current === request) this.setData({ error: errorMessage(error) });
     } finally {
       if (current === request) this.setData({ loading: false });
     }
   },
+  loadMore() { if (this.data.nextBefore && !this.data.loading) void this.refreshAccount(this.data.nextBefore); },
   signed(value: number): string {
     return (value > 0 ? '+' : '') + value;
-  },
-  changeUser(event: WechatMiniprogram.PickerChange) {
-    if (this.data.userIndex === Number(event.detail.value)) return;
-    this.setData({ ...emptyForm, userIndex: Number(event.detail.value), source: 'OFFLINE_CREDIT', action: operations.OFFLINE_CREDIT.action });
-    void this.refreshAccount();
   },
   setMode(event: WechatMiniprogram.TouchEvent) {
     if (this.data.busy) return;
     const source = event.currentTarget.dataset.source as 'OFFLINE_CREDIT' | 'ADJUSTMENT';
-    if (this.data.source !== source) this.setData({ ...emptyForm, source, action: operations[source].action });
+    if (this.data.source !== source) {
+      this.setData({ ...emptyForm,source,action: operations[source].action });
+    }
   },
   setDirection(event: WechatMiniprogram.TouchEvent) {
     const direction = Number(event.currentTarget.dataset.direction);
     if (this.data.busy || this.data.direction === direction || (direction !== 1 && direction !== -1)) return;
     this.setData({ direction, saveError: '' });
+
+  },
+  async loadChoices(event: WechatMiniprogram.TouchEvent) {
+    const field = event.currentTarget.dataset.field as 'training' | 'bookings';
+    const player = this.data.targetUserId;
+    const cursor = this.data.choiceNext[field];
+    if (!player || this.data.choiceBusy[field] || cursor === null) return;
+    this.setData({ ['choiceBusy.' + field]: true });
+    try {
+      const path = field === 'training' ? '/past-training' : '/accounts/' + encodeURIComponent(player) + '/bookings';
+      const result = await staffApi<ChoicePage>(path + '?view=choices' + (cursor ? '&after=' + encodeURIComponent(cursor) : ''));
+      if (player !== this.data.targetUserId) return;
+      if (!result.rows.length) wx.showToast({ title: '暂无可关联的记录', icon: 'none' });
+      const options = result.rows.map(row => ({ id: row.id, label: datetime(row.startsAt) + ' · ' + row.title }));
+      this.setData({ [field]: [...this.data[field], ...options], ['choiceNext.' + field]: result.next });
+    } catch (error) {
+      if (player === this.data.targetUserId) wx.showToast({ title: errorMessage(error), icon: 'none' });
+    } finally {
+      if (player === this.data.targetUserId) this.setData({ ['choiceBusy.' + field]: false });
+    }
   },
   selectTraining(event: WechatMiniprogram.PickerChange) {
     this.setData({ trainingIndex: Number(event.detail.value) });
