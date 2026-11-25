@@ -164,16 +164,12 @@ aside {
   padding: 20px 28px;
   margin-bottom: 16px;
 }
-.summary-band>div {
-  width: 28%;
-  border-left: 1px solid #ae7583;
-  padding-left: 26px;
-}
-.summary-band>div:first-child {
-  width: 44%;
-  border: 0;
-  padding: 0;
-}
+.week-head { flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.week-head h2 { font-size: 22px; }
+.week-controls { gap: 8px; }
+.week-current { padding: 0 8px; color: var(--wine); font-weight: 650; }
+.summary-band>div { flex: 1; padding-left: 24px; border-left: 1px solid #ae7583; }
+.summary-band>div:first-child { border: 0; padding-left: 0; }
 .summary-band small {
   color: #f2dce1;
   font-size: 14px;

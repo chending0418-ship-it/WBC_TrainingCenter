@@ -7,49 +7,28 @@
   color: #fff;
 }
 
-.overview-today, .pending {
-  box-sizing: border-box;
-  flex: 1;
-  padding: 0 3.7333vw;
+.week-heading, .week-controls, .week-lesson { display: flex; align-items: center; }
+.week-heading { flex-wrap: wrap; justify-content: space-between; gap: 4px; margin-bottom: 8px; }
+.week-range { font-size: 17px; font-weight: 650; }
+.week-controls button, button.agenda-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: auto; min-width: 44px; min-height: 44px; padding: 0 5px; margin: 0;
+  color: #761f32; background: transparent; font-size: 14px; line-height: 1.4;
 }
-
-.pending {
-  border-left: 1px solid #98566a;
-}
-
-.overview-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 3.7333vw;
-  font-weight: 650;
-}
-
-.today-counts {
-  display: block;
-  margin-top: 1.0667vw;
-  color: #f8e9ec;
-  font-size: 3.2vw;
-  line-height: 1.55;
-}
-
-.pending-number {
-  display: block;
-  margin-top: 0.5333vw;
-  font-size: 6.9333vw;
-  line-height: 1.35;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.arrow {
-  width: 1.6vw;
-  height: 1.6vw;
-  border-top: 2px solid currentColor;
-  border-right: 2px solid currentColor;
-  transform: rotate(45deg);
-}
-
+.week-controls button::after, .agenda-toggle::after { border: 0; }
+.week-controls .week-step { font-size: 23px; }
+.week-controls button[disabled] { color: #66595c; }
+.metric { flex: 1; padding-left: 14px; border-left: 1px solid #99596a; }
+.metric:first-child { border: 0; }
+.metric text { display: block; font-size: 13px; }
+.metric text + text { margin-top: 3px; font-size: 25px; font-weight: 700; }
+button.agenda-toggle { width: 100%; justify-content: space-between; padding: 8px 0; }
+.agenda-toggle text:first-child, .week-day { color: #272327; font-weight: 650; }
+.week-agenda { padding-bottom: 8px; }
+.week-day { margin: 8px 0 4px; }
+.week-lesson { gap: 12px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid #e9e2df; }
+.week-lesson > text { flex-shrink: 0; }
+.week-empty { padding: 12px 0 0; color: #66595c; }
 .shortcuts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -98,7 +77,5 @@
 .registration-shortcut .chevron { margin-left: 8px; }
 .registration-pending { margin-left: auto; color: #761f32; font-size: 14px; font-weight: 500; }
 
-.overview-label { font-size: 14px; }
-.today-counts { font-size: 13px; }
 .shortcut { min-height: 76px; }
 .shortcut-label { font-size: 14px; }

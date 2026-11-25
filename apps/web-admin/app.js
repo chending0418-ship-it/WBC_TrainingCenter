@@ -1,4 +1,4 @@
-import { html, href, link, title, box, empty, monthDay, weekday, weekdays, datetime } from './ui.js';
+import { html, href, link, title, box, empty, monthDay, datetime, addDays, mondayOfWeek } from './ui.js';
 import { exportsPage, roles } from './club.js';
 import { playerLinks } from './player-links.js';
 import { people, person, finance } from './people.js';
@@ -162,18 +162,32 @@ function login() {
 
 async function dashboard(ctx) {
   const { today } = await ctx.api('/context');
+  const anchor = ctx.query.get('week') || today;
+  const firstDay = mondayOfWeek(anchor) || mondayOfWeek(today);
+  const lastDay = addDays(firstDay, 6);
+  const currentWeek = firstDay === mondayOfWeek(today);
   const [classes, queue] = await Promise.all([
-    ctx.api('/schedule?date=' + today), ctx.api('/overview?queue=1')
+    ctx.api('/schedule?view=week&date=' + firstDay), ctx.api('/overview?queue=1')
   ]);
-  const live = classes.filter(row => row.bookable);
-  const { applications,bookings: pending } = queue;
+  const lessons = classes.filter(row => row.type === 'PRIVATE' || row.bookable);
+  const groups = lessons.filter(row => row.type === 'GROUP');
+  const { applications, bookings: pending } = queue;
   const first = applications.first;
   const task = (name, count, destination, action, note, params = {}) => box(name, html`<div class="task-line">
     <b>${count}</b>${link(action, destination, params)}</div><p class="quiet-text">${note}</p>`);
-  ctx.show(html`${title('工作台', link('＋ 新增团课', 'newClass', {}, 'wb'))}
-    <div class="summary-band"><div><small>今日训练</small><h2>${monthDay(today)} <span>${weekdays[weekday(today)]}</span></h2></div>
-    <div><small>团课班次</small><b>${live.length}</b></div><div><small>团课已占名额</small><b>${live.reduce((n, row) => n + row.bookedCount, 0)}</b></div></div>
-    ${box('今日排课', classTable(classes.filter(row => row.bookable || row.type === 'PRIVATE')), link('查看周课表', 'schedule'))}
+  const weekLink = (label, offset) => link(label, 'dashboard', { week: addDays(firstDay, offset) }, 'wb outline');
+  const controls = html`<nav class="buttons week-controls" aria-label="工作台周次">
+    ${weekLink('上一周', -7)}${currentWeek ? html`<span class="week-current" aria-current="date">本周</span>` : link('回到本周', 'dashboard', {}, 'wb outline')}${weekLink('下一周', 7)}
+    </nav>`;
+  const year = date => date.slice(0, 4);
+  const range = (year(firstDay) !== year(today) ? year(firstDay) + '年' : '') + monthDay(firstDay) + ' — ' +
+    (year(firstDay) !== year(lastDay) ? year(lastDay) + '年' : '') + monthDay(lastDay);
+  ctx.show(html`${title('工作台', link('＋ 新增团课', 'newClass', { date: firstDay > today ? firstDay : today }, 'wb'))}
+    <div class="section-head week-head"><h2>${range}</h2>${controls}</div>
+    <div class="summary-band"><div><small>团课班次</small><b>${groups.length}</b></div>
+    <div><small>团课已占名额</small><b>${groups.reduce((n, row) => n + row.bookedCount, 0)}</b></div>
+    <div><small>已确认私教</small><b>${lessons.length - groups.length}</b></div></div>
+    ${box('周排课', lessons.length ? classTable(lessons, undefined, true) : empty('这周暂无排课'), link('查看周课表', 'schedule', { date: currentWeek ? today : firstDay }))}
     <div class="split equal">${task('队员注册审核', applications.total + ' 个待审核申请', 'registrations', '去审核', first ? '最早提交于 ' + datetime(first) : '暂无待审核申请')}
     ${task('预约审核', pending.total + ' 笔预约待确认', 'bookings', '去确认', pending.first ? '下一节课于 ' + datetime(pending.first) + ' 开始' : '暂无待确认预约', { view: 'pending' })}</div>`);
 }
