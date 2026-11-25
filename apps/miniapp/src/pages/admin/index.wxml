@@ -1,22 +1,42 @@
 <view wx:if="{{authorized}}" class="page-shell">
   <text class="page-title" role="heading" aria-level="1">俱乐部管理员</text>
-  <view class="overview">
-    <view class="overview-today">
-      <text class="overview-label">今日训练</text>
-      <view wx:if="{{overview}}" class="today-counts"><view>{{overview.todayClasses}} 个团课班次</view><view>{{overview.todayAppointments}} 笔已确认预约</view></view>
-      <text wx:else class="today-counts">{{error ? '暂无统计数据' : '正在加载统计…'}}</text>
+  <view class="week-heading">
+    <text class="week-range">{{weekLabel || '周排课'}}</text>
+    <view wx:if="{{weekStart}}" class="week-controls">
+      <button size="mini" class="week-step" data-step="-1" bindtap="changeWeek" aria-label="上一周">‹</button>
+      <button size="mini" class="week-reset" data-step="0" bindtap="changeWeek" disabled="{{weekStart === thisWeek}}">{{weekStart === thisWeek ? '本周' : '回到本周'}}</button>
+      <button size="mini" class="week-step" data-step="1" bindtap="changeWeek" aria-label="下一周">›</button>
     </view>
-    <navigator class="pending" url="/pages/admin-bookings/index?pending=1" hover-class="press">
-      <view class="overview-label">待确认预约<text class="arrow" aria-hidden="true"></text></view>
-      <text class="pending-number">{{overview ? overview.pending : '—'}}</text>
-    </navigator>
+  </view>
+  <view class="overview">
+    <view class="metric"><text>团课班次</text><text>{{loading || error ? '—' : groupCount}}</text></view>
+    <view class="metric"><text>团课已占名额</text><text>{{loading || error ? '—' : occupied}}</text></view>
+    <view class="metric"><text>已确认私教</text><text>{{loading || error ? '—' : privateCount}}</text></view>
   </view>
   <view wx:if="{{error}}" class="message">
-    <view>统计更新失败。{{error}}</view>
+    <view>周统计更新失败。{{error}}</view>
     <button class="button quiet" bindtap="refresh" hover-class="press">重试</button>
   </view>
+  <view wx:elif="{{loading}}" class="week-empty">正在读取周排课…</view>
+  <view wx:elif="{{!days.length}}" class="week-empty">这周暂无排课</view>
+  <block wx:else>
+    <button size="mini" class="agenda-toggle" bindtap="toggleAgenda" aria-expanded="{{agendaOpen}}">
+      <text>周排课</text><text>{{agendaOpen ? '收起' : '查看 ' + (groupCount + privateCount) + ' 节课'}}</text>
+    </button>
+    <view wx:if="{{agendaOpen}}" class="week-agenda">
+      <view wx:for="{{days}}" wx:key="date" wx:for-item="day">
+        <view class="week-day">{{day.label}}</view>
+        <view wx:for="{{day.lessons}}" wx:key="id" class="week-lesson">
+          <text>{{item.time}}</text><view>{{item.title}}<view class="muted">{{item.venue}}</view></view>
+        </view>
+      </view>
+    </view>
+  </block>
+  <navigator class="registration-shortcut" url="/pages/admin-bookings/index?pending=1" hover-class="press">
+    <text>预约审核</text><text class="registration-pending">{{queue ? queue.bookings.total + ' 笔待确认' : '查看'}}</text><view class="chevron" aria-hidden="true"></view>
+  </navigator>
   <navigator class="registration-shortcut" url="/pages/admin-registrations/index" hover-class="press">
-    <text>队员注册审核</text><text class="registration-pending">{{overview ? overview.pendingRegistrations + ' 个待审核' : '查看'}}</text><view class="chevron" aria-hidden="true"></view>
+    <text>队员注册审核</text><text class="registration-pending">{{queue ? queue.applications.total + ' 个待审核' : '查看'}}</text><view class="chevron" aria-hidden="true"></view>
   </navigator>
   <view class="shortcuts">
     <navigator wx:for="{{shortcuts}}" wx:key="page" class="shortcut" url="/pages/{{item.page}}/index" hover-class="press">

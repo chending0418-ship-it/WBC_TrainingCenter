@@ -58,6 +58,10 @@ export function addDays(date, amount) {
   day.setUTCDate(day.getUTCDate() + amount);
   return day.toISOString().slice(0, 10);
 }
+export function mondayOfWeek(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || addDays(date, 0) !== date) return;
+  return addDays(date, -((weekday(date) + 6) % 7));
+}
 function shanghai(iso) { return new Date(Date.parse(iso) + 8 * 3600000).toISOString(); }
 export const time = iso => shanghai(iso).slice(11, 16);
 export const datetime = iso => monthDay(shanghai(iso)) + ' ' + time(iso);

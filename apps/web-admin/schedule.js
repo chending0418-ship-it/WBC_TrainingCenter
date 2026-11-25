@@ -1,12 +1,12 @@
 import { addDays, box, buttons, coach, confirmAction, details, field, filter, href, hours, html, link, monthDay,
-  select, submit, table, title, weekday, weekdays } from './ui.js';
+  select, submit, table, title, weekday, weekdays, mondayOfWeek } from './ui.js';
 
 function assignedCoaches(row) {
   return row.coachIds?.length ? row.coachIds : [row.coachId];
 }
 
-export function classTable(classes, editDate) {
-  return table(['时段', '课程', '教练', '训练场地', '已占 / 容量', '已确认队员', ...(editDate ? ['操作'] : [])], classes.map(row => {
+export function classTable(classes, editDate, showDate = false) {
+  return table([...(showDate ? ['日期'] : []), '时段', '课程', '教练', '训练场地', '已占 / 容量', '已确认队员', ...(editDate ? ['操作'] : [])], classes.map(row => {
     const label = coach(row.coachName);
     const privateLesson = row.type === 'PRIVATE';
     const editable = !privateLesson && editDate && Date.parse(row.startsAt) > Date.now();
@@ -14,7 +14,7 @@ export function classTable(classes, editDate) {
     const names = privateLesson ? row.childName : row.attendees.map(person => person.childName).join('、');
     const name = row.title + (privateLesson || row.bookable ? '' : '（已停开）');
     const course = row.trainingPlan ? html`${name}<details><summary>训练计划</summary><div class="plan-text">${row.trainingPlan}</div></details>` : name;
-    return [hours(row), course, cell, row.venue,
+    return [...(showDate ? [monthDay(row.date) + ' ' + weekdays[weekday(row.date)]] : []), hours(row), course, cell, row.venue,
       privateLesson ? '1 / 1' : row.bookedCount + ' / ' + row.capacity, names || '暂无已确认队员', ...(editDate ? [Date.parse(row.startsAt) > Date.now()
         ? html`<button type="button" class="txt" data-delete="${row.id}">删除课程</button>` : '—'] : [])];
   }), '当天暂无课程');
@@ -59,9 +59,9 @@ function validDate(date) {
 export async function schedule(ctx) {
   const context = await ctx.api('/context');
   const date = validDate(ctx.query.get('date')) ? ctx.query.get('date') : context.today;
-  const first = addDays(date, -((weekday(date) + 6) % 7));
+  const first = mondayOfWeek(date) || mondayOfWeek(context.today);
   const days = Array.from({ length: 7 }, (_, i) => addDays(first, i));
-  const all = await ctx.api('/schedule?view=week&date=' + first, true);
+  const all = await ctx.api('/schedule?view=week&date=' + first);
   const selectedCoach = ctx.query.get('coach') || '';
   const classes = all.filter(row => !selectedCoach || assignedCoaches(row).includes(selectedCoach));
   const dayUrl = target => href('schedule', { date: target, coach: selectedCoach });
