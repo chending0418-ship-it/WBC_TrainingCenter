@@ -32,7 +32,8 @@ export async function registrations(ctx) {
   const list = selectableTable(['队员', '联系人 · 尾号', '提交时间'], rows, selected, row =>
     [phoneTail(row.contact), datetime(row.submittedAt)], processed ? '暂无已处理申请' : '暂无待审核申请');
   const info = selected ? html`${details([
-    ['队员姓名', selected.name], ['出生年月', selected.child.birthMonth], ['性别', gender(selected.child.gender)],
+    ['队员姓名', selected.name], ...(selected.child.jerseyNumber ? [['背号', selected.child.jerseyNumber]] : []),
+    ['出生年月', selected.child.birthMonth], ['性别', gender(selected.child.gender)],
     ['申请家长',selected.parentName || '未填写称呼'], ['识别尾号',selected.wechatIdHint], ['联系人', selected.contact?.name], ['联系电话', maskedPhone(selected.contact?.phone)], ['申请状态', stamp(regLabels[selected.status])],
     ...(selected.reason ? [['退回原因', selected.reason]] : []),
     ...(selected.reviewedAt ? [['审核时间', datetime(selected.reviewedAt)]] : [])

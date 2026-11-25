@@ -11,3 +11,7 @@
 .registration-pickers .chevron, .registration-pickers picker > .picker::after { display: none; }
 .approved-editor .page-title { margin-bottom: 19px; }
 .approved-editor .en-actions { margin-top: 12px; }
+
+.approved-state { margin-top: 0; padding: 10px 14px; }
+.approved-state .en-state-title { font-size: 15px; }
+.approved-state .en-state-note { margin-top: 2px; }

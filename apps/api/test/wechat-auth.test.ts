@@ -32,7 +32,7 @@ async function select(app: FastifyInstance, token: string, role: RoleSession['ro
 test('wechat login uses server config, binds existing identities and issues role-scoped sessions', async context => {
   const db = openDatabase(':memory:');
   const used = new Set<string>();
-  const codes = new Map([['parent-one', 'parent_openid'], ['parent-two', 'parent_openid'], ['coach', 'coach_openid'], ['admin-again', 'parent_openid']]);
+  const codes = new Map([['parent-one', 'parent_openid'], ['parent-two', 'parent_openid'], ['coach', 'coach_openid'], ['coach-bound', 'coach_openid'], ['admin-again', 'parent_openid']]);
   const config = wechatLoginConfig(appId, secret, async input => {
     assert.ok(input instanceof URL);
     assert.equal(input.origin + input.pathname, 'https://api.weixin.qq.com/sns/jscode2session');
@@ -49,7 +49,8 @@ test('wechat login uses server config, binds existing identities and issues role
   context.after(() => app.close());
   const first = await login(app, 'parent-one');
   assert.deepEqual(first.roles, ['PARENT']);
-  assert.deepEqual(Object.keys(first).sort(), ['accountId', 'roles', 'token']);
+  assert.deepEqual(Object.keys(first).sort(), ['accountId', 'hasCoachProfile', 'roles', 'token']);
+  assert.equal(first.hasCoachProfile, false);
   assert.equal(db.prepare('SELECT token_hash FROM wechat_sessions').get()?.token_hash === first.token, false);
   assert.equal((await app.inject({
     method: 'POST', url: '/api/auth/wechat', payload: { code: 'parent-one' }
@@ -68,6 +69,7 @@ test('wechat login uses server config, binds existing identities and issues role
   const second = await login(app, 'parent-two');
   assert.equal(second.accountId, first.accountId);
   assert.deepEqual(second.roles, ['PARENT', 'COACH', 'ADMIN']);
+  assert.equal(second.hasCoachProfile, false);
   const admin = await select(app, second.token, 'ADMIN');
   const create = await app.inject({
     method: 'POST', url: '/api/admin/coaches', headers: headers(admin.token),
@@ -109,6 +111,7 @@ test('wechat login uses server config, binds existing identities and issues role
 
   const coachAccount = await login(app, 'coach');
   changeWechatRole(db, appId, coachAccount.accountId, 'bind-coach', coachId, now.toISOString());
+  assert.equal((await login(app, 'coach-bound')).hasCoachProfile, true);
   assert.throws(() => changeWechatRole(db, appId, first.accountId, 'bind-coach', coachId, now.toISOString()),
     { code: 'COACH_ALREADY_BOUND' });
   const coach = await select(app, coachAccount.token, 'COACH');

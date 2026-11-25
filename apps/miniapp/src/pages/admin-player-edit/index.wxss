@@ -2,3 +2,6 @@
 .editor-panel .field { width: 100%; }
 .guardian-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid #ece6e3; }
 .guardian-line button.button { width: auto; flex: none; margin: 0; min-height: 34px; padding: 6px 10px; font-size: 13px; }
+
+.guardian-caption { margin-bottom: 2px; color: #66595c; font-size: 13px; }
+.guardian-line { min-height: 40px; }

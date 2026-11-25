@@ -561,9 +561,13 @@ test('注册退回、重新提交和重复审核保持同一申请版本及预�
   })).json<{ id: string }[]>().map(row => row.id);
   assert.deepEqual(await directory('submitted'), []);
   assert.deepEqual(await directory('missing'), ['new-parent']);
-  const draft = { child, contact };
+  for (const jerseyNumber of ['12345', 'A7', -1]) {
+    assert.equal((await submit({ child: { ...child, jerseyNumber } })).statusCode, 400);
+  }
+  const draft = { child: { ...child, jerseyNumber: '007' }, contact };
   const pending = (await submit(draft)).json<Registration>();
   assert.equal(pending.status, 'PENDING');
+  assert.equal(pending.child.jerseyNumber, '007');
   assert.deepEqual(await directory('submitted'), ['new-parent']);
   assert.deepEqual(await directory('missing'), []);
   assert.equal((await submit(draft)).json().revision, pending.revision);
@@ -581,13 +585,19 @@ test('注册退回、重新提交和重复审核保持同一申请版本及预�
   assert.equal((await review(returned)).json().revision, firstReview.revision);
   assert.equal((await review({ decision: 'APPROVE', revision: pending.revision })).statusCode, 409);
   assert.equal((await submit({ ...draft, revision: pending.revision })).statusCode, 409);
-  const correction = { ...draft, child: { ...child, birthMonth: '2016-09' }, revision: firstReview.revision };
+  const correction = { ...draft, child: { ...child, birthMonth: '2016-09', jerseyNumber: '' }, revision: firstReview.revision };
   const updated = (await submit(correction)).json<Registration>();
   assert.equal(updated.status, 'PENDING');
+  assert.equal(updated.child.jerseyNumber, undefined);
   assert.notEqual(updated.revision, pending.revision);
   assert.equal((await review(returned)).statusCode, 409);
   const approved = (await review({ decision: 'APPROVE', revision: updated.revision })).json<Registration>();
   assert.equal(approved.child.birthMonth, '2016-09');
+  const jerseyUrl = '/api/admin/parents/new-parent/jersey';
+  assert.equal((await app.inject({ method: 'PUT', url: jerseyUrl, headers: admin, payload: { number: '09' } })).statusCode, 204);
+  const existing = { child: { ...child, birthMonth: '2016-09' }, revision: approved.revision };
+  assert.equal((await submit(existing)).json().child.jerseyNumber, '09');
+  assert.equal((await submit({ ...existing, child: { ...existing.child, jerseyNumber: '12' } })).statusCode, 403);
   assert.equal((await search('APPROVED'))[0].registrationStatus, 'APPROVED');
   assert.equal((await book(app, parent, group, 'approved')).statusCode, 200);
   assert.equal((await search('APPROVED'))[0].reservedPoints, 40);

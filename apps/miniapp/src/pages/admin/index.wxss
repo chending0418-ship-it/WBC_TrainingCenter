@@ -97,3 +97,8 @@
 .registration-shortcut { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 12px 14px; background: white; border: 1px solid #ded5d3; border-radius: 10px; font-weight: 650; }
 .registration-shortcut .chevron { margin-left: 8px; }
 .registration-pending { margin-left: auto; color: #761f32; font-size: 14px; font-weight: 500; }
+
+.overview-label { font-size: 14px; }
+.today-counts { font-size: 13px; }
+.shortcut { min-height: 76px; }
+.shortcut-label { font-size: 14px; }

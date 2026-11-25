@@ -1,0 +1,3 @@
+
+.booking-state { padding: 2px 8px; border-radius: 5px; background: #f4eeeb; color: #614a50; }
+.lesson-card .card-footer { text-align: right; }

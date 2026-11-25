@@ -1,18 +1,4 @@
-.balance {
-  padding: 15px 17px;
-  border-radius: 11px;
-  background: #761f32;
-  color: #fff;
-}
-
-.balance-number {
-  display: block;
-  margin: 2px 0 5px;
-  font-size: 36px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
-
-.balance > view:last-child:not(:first-child) { font-size: 13px; color: #f8e9ec; }
+.balance { padding: 16px 18px; border-radius: 12px; background: #761f32; color: #fff; }
+.balance-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; }
+.balance-number { font-size: 34px; font-weight: 700; line-height: 1.15; }
+.balance-reserved { border-top: 1px solid #9a5564; margin-top: 12px; padding-top: 10px; font-size: 13px; color: #fff3f5; }

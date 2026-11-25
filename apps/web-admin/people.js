@@ -156,8 +156,8 @@ export async function finance(ctx) {
     ['调整', href('finance', { id: family.id, mode: 'adjust' }), adjusting]
   ])}<form class="form-pad">
     ${adjusting ? select('调整方向', 'direction', [['1', '增加'], ['-1', '扣减']], '1') : ''}
-    ${field(adjusting ? '调整积分' : '充值积分', 'points', '', { type: 'number', min: 1, max: 100000 })}
-    ${field(adjusting ? '调整原因' : '充值备注', 'reason')}
+    ${field(adjusting ? '调整积分（必填）' : '充值积分（必填）', 'points', '', { type: 'number', min: 1, max: 100000 })}
+    ${field(adjusting ? '调整原因（必填）' : '充值备注（必填）', 'reason')}
     ${adjusting ? html`<div>${select('关联预约（选填）', 'bookingId', [['', '无关联预约']], '')}
       <button type="button" class="txt" data-choices="bookingId">查询可关联预约</button></div>
       <div id="past-training" hidden>${select('关联历史训练（选填）', 'trainingId', [['', '不关联训练']], '')}

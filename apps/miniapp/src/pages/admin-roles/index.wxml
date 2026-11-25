@@ -13,7 +13,7 @@
     <view wx:for="{{members}}" wx:key="id" class="list-row">
       <view class="row-line"><text class="row-name">{{item.parentName || item.name || '未填写称呼'}}</text><text class="muted">{{item.wechatIdHint}}</text></view>
       <view wx:if="{{item.parentName && item.name}}" class="muted">关联队员 · {{item.name}}</view>
-      <view>{{item.admin ? '俱乐部管理员' : (item.parent ? '队员家长' : '') + (item.coachId ? ' 教练' : '')}}</view>
+      <view class="member-roles"><text wx:if="{{item.parent}}">队员家长</text><text wx:if="{{item.coachId}}">教练</text><text wx:if="{{item.admin}}">俱乐部管理员</text></view>
       <view wx:if="{{editing !== item.id}}" class="admin-row-actions"><button class="button quiet" data-id="{{item.id}}" disabled="{{busy}}" bindtap="edit">编辑角色</button></view>
       <view wx:else>
         <label class="picker">队员家长<switch checked="{{parent}}" bindchange="setParent" disabled="{{busy}}"/></label>

@@ -16,6 +16,13 @@ export function requiredText(value: unknown, limit = 100): string {
   return value.trim();
 }
 
+export function jerseyNumberInput(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{0,4}$/.test(value)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', '球衣号码可填写一至四位数字或留空');
+  }
+  return value || null;
+}
+
 export function selection(body: Record<string, unknown>): BookingSelection {
   if (body.type === 'GROUP') return { type: 'GROUP', classSessionId: requiredText(body.classSessionId) };
   if (body.type === 'PRIVATE') {

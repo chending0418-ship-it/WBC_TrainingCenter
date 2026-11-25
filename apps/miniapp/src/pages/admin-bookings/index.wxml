@@ -56,7 +56,7 @@
     <block wx:for="{{bookings}}" wx:key="id">
       <view wx:if="{{item.dayHeading}}" id="agenda-{{item.day}}" class="section-title">{{item.dayHeading}}</view>
       <view class="list-row">
-        <view class="row-line"><text class="row-name">{{item.childName}} · {{item.title}}</text><text class="muted">{{item.statusLabel}}</text></view>
+        <view class="row-line"><text class="row-name">{{item.childName}} · {{item.title}}</text><text class="booking-status">{{item.statusLabel}}</text></view>
         <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}} · {{item.coachLabel}}</view>
         <view class="muted">{{item.venue}} · {{item.points}} 积分</view>
         <view class="muted">{{item.staffCreated ? '管理员代约' : '家长预约'}}{{item.staffCancelled ? ' · 管理员取消' : ''}}</view>

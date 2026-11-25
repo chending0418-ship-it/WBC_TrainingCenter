@@ -3,10 +3,12 @@
   <view wx:if="{{loading}}" class="message">正在查询联系人…</view>
   <view wx:elif="{{error}}" class="message"><view>{{error}}</view><button class="button quiet" bindtap="load" hover-class="press">重试</button></view>
   <form wx:else bindsubmit="save">
-    <view class="muted">微信昵称供俱乐部管理员识别关联家长，可单独填写。</view>
+    <view class="form-panel">
     <label class="form-field"><text>微信昵称（选填）</text><input class="field" name="nickname" type="nickname" maxlength="40" value="{{nickname}}" disabled="{{busy}}" placeholder="选择微信昵称或自行填写"/></label>
+    <view class="field-hint">微信昵称供俱乐部管理员识别关联家长，可单独填写。</view>
     <label class="form-field"><text>联系人姓名</text><input class="field" value="{{name}}" maxlength="40" name="name" disabled="{{busy}}" /></label>
     <label class="form-field"><text>联系电话</text><input class="field" value="{{phone}}" maxlength="24" name="phone" disabled="{{busy}}" /></label>
+    </view>
     <view wx:if="{{saveError}}" class="form-error">{{saveError}}</view>
     <view class="section-actions form-actions">
       <button wx:if="{{saved}}" class="button quiet" bindtap="clear" disabled="{{busy}}" hover-class="press">清空资料</button>

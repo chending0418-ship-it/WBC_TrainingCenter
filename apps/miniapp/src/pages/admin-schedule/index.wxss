@@ -99,3 +99,9 @@
 .coach-options { display: block; border: 1px solid #ded5d3; border-radius: 8px; }
 .coach-option { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; overflow-wrap: anywhere; font-size: 14px; }
 .coach-option + .coach-option { border-top: 1px solid #e6dfdc; }
+
+.closed-summary, .closed-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.closed-summary > view:first-child { min-width: 0; }
+.closed-summary .agenda-name { margin: 0; font-size: 14px; }
+.closed-actions { flex: none; }
+.closed-actions .manage-toggle { min-height: 42px; min-width: 44px; }

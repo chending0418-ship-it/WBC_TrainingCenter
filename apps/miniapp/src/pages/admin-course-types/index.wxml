@@ -53,7 +53,7 @@
       </block>
       <view wx:else class="section-actions item-actions">
         <button class="button quiet" data-id="{{item.id}}" bindtap="edit" disabled="{{busy}}" hover-class="press">编辑</button>
-        <button class="button quiet" data-id="{{item.id}}" bindtap="confirmRemove" disabled="{{busy}}" hover-class="press">删除</button>
+        <button class="button quiet deemphasized" data-id="{{item.id}}" bindtap="confirmRemove" disabled="{{busy}}" hover-class="press">删除</button>
       </view>
     </view>
   </block>

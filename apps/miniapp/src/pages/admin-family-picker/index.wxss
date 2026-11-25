@@ -1,9 +1,6 @@
-.page-shell .back-link, .page-shell .text-link, .page-shell .family-row { border: 0; background: transparent; margin: 0; padding: 0; text-align: left; font: inherit; }
-.page-shell .back-link::after, .page-shell .text-link::after, .page-shell .family-row::after { border: 0; }
-.page-shell .back-link, .page-shell .text-link { color: #761f32; font-size: 14px; }
-.page-shell .back-link { width: 100%; display: flex; align-items: center; gap: 7px; margin-bottom: 16px; }
-.page-shell .text-link { flex: none; width: auto; }
-.back-chevron { box-sizing: border-box; width: 8px; height: 8px; border: solid currentColor; border-width: 0 0 1.5px 1.5px; transform: rotate(45deg); }
+.page-shell .text-link, .page-shell .family-row { border: 0; background: transparent; margin: 0; padding: 0; text-align: left; font: inherit; }
+.page-shell .text-link::after, .page-shell .family-row::after { border: 0; }
+.page-shell .text-link { flex: none; width: auto; color: #761f32; font-size: 14px; }
 .family-search, .family-list { background: white; border: 1px solid #d5c4c5; border-radius: 9px; }
 .family-search { box-sizing: border-box; display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-radius: 8px; }
 .family-search input { min-width: 0; flex: 1; height: 25px; border: 0; background: transparent; }

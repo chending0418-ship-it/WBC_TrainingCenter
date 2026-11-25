@@ -4,3 +4,7 @@
 .user-toolbar button.button { width: 48px; padding: 0; }
 .profile-filter { gap: 7px; border: 1px solid #d5c4c5; border-radius: 8px; background: white; }
 .profile-filter .chevron { margin: -3px 2px 0 0; transform: rotate(135deg); }
+
+.member-roles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.member-roles text { padding: 1px 7px; border-radius: 4px; background: #f3efec; color: #51474a; font-size: 13px; }
+.user-toolbar { margin-bottom: 14px; }

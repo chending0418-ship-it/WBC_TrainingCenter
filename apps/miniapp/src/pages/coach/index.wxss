@@ -22,3 +22,22 @@
 }
 
 .coach-toolbar + .review-tabs { margin-top: 8px; }
+
+.coach-toolbar { padding: 10px 12px; border: 1px solid #ded5d3; border-radius: 10px; background: white; }
+.coach-toolbar .role-link { width: auto; margin: 0 0 0 auto; }
+.coach-week, .coach-roster, .plan-heading, .week-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coach-week { margin: 8px 0; padding: 0 4px 0 14px; border-radius: 9px; background: #761f32; color: white; }
+.week-range { font-weight: 650; }
+.week-controls { gap: 2px; }
+.week-controls button { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 0; padding: 0; background: transparent; }
+.week-controls button::after, .plan-toggle::after { border: 0; }
+.week-controls .chevron { border-color: white; }
+.week-controls .previous { transform: rotate(-135deg); }
+.coach-roster { align-items: baseline; color: #443a3c; }
+.coach-roster > text:first-child { flex-shrink: 0; font-weight: 600; }
+.coach-roster > text + text { text-align: right; overflow-wrap: anywhere; }
+.plan-block { margin-top: 8px; padding-top: 4px; border-top: 1px solid #e9e3df; }
+.plan-heading { font-size: 13px; font-weight: 600; }
+.plan-heading .plan-toggle { background: transparent; width: auto; margin: 0; padding: 8px 0 8px 8px; color: #761f32; font-size: 13px; line-height: 22px; }
+.plan-block .training-plan { font-size: 14px; color: #66595c; line-height: 1.55; }
+.plan-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }

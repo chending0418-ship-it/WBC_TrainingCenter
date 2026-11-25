@@ -58,7 +58,7 @@ export function wechatAuth(db: DatabaseSync, clock: () => Date, config: WechatLo
       db.prepare('DELETE FROM wechat_sessions WHERE expires_at <= ?').run(now);
       db.prepare('INSERT INTO wechat_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
         .run(hash(token), account.userId, now + sessionDuration);
-      return { accountId: account.userId, roles: availableRoles(account), token };
+      return { accountId: account.userId, roles: availableRoles(account), hasCoachProfile: !!account.coachId, token };
     });
   }
 

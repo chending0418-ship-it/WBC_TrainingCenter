@@ -1,9 +1,9 @@
 <template name="bookingCard">
   <view class="lesson-card">
-    <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state">{{item.label}}</text></view>
-        <view class="card-head"><text class="card-title">{{item.title}}</text></view>
+    <view class="review-time-line"><text class="card-time">{{item.hours}}</text><text class="card-state booking-state">{{item.label}}</text></view>
+    <view class="card-head"><text class="card-title">{{item.playerName ? item.playerName + ' · ' : ''}}{{item.title}}</text></view>
     <view class="card-note">{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.coachLabel}} · {{item.venue}}</view>
-    <view class="card-footer">{{item.playerName}} · {{item.points}} 积分</view>
+    <view class="card-footer">{{item.points}} 积分</view>
     <view wx:if="{{item.status === 'CANCELLED' && item.refundPoints > 0}}" class="card-note">已退回 {{item.refundPoints}} 积分</view>
   </view>
 </template>
@@ -18,7 +18,7 @@
   <block wx:if="{{loaded}}">
     <view class="section-title" role="heading" aria-level="2">待确认和即将开课</view>
     <view wx:if="{{upcoming.length}}" class="muted">如需取消，请在开课前至少 6 小时联系俱乐部管理员。</view>
-    <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去排课页选择课程。</view>
+    <view wx:if="{{!upcoming.length}}" class="muted">暂无即将上课的预约，去课表选择课程。</view>
     <block wx:for="{{upcoming}}" wx:key="id"><template is="bookingCard" data="{{item: item}}"/></block>
     <button wx:if="{{next.upcoming}}" class="button quiet" disabled="{{moreBusy}}" bindtap="more" data-period="upcoming">查看更多预约</button>
 

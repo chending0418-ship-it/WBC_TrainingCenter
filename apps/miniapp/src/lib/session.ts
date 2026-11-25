@@ -37,6 +37,7 @@ export function parentAccountId() {
 }
 let active: RoleSession | undefined;
 let wechat: WechatLogin | undefined;
+let switchingFrom: RoleSession | undefined;
 
 function openCurrentHome(courseId?: string, notice?: NoticePage) {
   if (notice && active?.role === noticePages[notice].role) {
@@ -99,6 +100,7 @@ export async function signInWechat(): Promise<WechatLogin> {
 
 export async function selectWechatRole(role: SessionRole, courseId?: string, notice?: NoticePage) {
   if (!wechat) throw new RequestError('NOT_AUTHORIZED', '请先使用微信登录', 401);
+  switchingFrom = active;
   try {
     const session = await send<RoleSession>('/api/auth/role', 'POST', { role }, wechat.token);
     wechat = { ...wechat, token: session.token };
@@ -110,6 +112,8 @@ export async function selectWechatRole(role: SessionRole, courseId?: string, not
       wechat = undefined;
     }
     throw error;
+  } finally {
+    switchingFrom = undefined;
   }
 }
 
@@ -210,7 +214,7 @@ export async function roleRequest<T>(role: SessionRole, path: string, method: Me
     if (error instanceof RequestError && error.code === 'PLAYER_ACCESS_DENIED') {
       cache.invalidate(key => key === '/api/me/players' || key.endsWith('|' + playerId));
     }
-    if (error instanceof RequestError && error.status === 401 && session === active) {
+    if (error instanceof RequestError && error.status === 401 && session === active && session !== switchingFrom) {
       active = undefined;
       wechat = undefined;
       wx.showToast({ title: '登录已失效，请重新登录', icon: 'none' });

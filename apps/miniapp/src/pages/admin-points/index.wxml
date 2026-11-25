@@ -29,7 +29,7 @@
         </view>
       </view>
       <label class="form-field">
-        <text>{{source === 'OFFLINE_CREDIT' ? '充值积分' : '调整积分'}}</text>
+        <text>{{source === 'OFFLINE_CREDIT' ? '充值积分' : '调整积分'}}（必填）</text>
         <input class="field" type="number" maxlength="6" placeholder="例如 100" value="{{points}}" data-field="points" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <picker wx:if="{{source === 'ADJUSTMENT' && direction === -1}}" range="{{training}}" range-key="label" value="{{trainingIndex}}" bindchange="selectTraining" disabled="{{busy}}">
@@ -43,7 +43,7 @@
       <button wx:if="{{source === 'ADJUSTMENT' && choiceNext.bookings !== null}}" class="button quiet row-action" size="mini"
         bindtap="loadChoices" data-field="bookings" loading="{{choiceBusy.bookings}}" disabled="{{busy || choiceBusy.bookings}}">{{choiceNext.bookings ? '加载更早的预约' : '查询可关联预约'}}</button>
       <label class="form-field">
-        <text>{{source === 'OFFLINE_CREDIT' ? '充值备注' : '调整原因'}}</text>
+        <text>{{source === 'OFFLINE_CREDIT' ? '充值备注' : '调整原因'}}（必填）</text>
         <input class="field" maxlength="100" placeholder="{{source === 'OFFLINE_CREDIT' ? '例如 线下收款' : '填写原因'}}" value="{{reason}}" data-field="reason" bindinput="changeField" disabled="{{busy}}" />
       </label>
       <label wx:if="{{source === 'ADJUSTMENT'}}" class="form-field">

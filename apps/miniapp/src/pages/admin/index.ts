@@ -12,10 +12,10 @@ Page({
       { page: 'admin-bookings', label: '预约管理', icon: 'bookings' },
       { page: 'admin-course-types', label: '课程类型', icon: 'types' },
       { page: 'admin-coaches', label: '教练管理', icon: 'coaches' },
-      { page: 'admin-parents', label: '队员档案', icon: 'parents' },
+      { page: 'admin-parents', label: '队员档案', icon: 'roster' },
       { page: 'admin-links', label: '家长关联', icon: 'parents' },
       { page: 'admin-export', label: '信息导出', icon: 'export' },
-      { page: 'admin-roles', label: '用户管理', icon: 'parents' },
+      { page: 'admin-roles', label: '用户管理', icon: 'permissions' },
       { page: 'admin-points', label: '积分调整', icon: 'points' }
     ]
   },
