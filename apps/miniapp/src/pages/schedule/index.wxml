@@ -55,7 +55,7 @@
           <view class="row-name">{{day.label}}</view>
           <text wx:if="{{!day.ranges.length}}" class="card-note">暂无可约时段</text>
           <view wx:for="{{day.ranges}}" wx:key="startsAt" wx:for-item="range" wx:for-index="ri" class="time-range">
-            <view wx:if="{{range.booked}}" class="private-period occupied {{range.mine ? 'mine' : ''}}"><text>{{range.label}}</text><text>{{range.mine ? '我的预约 · ' + range.venue : '已预约'}}</text></view>
+            <view wx:if="{{range.booked}}" class="private-period occupied {{range.mine ? 'mine' : ''}}"><text>{{range.label}}</text><text>{{range.mine ? '我的预约 · ' + range.venue : '已被预约'}}</text></view>
             <button wx:else class="button quiet range-toggle" data-range="{{range.startsAt}}" bindtap="toggleRange"
               aria-expanded="{{selectedRange === range.startsAt}}" disabled="{{booking}}" hover-class="press">
               <text>{{range.label}}</text><text class="range-action">{{selectedRange === range.startsAt ? '收起' : '选时段'}}</text>

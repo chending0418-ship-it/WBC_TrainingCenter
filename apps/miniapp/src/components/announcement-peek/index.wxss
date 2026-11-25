@@ -1,17 +1,90 @@
-.header { position:relative; display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-.heading { font-size:28px; font-weight:700; letter-spacing:-.65px; }
-button { color:#761f32; font-size:14px; background:transparent; padding:0 4px; margin:0; line-height:44px; min-height:44px; font-weight:600; }
-button::after { border:0; }
-.header .entry { display:flex; flex:0 0 auto; width:auto; min-width:44px; height:44px; margin:0 0 0 auto; padding:0 0 0 8px; align-items:center; justify-content:flex-end; gap:6px; font-size:14px; line-height:1.4; }
-.actions button { flex:0 0 auto; width:auto; margin:0; padding:0; min-width:44px; font-size:14px; }
-.actions button:last-child { text-align:right; }
-.dot { width:7px; height:7px; background:#a02c43; border-radius:50%; }
-.peek { position:absolute; z-index:4; right:0; top:100%; width:90%; box-sizing:border-box; max-width:360px; padding:11px 14px 2px; background:white; border:1px solid #d9c3c5; border-radius:9px; box-shadow:0 5px 16px rgba(79,25,36,.14); }
-.peek::before { content:""; position:absolute; top:-5px; right:17px; width:8px; height:8px; transform:rotate(45deg); background:white; border-top:1px solid #d9c3c5; border-left:1px solid #d9c3c5; }
-.meta,.actions { display:flex; align-items:center; justify-content:space-between; }
-.meta { font-size:12px; color:#761f32; }
-.meta text:last-child,.actions button:last-child { color:#695d61; }
-.title { font-size:18px; font-weight:650; margin:4px 0; word-break:break-all; }
-.excerpt { overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
-.full { max-height:32vh; white-space:pre-wrap; }
-.full,.excerpt { font-size:15px; overflow-wrap:anywhere; }
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.heading { font-size: 28px; font-weight: 700; letter-spacing: -.65px; }
+button::after { border: 0; }
+.header .entry, .actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: #761f32;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.header .entry {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 0 0 8px;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.dot { width: 7px; height: 7px; background: #a02c43; border-radius: 50%; }
+
+.peek {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  top: 100%;
+  width: 100%;
+  max-width: 360px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(44, 24, 33, .23), 0 1px 4px rgba(44, 24, 33, .14);
+}
+.peek::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: 17px;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: #382833;
+}
+.meta, .source, .actions { display: flex; align-items: center; }
+.meta {
+  justify-content: space-between;
+  padding: 12px 18px 0;
+  border-radius: 12px 12px 0 0;
+  background: #382833;
+  color: #f4eaee;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.source { gap: 7px; font-weight: 600; }
+.notice-icon { width: 18px; height: 18px; filter: brightness(0) invert(1); }
+.date { color: #d9cbd2; font-size: 12px; }
+.reading-expanded { max-height: 40vh; }
+.headline { padding: 9px 18px 15px; background: #382833; }
+.title {
+  color: #fff;
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.preview-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.copy { padding: 13px 18px 0; }
+.body { font-size: 15px; line-height: 1.65; color: #413940; overflow-wrap: anywhere; }
+.full { white-space: pre-wrap; }
+.actions { justify-content: space-between; gap: 12px; padding: 10px 18px 12px; }
+.actions .dismiss { justify-content: flex-start; padding: 0; color: #685d63; font-weight: 500; }
+.actions .primary { padding: 0 16px; background: #761f32; color: #fff; border-radius: 7px; }
+.actions .primary[disabled] { background: #e3dadd; color: #61565b; }

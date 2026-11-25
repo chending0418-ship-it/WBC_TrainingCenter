@@ -1,9 +1,29 @@
 <view class="header">
   <text class="heading" role="heading" aria-level="1">课程表</text>
-  <button size="mini" class="entry" bindtap="openList" aria-label="{{unread ? '公告栏，有未读公告' : '公告栏'}}"><text class="entry-label">公告栏</text><view wx:if="{{unread}}" class="dot"></view></button>
+  <button size="mini" class="entry" bindtap="openList" aria-label="{{unread ? '公告栏，有未读公告' : '公告栏'}}">
+    <text class="entry-label">公告栏</text>
+    <view wx:if="{{unread}}" class="dot" aria-hidden="true"></view>
+  </button>
   <view wx:if="{{showing && unread}}" class="peek">
-    <view class="meta"><text>俱乐部公告</text><text>{{date}}</text></view>
-    <view class="title">{{unread.title}}</view><scroll-view wx:if="{{expanded}}" class="full" scroll-y><text>{{unread.body}}</text></scroll-view><view wx:else class="excerpt">{{unread.body}}</view>
-    <view class="actions"><button size="mini" wx:if="{{expanded}}" bindtap="mark" disabled="{{busy}}">标为已读</button><button size="mini" wx:else bindtap="expand">查看详情 ›</button><button size="mini" bindtap="dismiss">收起</button></view>
+    <view class="meta">
+      <view class="source">
+        <image class="notice-icon" src="/pages/admin/icons/announcements.svg" aria-hidden="true" />
+        <text>俱乐部公告</text>
+      </view>
+      <text class="date">{{date}}</text>
+    </view>
+    <scroll-view class="reading {{expanded ? 'reading-expanded' : ''}}" scroll-y="{{expanded}}">
+      <view class="headline">
+        <view class="title {{expanded ? '' : 'preview-text'}}" role="heading" aria-level="2">{{unread.title}}</view>
+      </view>
+      <view class="copy">
+        <view class="body {{expanded ? 'full' : 'excerpt preview-text'}}">{{unread.body}}</view>
+      </view>
+    </scroll-view>
+    <view class="actions">
+      <button size="mini" class="dismiss" bindtap="dismiss">收起</button>
+      <button size="mini" wx:if="{{expanded}}" class="primary" bindtap="mark" disabled="{{busy}}">标为已读</button>
+      <button size="mini" wx:else class="primary" bindtap="expand">阅读全文</button>
+    </view>
   </view>
 </view>

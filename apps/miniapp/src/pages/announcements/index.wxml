@@ -1,9 +1,34 @@
-<view class="page-shell">
- <text class="page-title">{{selected ? '公告详情' : '俱乐部公告'}}</text>
- <view wx:if="{{error}}" class="message">{{error}}<button class="button quiet" bindtap="retry">重新加载</button></view>
- <block wx:if="{{selected}}"><view class="section-title">{{selected.title}}</view><view class="muted">{{selected.date}} 发布</view><view class="notice-body">{{selected.body}}</view>
- <view class="actions"><button wx:if="{{!selected.isRead}}" class="button" bindtap="mark" disabled="{{busy}}">标为已读</button><button class="button quiet" bindtap="close">返回公告栏</button></view></block>
- <block wx:else><view wx:if="{{!loaded && !error}}" class="message">正在读取公告…</view><view wx:if="{{loaded && !rows.length}}" class="message">暂无俱乐部公告</view>
- <button wx:for="{{rows}}" wx:key="id" class="notice-row" bindtap="select" data-id="{{item.id}}"><view class="meta"><text>{{item.date}}</text><text>{{item.isRead ? '已读' : '● 未读'}}</text></view><text class="row-name">{{item.title}}</text></button>
- <button wx:if="{{next}}" class="button quiet" bindtap="more" disabled="{{busy}}">更早公告</button></block>
+<view class="page-shell announcement-page">
+  <view wx:if="{{error}}" class="message">
+    {{error}}
+    <button size="mini" class="button quiet" bindtap="retry">重新加载</button>
+  </view>
+
+  <block wx:if="{{selected}}">
+    <view class="notice-heading" role="heading" aria-level="1">{{selected.title}}</view>
+    <view class="muted">{{selected.date}} 发布</view>
+    <view class="notice-body">{{selected.body}}</view>
+    <view class="notice-actions">
+      <button size="mini" class="button quiet" bindtap="close">返回公告栏</button>
+      <button wx:if="{{!selected.isRead}}" size="mini" class="button" disabled="{{busy}}" bindtap="mark">标为已读</button>
+    </view>
+  </block>
+  <block wx:else>
+    <view wx:if="{{!loaded && !error}}" class="message">正在读取公告…</view>
+    <view wx:if="{{loaded && !rows.length}}" class="message">暂无俱乐部公告</view>
+    <view class="notice-list" wx:if="{{rows.length}}">
+      <button wx:for="{{rows}}" wx:key="id" size="mini" class="notice-row" data-id="{{item.id}}" bindtap="select" hover-class="press"
+        aria-label="{{item.title}}，{{item.isRead ? '已读' : '未读'}}，{{item.date}}">
+        <view class="row-name">{{item.title}}</view>
+        <view class="notice-meta">
+          <text>{{item.date}}</text>
+          <view class="notice-state {{item.isRead ? '' : 'unread'}}">
+            <view wx:if="{{!item.isRead}}" class="unread-dot" aria-hidden="true"></view>
+            <text>{{item.isRead ? '已读' : '未读'}}</text>
+          </view>
+        </view>
+      </button>
+    </view>
+    <button wx:if="{{next}}" size="mini" class="button quiet more" bindtap="more" disabled="{{busy}}">更早公告</button>
+  </block>
 </view>
