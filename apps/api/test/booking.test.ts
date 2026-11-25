@@ -404,7 +404,7 @@ test('旧教练的三档只在升级时初始化，历史半小时预约和旧�
   first.close();
 
   const { app, db } = fixture(context, path);
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 21);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 22);
   const admin = await adminSession(app);
   const parent = await login(app);
   const coaches = (await app.inject({ url: '/api/admin/coaches', headers: admin })).json<ManagedCoach[]>();
@@ -704,4 +704,73 @@ test('生产模式开放公开课表，角色课表需要登录，不注册演�
   for (const table of ['users', 'coaches', 'class_sessions', 'ledger']) {
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM ' + table).get()?.n, 0);
   }
+});
+
+test('私教申请占位，只有预约家长看得到确认地点，拒绝或取消释放重叠时段', async context => {
+  const {app,db}=fixture(context);
+  const parent=await login(app), other=await login(app,'other-parent'), admin=await adminSession(app);
+  const training=privateTraining(1050,1110);
+  const span={startsAt:training.startsAt,endsAt:training.endsAt};
+  const route='/coaches/li/slots?date='+date;
+  async function board(headers?:typeof parent) {
+    return (await app.inject({url:headers?'/api'+route+'&view=board':'/api/public'+route,headers})).json<import('../../../packages/shared/contracts.js').PrivateBoard>();
+  }
+  assert.ok((await board()).slots.some(s=>s.startsAt===span.startsAt));
+  const pending=(await book(app,parent,training,'pending-1')).json<Booking>();
+  const overlap=privateTraining(1080,1140);
+  assert.equal((await book(app,other,overlap,'taken')).statusCode,409);
+  assert.deepEqual((await board()).occupied,[span]);
+  assert.deepEqual((await board(other)).occupied,[span]);
+  assert.deepEqual((await board(parent)).occupied,[{...span,mine:true,venue:'场地待确认'}]);
+  assert.equal((await app.inject({method:'POST',url:'/api/admin/bookings/'+pending.id+'/reject',headers:admin})).statusCode,204);
+  assert.deepEqual((await board()).occupied,[]);
+  assert.ok((await board()).slots.some(s=>s.startsAt===span.startsAt));
+  const second=(await book(app,parent,training,'pending-2')).json<Booking>();
+  assert.equal((await app.inject({method:'POST',url:'/api/admin/bookings/'+second.id+'/approve',headers:admin,payload:{venue:'3 号道'}})).statusCode,204);
+  assert.deepEqual((await board(parent)).occupied,[{...span,mine:true,venue:'3 号道'}]);
+  assert.deepEqual((await board(other)).occupied,[span]);
+  assert.deepEqual((await board()).occupied,[span]);
+  assert.ok(!(await board()).slots.some(s=>s.startsAt<span.endsAt&&s.endsAt>span.startsAt));
+  const bookings=async(headers:typeof parent)=>(await app.inject({headers,url:'/api/me/bookings?view=family&period=upcoming'})).json<{rows:Booking[]}>().rows;
+  assert.equal((await bookings(parent))[0].venue,'3 号道');
+  db.prepare("INSERT INTO parent_players(parent_id,player_id,kind,status,revision,changed_at) VALUES('other-parent','parent','LINK','APPROVED','v',?)").run(now().toISOString());
+  assert.deepEqual((await board(other)).occupied,[span]);
+  assert.ok(!(await bookings(other)).some(r=>r.id===second.id));
+  assert.equal((await app.inject({method:'DELETE',url:'/api/admin/bookings/'+second.id,headers:admin})).statusCode,204);
+  assert.deepEqual((await board()).occupied,[]);
+  assert.ok((await board()).slots.some(s=>s.startsAt===span.startsAt));
+});
+
+test('公告跨管理端共享，按家长显式已读，内容变更后重新提醒，分页及重试有效',async context=>{
+  const {app}=fixture(context);
+  const admin=await adminSession(app), parent=await login(app), other=await login(app,'other-parent');
+  const webLogin=await app.inject({method:'POST',url:'/wbctraining/admin/api/session',payload:{password:process.env.WBC_ADMIN_PASSWORD??'wbc-demo-2026'}});
+  const web={authorization:'Bearer '+webLogin.json().token};
+  const payload={title:'训练场地调整',body:'请到 3 号道集合。',requestKey:'notice-test'};
+  assert.equal((await app.inject({url:'/api/me/announcements'})).statusCode,401);
+  assert.equal((await app.inject({method:'POST',url:'/api/admin/announcements',headers:parent,payload})).statusCode,401);
+  const publish=()=>app.inject({method:'POST',url:'/wbctraining/admin/api/announcements',headers:web,payload});
+  const {id}= (await publish()).json();
+  assert.equal((await publish()).json().id,id);
+  const unread=async(headers:typeof parent)=>(await app.inject({url:'/api/me/announcements/unread',headers})).json().unread;
+  const list=async(headers:typeof parent)=>(await app.inject({url:'/api/me/announcements',headers})).json().rows;
+  assert.equal((await list(parent))[0].isRead,0);
+  assert.equal((await unread(parent)).id,id);
+  const mark=()=>app.inject({method:'PUT',url:'/api/me/announcements/'+id+'/read',headers:parent,payload:{revision:1}});
+  assert.equal((await mark()).json().unread,null);
+  assert.equal((await mark()).statusCode,200);
+  assert.equal((await list(parent))[0].isRead,1);
+  assert.equal((await unread(other)).id,id);
+  const change=(data:object)=>app.inject({method:'PUT',url:'/api/admin/announcements/'+id,headers:admin,payload:data});
+  assert.equal((await change({...payload,body:'改到 5 号道。',requestKey:'edit',revision:1})).statusCode,200);
+  assert.equal((await unread(parent)).body,'改到 5 号道。');
+  assert.equal((await mark()).statusCode,409);
+  assert.equal((await change({withdraw:true,requestKey:'withdraw',revision:2})).statusCode,200);
+  assert.deepEqual(await list(parent),[]);
+  assert.equal((await app.inject({url:'/wbctraining/admin/api/announcements',headers:web})).json().rows[0].published,0);
+  for(let i=0;i<22;i++) await app.inject({url:'/api/admin/announcements',method:'POST',headers:admin,payload:{...payload,requestKey:'more-'+i}});
+  const page=(await app.inject({url:'/api/me/announcements',headers:parent})).json();
+  assert.equal(page.rows.length,20);
+  const rest=(await app.inject({url:'/api/me/announcements?before='+page.next,headers:parent})).json();
+  assert.equal(rest.rows.length,2);assert.equal(rest.next,null);
 });

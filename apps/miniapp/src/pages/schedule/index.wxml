@@ -2,7 +2,7 @@
 <import src="../../calendar/groups.wxml" />
 <page-meta page-style="{{playerPrompt || detail || confirmation || registrationPrompt ? 'overflow: hidden' : ''}}" />
 <view wx:if="{{authorized}}" class="page-shell parent-tab-page calendar-page">
-  <text class="page-title" role="heading" aria-level="1">课程表</text>
+  <announcement-peek id="clubNotice" />
 
   <view wx:if="{{loading}}" class="message">正在加载排课…</view>
   <view wx:elif="{{error}}" class="message">
@@ -39,7 +39,7 @@
         </view>
       </scroll-view>
       <view wx:if="{{coaches.length}}" class="agenda-heading">
-        <view class="agenda-title" role="heading" aria-level="2">可申请时段</view>
+        <view class="agenda-title" role="heading" aria-level="2">私教时段</view>
         <button class="button quiet row-action" bindtap="openCoachIntro" disabled="{{booking}}" hover-class="press"
           aria-label="查看{{coaches[coachIndex].label}}的教练介绍">教练介绍</button>
       </view>
@@ -55,11 +55,12 @@
           <view class="row-name">{{day.label}}</view>
           <text wx:if="{{!day.ranges.length}}" class="card-note">暂无可约时段</text>
           <view wx:for="{{day.ranges}}" wx:key="startsAt" wx:for-item="range" wx:for-index="ri" class="time-range">
-            <button class="button quiet range-toggle" data-range="{{range.startsAt}}" bindtap="toggleRange"
+            <view wx:if="{{range.booked}}" class="private-period occupied {{range.mine ? 'mine' : ''}}"><text>{{range.label}}</text><text>{{range.mine ? '我的预约 · ' + range.venue : '已预约'}}</text></view>
+            <button wx:else class="button quiet range-toggle" data-range="{{range.startsAt}}" bindtap="toggleRange"
               aria-expanded="{{selectedRange === range.startsAt}}" disabled="{{booking}}" hover-class="press">
               <text>{{range.label}}</text><text class="range-action">{{selectedRange === range.startsAt ? '收起' : '选时段'}}</text>
             </button>
-            <view wx:if="{{selectedRange === range.startsAt}}" class="range-detail">
+            <view wx:if="{{!range.booked && selectedRange === range.startsAt}}" class="range-detail">
               <view class="card-note">选择开始时间</view>
               <view class="start-options">
                 <button wx:for="{{range.starts}}" wx:key="startsAt" wx:for-item="start" class="button {{selectedStart === start.startsAt ? '' : 'quiet'}}"

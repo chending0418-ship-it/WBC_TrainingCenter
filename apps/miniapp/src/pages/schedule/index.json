@@ -2,6 +2,7 @@
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark",
   "usingComponents": {
+    "announcement-peek": "/components/announcement-peek/index",
     "subscription-reminder": "/components/subscription-reminder/index"
   }
 }

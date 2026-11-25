@@ -18,7 +18,7 @@ let choicesRequest = 0;
 Page({
   data: {
     authorized: false,
-    pendingOnly: false,
+    pendingOnly: false, venues: {} as Record<string,string>, staffVenue:'',
     today: '', lastDate: '', date: '', weekStart: '', weekLabel: '', hasNext: false,
     dates: [] as (ReturnType<typeof weekDates>[number] & { count: number; outside: boolean })[],
     loading: true, busy: false, loadError: '', saveError: '',
@@ -204,17 +204,19 @@ Page({
 
     this.setData({ busy: true, saveError: '' });
     try {
-      const data = { ...selection, userId: user.id };
+      const venue = this.data.staffVenue.trim();
+      if (type === 'PRIVATE' && !venue) { this.setData({saveError:'请填写训练场地'}); return; }
+      const data = { ...selection, userId: user.id, ...(type === 'PRIVATE' ? {venue} : {}) };
       let revision: string | undefined;
       if (!hasPendingStaffWrite('/bookings', data)) {
         const quote = await staffApi<BookingQuote>('/bookings/quote', 'POST', data);
         const detail = user.label + '\n' + quote.title + ' · ' + datetime(quote.startsAt) +
-          '\n扣除 ' + quote.points + ' 积分\n取消须至少提前 6 小时。' + cancellationRefundText(quote.refundPoints);
+          (type === 'PRIVATE' ? '\n训练场地：' + venue : '') + '\n扣除 ' + quote.points + ' 积分\n取消须至少提前 6 小时。' + cancellationRefundText(quote.refundPoints);
         if (!await confirmAction('确认代约', detail, '确认代约')) return;
         revision = quote.revision;
       }
       const created = await staffWrite<Booking>('/bookings', data, revision);
-      this.setData({ adding: false });
+      this.setData({ adding: false, staffVenue:'' });
       this.setWeek(this.data.date);
       await this.refresh();
       wx.showToast({ title: created.status === 'CONFIRMED' ? '代约成功' : '预约已取消', icon: 'none' });
@@ -224,20 +226,27 @@ Page({
       this.setData({ busy: false });
     }
   },
+  inputVenue(event: WechatMiniprogram.Input) {
+    const id=String(event.currentTarget.dataset.id || '');
+    if (id) this.setData({venues:{...this.data.venues,[id]:event.detail.value}});
+    else this.setData({staffVenue:event.detail.value});
+  },
   async decide(event: WechatMiniprogram.TouchEvent) {
     const booking = this.data.bookings.find(row => row.id === event.currentTarget.dataset.id);
     if (this.data.busy || !booking) return;
     const approving = event.currentTarget.dataset.action === 'approve';
     const rejecting = booking.status === 'PENDING' && !approving;
     if ((approving && !booking.canApprove) || (!approving && !rejecting && !booking.canCancel)) return;
+    const venue=approving && booking.type==='PRIVATE' ? this.data.venues[booking.id]?.trim() : '';
+    if(approving && booking.type==='PRIVATE' && !venue){wx.showToast({title:'请填写训练场地',icon:'none'});return;}
     const title = approving ? '确认预约' : rejecting ? '拒绝申请' : '取消预约';
     this.setData({ busy: true, saveError: '' });
     try {
       const detail = booking.childName + ' · ' + booking.title + '\n' + (approving ? '确认后扣除 ' + booking.points + ' 积分。' :
         rejecting ? '释放名额和预留积分，不扣分。' : cancellationRefundText(booking.refundPoints));
-      if (!await confirmAction(title + '？', detail, title)) return;
+      if (!await confirmAction(title + '？', detail + (venue ? '\n训练场地：' + venue : ''), title)) return;
       const path = '/bookings/' + booking.id;
-      if (approving || rejecting) await staffApi(path + (approving ? '/approve' : '/reject'), 'POST', {});
+      if (approving || rejecting) await staffApi(path + (approving ? '/approve' : '/reject'), 'POST', venue ? {venue} : {});
       else await staffApi(path, 'DELETE');
       await this.refresh();
       wx.showToast({ title: approving ? '预约已确认' : rejecting ? '申请已拒绝' : '预约已取消', icon: 'none' });

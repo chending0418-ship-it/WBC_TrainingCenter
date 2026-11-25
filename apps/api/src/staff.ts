@@ -7,6 +7,7 @@ import type { bookingService } from './booking.ts';
 import { sessionRoster } from './class-coaches.ts';
 import { audit, transaction } from './database.ts';
 import { dateInput, expectedRevision, integer, jerseyNumberInput, ledgerWindow, object, requiredText, selection } from './input.ts';
+import { announcementDraft, announcementPage, changeAnnouncement, publishAnnouncement } from './announcements.ts';
 import { registerLinkAdmin } from './player-links.ts';
 import { searchParents } from './parent-contact.ts';
 import { registrations, reviewRegistration } from './registration.ts';
@@ -152,6 +153,19 @@ export function registerStaffRoutes(
       });
     }
     registerLinkAdmin(routes,db,actor,clock,appId,demo);
+    routes.get('/announcements', async request => announcementPage(db,object(request.query).before));
+    routes.post('/announcements', async request => {
+      const body = object(request.body), draft = announcementDraft(body);
+      return safeWrite(requiredText(body.requestKey),'ANNOUNCEMENT_PUBLISH',draft,
+        () => publishAnnouncement(db,draft,actor(request),clock().toISOString()));
+    });
+    routes.put('/announcements/:id', async request => {
+      const id = integer(Number(object(request.params).id),1,Number.MAX_SAFE_INTEGER);
+      const body = object(request.body), revision = integer(body.revision,1,Number.MAX_SAFE_INTEGER);
+      const draft = body.withdraw === true ? null : announcementDraft(body);
+      return safeWrite(requiredText(body.requestKey),'ANNOUNCEMENT_CHANGE',{id,revision,draft},
+        () => changeAnnouncement(db,id,revision,draft,actor(request),clock().toISOString()));
+    });
     routes.get('/context', async () => booking.scheduleContext());
     routes.get('/overview', async request => {
       const now = clock().toISOString();
@@ -412,11 +426,12 @@ export function registerStaffRoutes(
       const userId = requiredText(body.userId);
       requireUser(userId);
       return booking.book(userId, selection(body), 'staff:' + requiredText(body.requestKey), {
-        staffActor: actor(request), expectedRevision: expectedRevision(body.expectedRevision)
+        staffActor: actor(request), staffVenue: body.type === 'PRIVATE' && body.venue !== undefined ? requiredText(body.venue,100) : undefined, expectedRevision: expectedRevision(body.expectedRevision)
       });
     });
     routes.post('/bookings/:id/approve', async (request, reply) => {
-      booking.approve(requiredText(object(request.params).id), actor(request));
+      const venue = object(request.body ?? {}).venue;
+      booking.approve(requiredText(object(request.params).id), actor(request), venue === undefined ? undefined : requiredText(venue,100));
       return reply.code(204).send();
     });
     routes.post('/bookings/:id/reject', async (request, reply) => {

@@ -6,6 +6,7 @@
     <text class="page-title" role="heading" aria-level="1">课程表</text>
     <button class="login-link" bindtap="login" hover-class="press">成员登录</button>
   </view>
+  <view class="calendar-tabs"><view class="calendar-tab active">团课</view><navigator class="calendar-tab" url="/pages/public-private/index" hover-class="press">私教</navigator></view>
   <view class="public-services"><text>本周公开团课</text>
   <button class="service-link" size="mini" bindtap="toggleServices" aria-expanded="{{serviceDetails}}">{{serviceDetails ? '收起训练服务介绍' : '查看训练服务介绍'}}</button></view>
   <view wx:if="{{serviceDetails}}" class="service-intro"><view>WBC 俱乐部提供棒球团课和一对一私教。访客可查看本周团课的时间、教练和训练场地，成员登录后可查看训练计划。</view><view class="row-name">团体训练</view><view>按课表上的时间和训练场地上课，每个班次单独开放预约。</view><view class="row-name">一对一私教</view><view>可选 60、90 或 120 分钟，开放时段和所需积分由教练档案确定。家长提交预约后，俱乐部管理员确认并扣除积分。</view></view>

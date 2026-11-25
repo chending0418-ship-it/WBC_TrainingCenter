@@ -51,6 +51,7 @@ export function reservedPoints(db: DatabaseSync, user: string, now: string): num
   `).get(user, now)?.total);
 }
 
+const privateBookingAccess = "(b.type<>'PRIVATE' OR b.booked_by IS NULL OR b.booked_by=?)";
 const bookingFields = `
   b.id, b.type, ${bookingStatus} AS status, b.title, COALESCE(b.group_coach_names, c.name) AS coachName, b.venue, b.points,
   b.starts_at AS startsAt, b.ends_at AS endsAt, b.refund_points AS refundPoints
@@ -219,6 +220,19 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return slots;
   }
 
+  function privateBoard(coach: string, start: string, days: number, parent?: string) {
+    const slots = Array.from({ length: days }, (_, offset) => listSlots(coach, addDays(start,offset))).flat();
+    const owner = parent ? `EXISTS (SELECT 1 FROM parent_players WHERE parent_id=? AND player_id=b.player_id
+      AND ${accessiblePlayerLink}) AND (b.booked_by=? OR b.booked_by IS NULL)` : '0';
+    const rows = db.prepare(`SELECT b.starts_at AS startsAt,b.ends_at AS endsAt,
+      CASE WHEN ${owner} THEN CASE WHEN b.approval_pending THEN '场地待确认' ELSE b.venue END END AS venue
+      FROM bookings b WHERE b.type='PRIVATE' AND b.status='CONFIRMED' AND b.coach_id=?
+      AND b.starts_at>=? AND b.starts_at<? AND b.ends_at>? ORDER BY b.starts_at`)
+      .all(...(parent ? [parent,parent] : []),coach,dateAt(start),dateAt(addDays(start,days)),clock().toISOString());
+    return { slots, occupied: rows.map(({ startsAt,endsAt,venue }) =>
+      venue == null ? { startsAt,endsAt } : { startsAt,endsAt,mine:true,venue }) };
+  }
+
   function canBookAt(startsAt: string, date: string): void {
     const { now, today, lastDate } = horizon();
     if (date < today || date > lastDate || startsAt <= now.toISOString()) {
@@ -285,19 +299,21 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     return { title, coachName, venue, startsAt, endsAt, points, refundPoints, revision: quoteRevision(details) };
   }
 
-  function bookings(user: string, limit = -1): Booking[] {
+  function bookings(user: string, limit = -1, parent?: string): Booking[] {
     return db.prepare(`
       SELECT ${bookingFields} FROM bookings b JOIN coaches c ON c.id = b.coach_id
-      WHERE b.player_id = ? ORDER BY b.starts_at DESC, b.created_at DESC, b.id DESC LIMIT ?
-    `).all(user,limit) as unknown as Booking[];
+      WHERE b.player_id = ? ${parent ? 'AND ' + privateBookingAccess : ''} ORDER BY b.starts_at DESC, b.created_at DESC, b.id DESC LIMIT ?
+    `).all(user,...(parent ? [parent] : []),limit) as unknown as Booking[];
   }
 
-  function bookingPage(owner: string, period: 'upcoming' | 'history', after?: string, family = false) {
+  function bookingPage(owner: string, period: 'upcoming' | 'history', after?: string, family = false, parent?: string) {
     const upcoming = period === 'upcoming';
     const order = upcoming ? 'ASC' : 'DESC';
     const comparison = upcoming ? '>' : '<';
-    const scope = family ? `b.player_id IN (SELECT player_id FROM parent_players WHERE parent_id=? AND ${accessiblePlayerLink})` : 'b.player_id=?';
-    const cursor = after && db.prepare('SELECT b.starts_at FROM bookings b WHERE b.id=? AND ' + scope).get(after, owner);
+    const playerScope = family ? `b.player_id IN (SELECT player_id FROM parent_players WHERE parent_id=? AND ${accessiblePlayerLink})` : 'b.player_id=?';
+    const scope = playerScope + (parent ? ' AND ' + privateBookingAccess : '');
+    const access = parent ? [owner,parent] : [owner];
+    const cursor = after && db.prepare('SELECT b.starts_at FROM bookings b WHERE b.id=? AND ' + scope).get(after,...access);
     if (after && !cursor) throw new ApiError(400, 'INVALID_CURSOR', '预约列表已更新，请刷新');
     const limit = 25;
     const rows = db.prepare(`SELECT ${bookingFields}${family ? ',child.name AS playerName' : ''}
@@ -306,7 +322,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
       WHERE ${scope} AND ${upcoming ? '' : 'NOT'} (b.status='CONFIRMED' AND b.starts_at>?)
       ${cursor ? 'AND (b.starts_at,b.id) ' + comparison + ' (?,?)' : ''}
       ORDER BY b.starts_at ${order}, b.id ${order} LIMIT ?`)
-      .all(owner, clock().toISOString(), ...(cursor ? [cursor.starts_at, after!] : []), limit+1) as unknown as Booking[];
+      .all(...access,clock().toISOString(), ...(cursor ? [cursor.starts_at, after!] : []), limit+1) as unknown as Booking[];
     const more = rows.length > limit;
     if (more) rows.pop();
     return { rows, next: more ? rows.at(-1)!.id : null };
@@ -318,11 +334,11 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
   `);
 
   function book(user: string, selection: BookingSelection, requestKey: string,
-    { staffActor, expectedRevision, parentId }: { parentId?: string; staffActor?: string; expectedRevision?: string } = {}
+    { staffActor, expectedRevision, parentId, staffVenue }: { staffVenue?: string; parentId?: string; staffActor?: string; expectedRevision?: string } = {}
   ): Booking {
     return transaction(db, () => {
       if (parentId && user) selectedPlayer(db,parentId,user);
-      const payload = JSON.stringify(selection);
+      const payload = JSON.stringify(staffVenue ? {...selection,venue:staffVenue} : selection);
       const previous = db.prepare(`
         SELECT ${bookingFields}, b.request_payload AS payload
         FROM bookings b JOIN coaches c ON c.id = b.coach_id WHERE b.player_id = ? AND b.request_key = ?
@@ -345,6 +361,7 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
         throw new ApiError(409, 'INSUFFICIENT_POINTS', '可用积分不足，无法预约');
       }
       const pending = staffActor === undefined;
+      if (selection.type === 'PRIVATE') details.venue = pending ? '场地待确认' : staffVenue ?? details.venue;
       db.prepare(`
         INSERT INTO bookings
           (id, player_id, type, class_id, coach_id, title, venue, starts_at, ends_at, points, refund_points,
@@ -362,16 +379,16 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  function approve(id: string, operator: string): void {
+  function approve(id: string, operator: string, venue?: string): void {
     transaction(db, () => {
-      const row = db.prepare('SELECT player_id, approval_pending, status, starts_at, points, title FROM bookings WHERE id = ?').get(id);
+      const row = db.prepare('SELECT player_id, type, venue, approval_pending, status, starts_at, points, title FROM bookings WHERE id = ?').get(id);
       if (!row) throw new ApiError(404, 'NOT_FOUND', '未找到该预约');
       if (row.status === 'CANCELLED') throw new ApiError(409, 'ALREADY_CANCELLED', '该预约已取消或拒绝');
       if (!row.approval_pending) return;
       const now = clock().toISOString();
       if (String(row.starts_at) <= now) throw new ApiError(409, 'TOO_LATE', '课程已开始，无法确认预约');
       charge.run(row.player_id, id, -Number(row.points), '预约 · ' + row.title, now, operator);
-      db.prepare('UPDATE bookings SET approval_pending = 0 WHERE id = ?').run(id);
+      db.prepare('UPDATE bookings SET approval_pending = 0, venue = ? WHERE id = ?').run(row.type === 'PRIVATE' && venue ? venue : row.venue,id);
       audit(db, operator, 'BOOKING_APPROVED', id, now);
       notifyBooking(db, id, 'BOOKING_CONFIRMED', now);
     });
@@ -431,5 +448,5 @@ export function bookingService(db: DatabaseSync, clock: () => Date) {
     });
   }
 
-  return { publicSchedule, activeCoaches, weekSchedule, schedule, scheduleContext, child, account, wallets, listSlots, quote, bookings, bookingPage, book, approve, cancel, deleteLesson };
+  return { publicSchedule, privateBoard, activeCoaches, weekSchedule, schedule, scheduleContext, child, account, wallets, listSlots, quote, bookings, bookingPage, book, approve, cancel, deleteLesson };
 }

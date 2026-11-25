@@ -12,6 +12,8 @@ import { registerSubscriptions } from './subscription-api.ts';
 import type { MessageState, Templates } from './subscription-config.ts';
 import { notificationWorker, startNotificationWorker } from './subscription-worker.ts';
 import type { MessageClient } from './wechat-message-client.ts';
+import { announcementPage, markAnnouncement, unreadAnnouncement } from './announcements.ts';
+import { transaction } from './database.ts';
 import { roleSessions } from './role-session.ts';
 import { staffSchedule } from './staff-schedule.ts';
 import { registerStaffRoutes } from './staff.ts';
@@ -111,6 +113,19 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
   });
   app.post('/api/me/players', async request => submitRegistration(db,user(request),request.body,clock(),false,
     { newKey: requiredText(object(request.body).requestKey) }));
+  app.get('/api/me/announcements/unread', async request => ({ unread: unreadAnnouncement(db,user(request)) }));
+  app.get('/api/me/announcements', async request => announcementPage(db,object(request.query).before,user(request)));
+  app.put('/api/me/announcements/:id/read', async request => {
+    const parent = user(request);
+    return transaction(db, () => markAnnouncement(db,parent,integer(Number(object(request.params).id),1,Number.MAX_SAFE_INTEGER),
+      integer(object(request.body).revision,1,Number.MAX_SAFE_INTEGER)));
+  });
+  app.get('/api/public/private-coaches', async () => {
+    const { today,lastDate,coaches } = service.scheduleContext();
+    return { today,lastDate,coaches: coaches.map(({id,name}) => ({id,name})) };
+  });
+  app.get('/api/public/coaches/:id/slots', async request =>
+    service.privateBoard(requiredText(object(request.params).id),dateInput(object(request.query).date),1));
   app.get('/api/public/schedule', async () => service.publicSchedule());
   app.get('/api/schedule', async request => {
     const id = player(request), query = object(request.query);
@@ -118,11 +133,12 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
   });
   app.get('/api/me/private-coaches', async request => { user(request); return service.activeCoaches(); });
   app.get('/api/coaches/:id/slots', async request => {
-    user(request);
+    const parent = user(request);
     const query = object(request.query);
     const start = dateInput(query.date);
     const coach = requiredText(object(request.params).id);
     const days = query.days === undefined ? 1 : integer(Number(requiredText(query.days, 1)), 1, 7, '请选择 1 至 7 天的时段');
+    if (query.view === 'board') return service.privateBoard(coach,start,days,parent);
     return Array.from({ length: days }, (_, offset) => service.listSlots(coach, addDays(start, offset))).flat();
   });
   app.get('/api/me/child', async request => ({ child: service.child(player(request)) }));
@@ -149,13 +165,18 @@ export function createApp(db: DatabaseSync, clock = () => new Date(),
   app.get('/api/me/bookings', async request => {
     const { view,period,after } = object(request.query);
     const family = view === 'family';
-    const id = family ? user(request) : player(request);
-    if (!family && view !== 'pages') return service.bookings(id);
-    if (!period) return { upcoming: service.bookingPage(id,'upcoming',undefined,family),history: service.bookingPage(id,'history',undefined,family) };
+    const parent = user(request);
+    const id = family ? parent : selectedPlayer(db,parent,request.headers['x-player-id']);
+    if (!family && view !== 'pages') return service.bookings(id,-1,parent);
+    if (!period) return { upcoming: service.bookingPage(id,'upcoming',undefined,family,parent),history: service.bookingPage(id,'history',undefined,family,parent) };
     if (period !== 'upcoming' && period !== 'history') throw new ApiError(400,'VALIDATION_ERROR','请选择预约类型');
-    return service.bookingPage(id,period,after ? requiredText(after) : undefined,family);
+    return service.bookingPage(id,period,after ? requiredText(after) : undefined,family,parent);
   });
-  app.post('/api/bookings/quote', async request => service.quote(player(request), parentSelection(object(request.body))));
+  app.post('/api/bookings/quote', async request => {
+    const selected = parentSelection(object(request.body));
+    const quote = service.quote(player(request), selected);
+    return selected.type === 'PRIVATE' ? { ...quote, venue: '场地待确认' } : quote;
+  });
   app.post('/api/bookings', async request => {
     const profile = user(request);
     const body = object(request.body);

@@ -21,6 +21,7 @@
     <button size="mini" class="family-choice" bindtap="chooseFamily" disabled="{{busy}}" hover-class="press">
       <text class="muted">队员账户</text><text class="family-choice-name">{{family ? family.label : '搜索并选择队员'}}</text><view class="chevron"></view>
     </button>
+    <label wx:if="{{type === 'PRIVATE'}}" class="form-field">训练场地<input class="field" maxlength="100" value="{{staffVenue}}" bindinput="inputVenue" placeholder="例如 3 号道"/></label>
     <picker wx:if="{{type === 'PRIVATE'}}" class="filter-row" range="{{privateTypes}}" range-key="name"
       value="{{privateTypeIndex}}" bindchange="changePrivateType" disabled="{{busy}}">
       <view class="picker"><text class="picker-label">私教课程</text><text class="picker-value">{{privateTypes[privateTypeIndex].name}}</text><view wx:if="{{!busy}}" class="chevron" aria-hidden="true"></view></view>
@@ -60,6 +61,7 @@
         <view>{{item.type === 'GROUP' ? '团课' : '私教'}} · {{item.hours}} · {{item.coachLabel}}</view>
         <view class="muted">{{item.venue}} · {{item.points}} 积分</view>
         <view class="muted">{{item.staffCreated ? '管理员代约' : '家长预约'}}{{item.staffCancelled ? ' · 管理员取消' : ''}}</view>
+        <label wx:if="{{item.canApprove && item.type === 'PRIVATE'}}" class="form-field">训练场地<input class="field" maxlength="100" placeholder="例如 3 号道" data-id="{{item.id}}" value="{{venues[item.id]}}" bindinput="inputVenue" disabled="{{busy}}"/></label>
         <view wx:if="{{item.status === 'PENDING'}}" class="section-actions item-actions">
           <button wx:if="{{item.canApprove}}" class="button" data-id="{{item.id}}" data-action="approve" bindtap="decide" disabled="{{busy}}" hover-class="press">确认预约</button>
           <button class="button quiet" data-id="{{item.id}}" data-action="reject" bindtap="decide" disabled="{{busy}}" hover-class="press">拒绝申请</button>

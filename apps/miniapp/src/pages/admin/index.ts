@@ -8,6 +8,7 @@ Page({
   data: {
     authorized: false, error: '', overview: null as Overview | null,
     shortcuts: [
+      { page: 'admin-announcements', label: '公告管理', icon: 'announcements' },
       { page: 'admin-schedule', label: '排课管理', icon: 'schedule' },
       { page: 'admin-bookings', label: '预约管理', icon: 'bookings' },
       { page: 'admin-course-types', label: '课程类型', icon: 'types' },

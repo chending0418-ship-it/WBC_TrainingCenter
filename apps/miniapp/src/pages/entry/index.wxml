@@ -34,7 +34,7 @@
   </view>
 </view>
 <view wx:elif="{{visible}}" class="page-shell">
-  <text class="page-title" role="heading" aria-level="1">{{wechatMode && allowedRoles.length > 1 ? '选择身份' : (mode === 'ADMIN' ? '管理员登录' : (mode === 'COACH' ? '教练登录' : 'WBC 训练助手'))}}</text>
+  <text class="page-title" role="heading" aria-level="1">{{wechatMode && allowedRoles.length > 1 ? '选择身份' : (mode === 'ADMIN' ? '本地演示 · 管理员登录' : (mode === 'COACH' ? '教练登录' : 'WBC 训练助手'))}}</text>
   <block wx:if="{{wechatMode}}">
     <view wx:if="{{noticeRoleLabel}}" class="muted">使用{{noticeRoleLabel}}身份查看这条服务通知。</view>
     <view wx:if="{{allowedRoles.length}}" class="identity-choices">
@@ -45,9 +45,9 @@
   </block>
   <form wx:elif="{{mode === 'ADMIN'}}" bindsubmit="adminLogin">
     <label class="form-field">
-      <text>管理员密码</text>
+      <text>本地演示口令</text>
       <input class="field" password="{{true}}" value="{{password}}" maxlength="128" disabled="{{busy}}"
-        placeholder="输入管理员密码" bindinput="changePassword" aria-label="管理员密码" />
+        placeholder="输入本地演示口令" bindinput="changePassword" aria-label="本地演示口令" />
     </label>
     <view wx:if="{{error}}" class="form-error" aria-live="polite">{{error}}</view>
     <view class="section-actions form-actions">
